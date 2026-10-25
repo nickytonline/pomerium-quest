@@ -14,7 +14,7 @@ import {
 } from './content.ts'
 import { decide, routeYaml, type Identity } from './ppl.ts'
 import { KNIGHT_QUOTA, hasSteel, isAtLeast, stage, type QuestStage } from './quest-machine.ts'
-import { quest, type DenyView, type LogEntry } from './store.ts'
+import { MAX_HP, quest, type DenyView, type LogEntry } from './store.ts'
 import type { NpcId } from './world.ts'
 import { KINGDOM_DOMAIN, zoneById, type Zone, type ZoneId } from './zones.ts'
 
@@ -460,6 +460,43 @@ const siblingDomain = () => {
   const [first, ...rest] = location.hostname.split('.')
 
   return rest.length > 0 ? rest.join('.') : first
+}
+
+/** The town fountain restores half a heart per drink, up to two full hearts each game. */
+export const FOUNTAIN_LIMIT = 4
+
+const hearts = (halves: number) => {
+  const whole = Math.floor(halves / 2)
+
+  if (halves % 2 === 0) return `${whole} ${whole === 1 ? 'heart' : 'hearts'}`
+
+  return whole ? `${whole}½ hearts` : 'half a heart'
+}
+
+export function drinkFromFountain() {
+  const { hp, progress } = quest.get()
+  const left = FOUNTAIN_LIMIT - progress.fountainHealed
+  const say = (text: string) => quest.say([{ who: 'Town Fountain', text }])
+
+  if (hp >= MAX_HP) {
+    say("Cool, fresh water. You're already at full health.")
+
+    return
+  }
+
+  if (left <= 0) {
+    say("The water still runs, but it can't restore any more hearts this game.")
+
+    return
+  }
+
+  quest.setHp(hp + 1)
+  quest.progress({ fountainHealed: progress.fountainHealed + 1 })
+  say(
+    left > 1
+      ? `You drink the cool water and feel a little better: half a heart restored. The fountain has ${hearts(left - 1)} left to give this game.`
+      : "You drink the cool water and feel a little better: half a heart restored. That's all the fountain can give this game.",
+  )
 }
 
 export function nightGate() {

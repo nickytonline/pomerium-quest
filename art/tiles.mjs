@@ -99,7 +99,8 @@ const rows = (rect, spans, color) => {
 
 const range = (y0, y1, x0, x1) => Array.from({ length: y1 - y0 + 1 }, (_, i) => [y0 + i, x0, x1])
 
-// A round stone basin seen from the front, a pillar and bowl, and water arcing back down.
+// A round stone basin seen from the front, a pillar and bowl, and water spilling from the bowl.
+// Each frame moves the highlights one step down the streams, so the water reads as flowing.
 const paintFountain = (rect, frame) => {
   const outline = '#241a2e'
   const stone = '#c3c6d3'
@@ -107,7 +108,8 @@ const paintFountain = (rect, frame) => {
   const mortar = '#6c6f80'
   const water = '#3d7fcf'
   const ripple = '#7fb6ef'
-  const spray = '#cfe6ff'
+  const stream = '#9fcaf5'
+  const glint = '#eef7ff'
 
   // Basin: outline, front wall, then the rim and the water on top.
   rows(
@@ -148,16 +150,11 @@ const paintFountain = (rect, frame) => {
     water,
   )
 
-  for (const [x, y] of frame
-    ? [
-        [10, 14],
-        [19, 13],
-      ]
-    : [
-        [7, 13],
-        [22, 15],
-      ])
-    rect(x, y, 3, 1, ripple)
+  // Ripples spread out from where the streams land and from the pillar's foot.
+  const spread = frame + 1
+  rect(8 - spread, 14, 2 + spread, 1, ripple)
+  rect(22, 14, 2 + spread, 1, ripple)
+  rect(12 - frame, 16, 8 + frame * 2, 1, ripple)
 
   // Pillar and bowl.
   rect(13, 5, 6, 11, outline)
@@ -166,34 +163,49 @@ const paintFountain = (rect, frame) => {
   rect(10, 3, 12, 4, outline)
   rect(11, 4, 10, 2, stone)
   rect(12, 4, 8, 1, water)
-  rect(frame ? 13 : 12, 15, frame ? 6 : 8, 1, ripple)
 
-  // Spray: a jet up the middle, arcing down into the basin on both sides.
-  // The second frame moves each drop partway along its arc and pulses the jet.
-  rect(15, frame ? 1 : 0, 2, frame ? 3 : 4, spray)
+  // Two streams spill over the bowl's lip and curve down into the basin, two pixels wide.
+  // A glint every third step moves one step further down each frame.
+  const path = [
+    [10, 4],
+    [9, 5],
+    [8, 6],
+    [8, 7],
+    [7, 8],
+    [7, 9],
+    [7, 10],
+    [7, 11],
+    [7, 12],
+  ]
 
-  for (const [x, y] of frame
-    ? [
-        [10, 1],
-        [8, 3],
-        [6, 5],
-        [6, 8],
-        [7, 11],
-      ]
-    : [
-        [12, 1],
-        [9, 2],
-        [7, 4],
-        [6, 7],
-        [6, 10],
-      ]) {
-    rect(x, y, 2, 2, spray)
-    rect(30 - x, y, 2, 2, spray)
+  path.forEach(([x, y], i) => {
+    const color = (i - frame) % 3 === 0 ? glint : stream
+    rect(x, y, 2, 1, color)
+    rect(30 - x, y, 2, 1, color)
+  })
+
+  // Splashes where the streams land, a little higher on alternate frames.
+  for (const x of [5, 10]) {
+    rect(x, frame === 1 ? 12 : 13, 1, 1, glint)
+    rect(31 - x, frame === 1 ? 12 : 13, 1, 1, glint)
   }
+
+  // The jet bubbles up from the bowl: a short column and a crown that rises and falls.
+  rect(15, 1, 2, 3, stream)
+  rect(15, 2 - (frame % 2), 2, 1, glint)
+
+  const crown = [
+    [14, 0],
+    [13, 1],
+    [12, 2],
+  ][frame]
+
+  rect(crown[0], crown[1], 1, 1, glint)
+  rect(31 - crown[0], crown[1], 1, 1, glint)
 }
 
-/** Two frames, swapped by the scene to animate the water. */
-const fountain = [0, 1].flatMap((frame) => quad((rect) => paintFountain(rect, frame)))
+/** The fountain's animation frames, four tiles each. */
+const fountain = [0, 1, 2].flatMap((frame) => quad((rect) => paintFountain(rect, frame)))
 
 const wallBlocks = (rect) => {
   rect(0, 0, 16, 16, '#4a4c59')
@@ -371,7 +383,7 @@ const painters = [
     for (let x = 4; x <= 12; x += 2) rect(x, 3, 1, 2, '#2b2b33')
     rect(6, 0, 4, 3, '#4ade80')
   },
-  // 17–20 fountain: top-left, top-right, bottom-left, bottom-right; 21–24 its second frame
+  // 17–28 fountain: three frames of top-left, top-right, bottom-left, bottom-right
   ...fountain,
 ]
 

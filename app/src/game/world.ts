@@ -25,11 +25,14 @@ export const TILE = {
   fountainTopRight: 18,
   fountainBottomLeft: 19,
   fountainBottomRight: 20,
-  /** The fountain's second animation frame starts here, in the same order. */
-  fountainFrame2: 21,
 } as const
 
 export type TileId = (typeof TILE)[keyof typeof TILE]
+
+/** The fountain's animation frames follow its first four tiles, four tiles per frame in the same order. */
+export const FOUNTAIN_FRAMES = 3
+
+export const isFountain = (tile: number) => tile >= TILE.fountainTopLeft && tile <= TILE.fountainBottomRight
 
 export const WALKABLE: ReadonlySet<number> = new Set([
   TILE.grass,

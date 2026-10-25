@@ -508,12 +508,24 @@ function Hud() {
 
   return (
     <div className="flex items-center justify-between gap-3 font-display text-[1.05rem]">
-      <span aria-label={`${hp} of ${MAX_HP} hearts`}>
-        {Array.from({ length: MAX_HP }, (_, i) => (
-          <span key={i} className={i < hp ? 'mr-0.5 text-deny' : 'mr-0.5 text-heart-empty'}>
-            ♥
-          </span>
-        ))}
+      <span aria-label={`${hp / 2} of ${MAX_HP / 2} hearts`}>
+        {Array.from({ length: MAX_HP / 2 }, (_, i) => {
+          const fill = Math.min(Math.max(hp - i * 2, 0), 2)
+
+          return (
+            <span key={i} className="relative mr-0.5 inline-block text-heart-empty">
+              ♥
+              {fill > 0 && (
+                <span
+                  className={`absolute inset-0 text-deny ${fill === 1 ? '[clip-path:inset(0_50%_0_0)]' : ''}`}
+                  aria-hidden="true"
+                >
+                  ♥
+                </span>
+              )}
+            </span>
+          )
+        })}
       </span>
       <span className="text-sun">{region}</span>
       <span className="text-muted tabular-nums">

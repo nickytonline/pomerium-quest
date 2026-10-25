@@ -22,6 +22,8 @@ export interface Progress {
   readonly dir: Dir
   readonly lessons: readonly LessonId[]
   readonly brokenRocks: readonly string[]
+  /** Half hearts the town fountain has restored this game (it gives at most FOUNTAIN_LIMIT). */
+  readonly fountainHealed: number
   /** True once a game has been started, so the title screen offers Continue. */
   readonly playedBefore: boolean
   /** Simulated-mode identity; in Pomerium mode the identity comes from the session. */
@@ -93,7 +95,8 @@ export interface QuestState {
   readonly savedAt: string | null
 }
 
-export const MAX_HP = 5
+/** Health is counted in half hearts: 10 is five full hearts. */
+export const MAX_HP = 10
 
 /** A short buzz on phones that support it (not iPhones); nothing depends on it. */
 export const buzz = (pattern: number | number[]) => {
@@ -109,6 +112,7 @@ const freshProgress = (): Progress => ({
   dir: 'right',
   lessons: [],
   brokenRocks: [],
+  fountainHealed: 0,
   playedBefore: false,
   sim: { signedIn: false, groups: [], pendingGroups: [] },
 })

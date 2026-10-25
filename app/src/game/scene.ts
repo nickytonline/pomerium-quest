@@ -5,13 +5,24 @@ import { startPlayer } from './player-machine.ts'
 import { SHEETS } from './sheets.ts'
 import { KNIGHT_QUOTA, defeated, hasSteel, type MonsterKind } from './quest-machine.ts'
 import { MAX_HP, buzz, quest, type Dir } from './store.ts'
-import { enterGate, nightGate, openChest, readBook, readSign, talk, writeLedger } from './story.ts'
+import {
+  drinkFromFountain,
+  enterGate,
+  nightGate,
+  openChest,
+  readBook,
+  readSign,
+  talk,
+  writeLedger,
+} from './story.ts'
 import {
   MAP_HEIGHT,
   MAP_WIDTH,
   NPC_FRAME,
+  FOUNTAIN_FRAMES,
   TILE,
   WALKABLE,
+  isFountain,
   buildWorld,
   regionAt,
   type Point,
@@ -63,6 +74,9 @@ const SWORD_ANGLE: Record<Dir, number> = { up: 0, right: 90, down: 180, left: 27
 const SWORD_GRIP = 14 / 16
 const SWING = { from: 100, to: -50, ms: 160 }
 const ITEM = { swordWood: 0, swordSteel: 1 }
+
+/** A monster's bite takes a full heart (health counts half hearts). */
+const HIT_DAMAGE = 2
 
 /** Monsters never leave the fields. */
 const FIELDS = { x0: 1, y0: 1, x1: 15, y1: 16 }
@@ -261,18 +275,18 @@ export class KingdomScene extends Phaser.Scene {
     return this.world.tiles[p.y]?.[p.x] ?? TILE.tree
   }
 
-  /** Swaps the fountain's four tiles between its two frames, unless the player prefers less motion. */
+  /** Steps the fountain's four tiles through its frames, unless the player prefers less motion. */
   private animateFountain() {
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return
     const { x, y } = this.world.fountain
     let frame = 0
 
     this.time.addEvent({
-      delay: 260,
+      delay: 180,
       loop: true,
       callback: () => {
-        frame = 1 - frame
-        const first = frame ? TILE.fountainFrame2 : TILE.fountainTopLeft
+        frame = (frame + 1) % FOUNTAIN_FRAMES
+        const first = TILE.fountainTopLeft + frame * 4
 
         this.map?.putTileAt(first, x, y)
         this.map?.putTileAt(first + 1, x + 1, y)
@@ -421,6 +435,8 @@ export class KingdomScene extends Phaser.Scene {
     if (tile === TILE.lectern) void writeLedger()
 
     if (tile === TILE.nightGate) nightGate()
+
+    if (isFountain(tile)) drinkFromFountain()
   }
 
   private swing() {
@@ -628,7 +644,7 @@ export class KingdomScene extends Phaser.Scene {
   private hurt(dir: Dir) {
     if (this.mode.invulnerable() || !this.player) return
     this.mode.send({ type: 'HIT' })
-    const hp = quest.get().hp - 1
+    const hp = quest.get().hp - HIT_DAMAGE
     this.tweens.add({ targets: this.player, alpha: 0.2, duration: 90, yoyo: true, repeat: 4 })
 
     if (hp <= 0) {
