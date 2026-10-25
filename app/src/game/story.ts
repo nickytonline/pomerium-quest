@@ -47,9 +47,17 @@ const LOG_DECISION: Record<Outcome['kind'], LogEntry['decision']> = {
   error: 'DENY',
 }
 
-function denyView(zone: Zone, method: 'GET' | 'POST', path: string, id: Identity, signIn: boolean): DenyView {
+function denyView(
+  zone: Zone,
+  method: 'GET' | 'POST',
+  path: string,
+  id: Identity,
+  signIn: boolean,
+  requestId: string | null = null,
+): DenyView {
   const decision = decide(zone, id, { method, path })
   const requestLine = `${method} ${location.origin}${path}`
+  const fromPomerium = requestId ? { requestId } : {}
 
   if (signIn) {
     return {
@@ -60,6 +68,7 @@ function denyView(zone: Zone, method: 'GET' | 'POST', path: string, id: Identity
       lines: decision.lines,
       hint: 'You have no session yet. Pomerium sends anyone without one to the identity provider to sign in, then back here. Visit the Oracle in the temple to the west.',
       links: [link('idp'), link('authz')],
+      ...fromPomerium,
     }
   }
 
@@ -72,9 +81,10 @@ function denyView(zone: Zone, method: 'GET' | 'POST', path: string, id: Identity
     who: who(id),
     lines: decision.lines,
     hint: stale
-      ? 'Pomerium said no, yet by the game’s records you qualify. Your session still holds the claims from when you signed in. Visit the Oracle to refresh them.'
+      ? 'Pomerium said no, yet by the game’s records you qualify. Your session still holds the claims from when you signed in: visit the Oracle to sign in again. If you just did, give Pomerium up to a minute to pick up the new claim.'
       : (DENY_HINTS[zone.id] ?? 'No allow rule matched this request.'),
     links: stale ? [link('refresh'), link('claims')] : [link('authz'), link('defaultDeny')],
+    ...fromPomerium,
   }
 }
 
@@ -87,10 +97,10 @@ async function attempt(zone: Zone, method: 'GET' | 'POST', action: string): Prom
   const decision = LOG_DECISION[outcome.kind]
   quest.log({ decision, method, path, who: who(id) })
 
-  if (outcome.kind === 'signin') quest.showDeny(denyView(zone, method, path, id, true))
+  if (outcome.kind === 'signin') quest.showDeny(denyView(zone, method, path, id, true, outcome.requestId))
 
   if (outcome.kind === 'deny') {
-    const view = denyView(zone, method, path, id, false)
+    const view = denyView(zone, method, path, id, false, outcome.requestId)
     quest.showDeny(view, () => {
       learn('authz')
 
@@ -230,7 +240,10 @@ async function captain() {
     quest.say([
       {
         who: 'Captain',
-        text: 'Go claim your steel. The armory is east of the square. If the guard turns you away, ask the Oracle to refresh your claims.',
+        text:
+          stage() === 'knighted'
+            ? 'The Oracle has your new claim, but your session still carries the old one. Visit her in the temple and sign in again, then claim your steel in the armory east of the square.'
+            : 'Go claim your steel. The armory is east of the square.',
       },
     ])
 
@@ -273,6 +286,11 @@ async function captain() {
         who: 'Captain',
         text: "Pomerium reads groups from your identity provider. It doesn't decide who is a knight. It checks the claim.",
         links: [link('claims')],
+      },
+      {
+        who: 'Captain',
+        text: 'One catch: your session still holds the claims from when you signed in, so your groups still read []. Return to the Oracle and sign in again to carry the new claim.',
+        links: [link('refresh')],
       },
     ],
     () => learn('claims'),

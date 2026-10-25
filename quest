@@ -92,6 +92,12 @@ deploy() {
   say "Waiting for Pomerium, the Oracle and the game"
   kc -n kube-system rollout status deployment/coredns --timeout=120s
   for d in oracle quest pomerium; do kc -n "$NAMESPACE" rollout status "deployment/${d}" --timeout=180s; done
+  # Pomerium needs a few seconds after the rollout to load certificates and policies.
+  for _ in $(seq 1 60); do
+    if curl -fsS -o /dev/null "$(url)/" 2>/dev/null; then return; fi
+    sleep 1
+  done
+  fail "Pomerium didn't answer at $(url). Check: ./quest logs pomerium"
 }
 
 case "${1:-up}" in

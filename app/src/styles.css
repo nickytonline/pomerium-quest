@@ -671,3 +671,10 @@ pre {
     animation: none;
   }
 }
+
+.deny-request-id {
+  margin: 10px 0 0;
+  font-size: 0.75rem;
+  color: #5e5680;
+  overflow-wrap: anywhere;
+}

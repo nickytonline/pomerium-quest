@@ -7,8 +7,8 @@ import { KINGDOM_DOMAIN, type Zone } from './zones.ts'
 
 export type Outcome =
   | { readonly kind: 'allow'; readonly message: string | null }
-  | { readonly kind: 'deny' }
-  | { readonly kind: 'signin' }
+  | { readonly kind: 'deny'; readonly requestId: string | null }
+  | { readonly kind: 'signin'; readonly requestId: string | null }
   | { readonly kind: 'error'; readonly message: string }
 
 interface OracleResponse {
@@ -18,6 +18,22 @@ interface OracleResponse {
 
 interface ZoneResponse {
   readonly message?: string
+}
+
+/** Pomerium's JSON error body, e.g. {"error":"Forbidden","request_id":"…"}. */
+interface PomeriumError {
+  readonly request_id?: string
+}
+
+async function readRequestId(response: Response) {
+  try {
+    // SAFETY: Pomerium's JSON error responses carry request_id; anything else yields null.
+    const body = (await response.json()) as PomeriumError
+
+    return body.request_id ?? null
+  } catch {
+    return null
+  }
 }
 
 const SIM_EMAIL = `hero@${KINGDOM_DOMAIN}`
@@ -32,7 +48,10 @@ export function simulatedIdentity(progress: Progress): Identity {
   }
 }
 
-const redirected = (response: Response) => response.type === 'opaqueredirect' || response.status === 302
+// Pomerium answers an unauthenticated request with a redirect to sign in, or with a 401
+// when the request asks for JSON (as the game's fetches do).
+const needsSignIn = (response: Response) =>
+  response.type === 'opaqueredirect' || response.status === 302 || response.status === 401
 
 /** Finds out whether Pomerium is in front of us and, if so, who we are. */
 export async function probe(progress: Progress): Promise<{ mode: Mode; identity: Identity }> {
@@ -42,7 +61,7 @@ export async function probe(progress: Progress): Promise<{ mode: Mode; identity:
       headers: { accept: 'application/json' },
     })
 
-    if (redirected(response)) return { mode: 'pomerium', identity: ANONYMOUS }
+    if (needsSignIn(response)) return { mode: 'pomerium', identity: ANONYMOUS }
     // SAFETY: our own server route returns this JSON shape (app/src/server/zones.ts).
     const body = (await response.json()) as OracleResponse
 
@@ -82,9 +101,9 @@ export async function requestZone(
   const path = `${zone.prefix}/${action}`
 
   if (mode === 'simulated') {
-    if (!identity.authenticated) return { kind: 'signin' }
+    if (!identity.authenticated) return { kind: 'signin', requestId: null }
 
-    if (!decide(zone, identity, { method, path }).allow) return { kind: 'deny' }
+    if (!decide(zone, identity, { method, path }).allow) return { kind: 'deny', requestId: null }
   }
 
   try {
@@ -94,9 +113,9 @@ export async function requestZone(
       headers: { accept: 'application/json' },
     })
 
-    if (redirected(response)) return { kind: 'signin' }
+    if (needsSignIn(response)) return { kind: 'signin', requestId: await readRequestId(response) }
 
-    if (response.status === 403) return { kind: 'deny' }
+    if (response.status === 403) return { kind: 'deny', requestId: await readRequestId(response) }
 
     if (!response.ok) return { kind: 'error', message: `${response.status} ${response.statusText}` }
 
@@ -109,6 +128,8 @@ export async function requestZone(
 /** Where to send the browser to sign in through Pomerium, landing back in the game. */
 export const signInUrl = () => '/zones/oracle/signin'
 
-/** Sign out of the Pomerium session, then sign straight back in to pick up fresh claims. */
-export const refreshClaimsUrl = () =>
-  `/.pomerium/sign_out?pomerium_redirect_uri=${encodeURIComponent(`${location.origin}${signInUrl()}`)}`
+/**
+ * Sign out of the Pomerium session. Pomerium's signout_redirect_url sends the player straight
+ * back to sign in, which picks up fresh claims from the Oracle.
+ */
+export const refreshClaimsUrl = () => '/.pomerium/sign_out'

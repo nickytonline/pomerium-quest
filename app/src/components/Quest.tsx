@@ -44,11 +44,28 @@ function useBoot() {
   }, [])
 }
 
+const SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'PageUp', 'PageDown'])
+
+/** While playing, keys that move the dog must not also scroll the page. */
+function useNoScrollKeys() {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement
+
+      if (quest.get().started && !typing && SCROLL_KEYS.has(event.key)) event.preventDefault()
+    }
+
+    window.addEventListener('keydown', onKey)
+
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+}
+
 function useDialogKeys() {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       // A handled key (like the Enter that starts the game) must not also advance a dialog.
-      if (event.repeat || event.defaultPrevented) return
+      if (event.repeat) return
       const { deny, dialog } = quest.get()
       const confirm = event.key === 'Enter' || event.key === ' ' || event.key === 'e' || event.key === 'E'
 
@@ -70,6 +87,7 @@ function useDialogKeys() {
 export function Quest() {
   useBoot()
   useDialogKeys()
+  useNoScrollKeys()
   const started = useQuest((s) => s.started)
 
   return started ? <Kingdom /> : <Splash />
@@ -81,7 +99,8 @@ function Splash() {
   const begin = () => {
     quest.start()
 
-    if (quest.get().progress.lessons.length === 0) quest.say(INTRO)
+    // Open the intro after this keypress finishes, so the same Enter doesn't also advance it.
+    if (quest.get().progress.lessons.length === 0) setTimeout(() => quest.say(INTRO), 0)
   }
 
   useEffect(() => {
@@ -268,6 +287,11 @@ function DenyScreen() {
           </div>
         )}
         <p className="deny-hint">{deny.hint}</p>
+        {deny.requestId && (
+          <p className="deny-request-id">
+            Pomerium request ID <code>{deny.requestId}</code>
+          </p>
+        )}
         <ul className="doc-links">
           {deny.links.map((doc) => (
             <li key={doc.href + doc.label}>

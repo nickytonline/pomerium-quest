@@ -89,6 +89,9 @@ function pomeriumConfig(secrets: Secrets): Yaml {
   return {
     address: ':8443',
     authenticate_service_url: publicUrl('authenticate'),
+    // After signing out, go straight back to sign-in: the Oracle session makes it instant and
+    // the new session carries fresh claims. This is how the game refreshes a player's groups.
+    signout_redirect_url: `${game}/zones/oracle/signin`,
     idp_provider: 'oidc',
     idp_provider_url: publicUrl('oracle'),
     idp_client_id: 'pomerium',
@@ -124,7 +127,18 @@ function pomeriumConfig(secrets: Secrets): Yaml {
 
 const labels = (name: string) => ({ app: name })
 
-function deployment(name: string, image: string, port: number, extra: { [key: string]: Yaml }): Yaml {
+const caVolume: Yaml = {
+  name: 'certs',
+  secret: { secretName: 'quest-tls', items: [{ key: 'ca.crt', path: 'ca.crt' }] },
+}
+
+function deployment(
+  name: string,
+  image: string,
+  port: number,
+  extra: { [key: string]: Yaml },
+  pod: { [key: string]: Yaml },
+): Yaml {
   return {
     apiVersion: 'apps/v1',
     kind: 'Deployment',
@@ -144,21 +158,7 @@ function deployment(name: string, image: string, port: number, extra: { [key: st
               ...extra,
             },
           ],
-          ...(name === 'pomerium'
-            ? {
-                volumes: [
-                  { name: 'config', secret: { secretName: 'pomerium-config' } },
-                  { name: 'certs', secret: { secretName: 'quest-tls' } },
-                ],
-              }
-            : {
-                volumes: [
-                  {
-                    name: 'certs',
-                    secret: { secretName: 'quest-tls', items: [{ key: 'ca.crt', path: 'ca.crt' }] },
-                  },
-                ],
-              }),
+          ...pod,
         },
       },
     },
@@ -200,39 +200,76 @@ function manifests(secrets: Secrets): Yaml[] {
       metadata: { name: 'pomerium-config', namespace: NAMESPACE },
       stringData: { 'config.yaml': `${toYaml(pomeriumConfig(secrets))}\n` },
     },
-    deployment('pomerium', POMERIUM_IMAGE, 8443, {
-      args: ['-config', '/pomerium/config.yaml'],
-      env: [{ name: 'SSL_CERT_DIR', value: '/etc/ssl/certs:/certs' }],
-      volumeMounts: [
-        { name: 'config', mountPath: '/pomerium', readOnly: true },
-        { name: 'certs', mountPath: '/certs', readOnly: true },
-      ],
-    }),
+    deployment(
+      'pomerium',
+      POMERIUM_IMAGE,
+      8443,
+      {
+        args: ['-config', '/pomerium/config.yaml'],
+        env: [{ name: 'SSL_CERT_DIR', value: '/etc/ssl/certs:/certs' }],
+        volumeMounts: [
+          { name: 'config', mountPath: '/pomerium', readOnly: true },
+          { name: 'certs', mountPath: '/certs', readOnly: true },
+        ],
+      },
+      {
+        volumes: [
+          { name: 'config', secret: { secretName: 'pomerium-config' } },
+          { name: 'certs', secret: { secretName: 'quest-tls' } },
+        ],
+      },
+    ),
     service('pomerium', PORT, 8443, 'LoadBalancer'),
-    deployment('quest', APP_IMAGE, 3000, {
-      env: [
-        { name: 'QUEST_MODE', value: 'pomerium' },
-        { name: 'QUEST_PUBLIC_ORIGIN', value: publicUrl('game') },
-        { name: 'ORACLE_ADMIN_URL', value: svc('oracle', 4000) },
-        secretEnv('ORACLE_ADMIN_KEY', 'oracle-admin-key'),
-        { name: 'NODE_EXTRA_CA_CERTS', value: '/certs/ca.crt' },
-      ],
-      volumeMounts: [{ name: 'certs', mountPath: '/certs', readOnly: true }],
-      readinessProbe: { httpGet: { path: '/', port: 3000 }, periodSeconds: 3 },
-    }),
+    deployment(
+      'quest',
+      APP_IMAGE,
+      3000,
+      {
+        env: [
+          { name: 'QUEST_MODE', value: 'pomerium' },
+          { name: 'QUEST_PUBLIC_ORIGIN', value: publicUrl('game') },
+          { name: 'ORACLE_ADMIN_URL', value: svc('oracle', 4000) },
+          secretEnv('ORACLE_ADMIN_KEY', 'oracle-admin-key'),
+          { name: 'NODE_EXTRA_CA_CERTS', value: '/certs/ca.crt' },
+        ],
+        volumeMounts: [{ name: 'certs', mountPath: '/certs', readOnly: true }],
+        readinessProbe: { httpGet: { path: '/', port: 3000 }, periodSeconds: 3 },
+      },
+      { volumes: [caVolume] },
+    ),
     service('quest', 3000, 3000),
-    deployment('oracle', ORACLE_IMAGE, 4000, {
-      env: [
-        { name: 'ORACLE_ISSUER', value: publicUrl('oracle') },
-        { name: 'ORACLE_REDIRECT_URI', value: `${publicUrl('authenticate')}/oauth2/callback` },
-        secretEnv('ORACLE_CLIENT_SECRET', 'client-secret'),
-        secretEnv('ORACLE_ADMIN_KEY', 'oracle-admin-key'),
-        secretEnv('ORACLE_COOKIE_KEY', 'oracle-cookie-key'),
-      ],
-      volumeMounts: [{ name: 'certs', mountPath: '/certs', readOnly: true }],
-      readinessProbe: { httpGet: { path: '/healthz', port: 4000 }, periodSeconds: 3 },
-    }),
+    deployment(
+      'oracle',
+      ORACLE_IMAGE,
+      4000,
+      {
+        env: [
+          { name: 'ORACLE_ISSUER', value: publicUrl('oracle') },
+          { name: 'ORACLE_REDIRECT_URI', value: `${publicUrl('authenticate')}/oauth2/callback` },
+          secretEnv('ORACLE_CLIENT_SECRET', 'client-secret'),
+          secretEnv('ORACLE_ADMIN_KEY', 'oracle-admin-key'),
+          secretEnv('ORACLE_COOKIE_KEY', 'oracle-cookie-key'),
+          { name: 'ORACLE_DATA_FILE', value: '/data/groups.json' },
+        ],
+        volumeMounts: [
+          { name: 'certs', mountPath: '/certs', readOnly: true },
+          { name: 'data', mountPath: '/data' },
+        ],
+        readinessProbe: { httpGet: { path: '/healthz', port: 4000 }, periodSeconds: 3 },
+      },
+      {
+        // The Oracle keeps granted groups on a volume so a redeploy doesn't forget knighthoods.
+        volumes: [caVolume, { name: 'data', persistentVolumeClaim: { claimName: 'oracle-data' } }],
+        securityContext: { fsGroup: 1000 },
+      },
+    ),
     service('oracle', 4000, 4000),
+    {
+      apiVersion: 'v1',
+      kind: 'PersistentVolumeClaim',
+      metadata: { name: 'oracle-data', namespace: NAMESPACE },
+      spec: { accessModes: ['ReadWriteOnce'], resources: { requests: { storage: '16Mi' } } },
+    },
     // Only Pomerium may reach the game; only Pomerium and the game may reach the Oracle.
     {
       apiVersion: 'networking.k8s.io/v1',

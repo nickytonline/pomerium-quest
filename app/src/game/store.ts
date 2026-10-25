@@ -31,6 +31,8 @@ export interface DenyView {
   readonly lines: readonly EvalLine[]
   readonly hint: string
   readonly links: readonly DocLink[]
+  /** Pomerium's request ID for this decision, when it came from a real Pomerium. */
+  readonly requestId?: string
 }
 
 export interface LogEntry {

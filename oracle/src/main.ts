@@ -4,6 +4,7 @@
 // server can add a group to a player through the admin API; the new claim reaches Pomerium
 // the next time the player signs in, which is the lesson the game teaches.
 import { generateKeyPairSync, timingSafeEqual } from 'node:crypto'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import Provider, { type Configuration, type KoaContextWithOIDC } from 'oidc-provider'
 import { loginPage } from './login-page.ts'
@@ -24,8 +25,34 @@ const REDIRECT_URI = env('ORACLE_REDIRECT_URI', 'https://authenticate.localhost.
 const ADMIN_KEY = env('ORACLE_ADMIN_KEY', 'dev-only-oracle-key')
 const COOKIE_KEY = env('ORACLE_COOKIE_KEY', 'dev-only-cookie-key')
 
-/** Groups granted by the game, keyed by email. In memory: restarting the Oracle forgets them. */
-const groups = new Map<string, Set<string>>()
+/** Groups granted by the game, keyed by email, saved to ORACLE_DATA_FILE when it is set. */
+const DATA_FILE = process.env['ORACLE_DATA_FILE']
+
+function loadGroups() {
+  const loaded = new Map<string, Set<string>>()
+
+  if (!DATA_FILE || !existsSync(DATA_FILE)) return loaded
+
+  try {
+    const saved = new Map<string, string[]>(Object.entries(JSON.parse(readFileSync(DATA_FILE, 'utf8'))))
+
+    for (const [email, list] of saved) loaded.set(email, new Set(list.map(String)))
+  } catch (error) {
+    console.error(`could not read ${DATA_FILE}; starting with no groups`, error)
+  }
+
+  return loaded
+}
+
+function saveGroups() {
+  if (!DATA_FILE) return
+
+  const data = Object.fromEntries([...groups].map(([email, set]) => [email, [...set]]))
+
+  writeFileSync(DATA_FILE, JSON.stringify(data, null, 2))
+}
+
+const groups = loadGroups()
 
 const groupsFor = (email: string) => [...(groups.get(email) ?? [])].sort()
 
@@ -180,6 +207,7 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
 
     current.add(grant.group)
     groups.set(grant.email, current)
+    saveGroups()
     console.log(`granted ${grant.group} to ${grant.email}`)
 
     return sendJson(res, 200, JSON.stringify({ email: grant.email, groups: groupsFor(grant.email) }))
