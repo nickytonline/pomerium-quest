@@ -2,6 +2,6 @@
 export const SHEETS = {
   dog: '/assets/dog.png?v=0be57c5f01',
   items: '/assets/items.png?v=8b19d504e1',
-  npcs: '/assets/npcs.png?v=568c6ee91c',
+  npcs: '/assets/npcs.png?v=5962c6ff14',
   tiles: '/assets/tiles.png?v=0aa01ab445',
 } as const
