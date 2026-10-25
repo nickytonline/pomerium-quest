@@ -163,10 +163,27 @@ function useDialogKeys() {
   }, [])
 }
 
+/** In dev, a reload while playing (an edited game file) skips the title screen. */
+const RESUME_KEY = 'pomerium-quest/dev/resume'
+
+function useDevResume(started: boolean) {
+  useEffect(() => {
+    if (import.meta.env.DEV && sessionStorage.getItem(RESUME_KEY)) begin()
+  }, [])
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+
+    if (started) sessionStorage.setItem(RESUME_KEY, '1')
+    else sessionStorage.removeItem(RESUME_KEY)
+  }, [started])
+}
+
 export function Quest() {
   useBoot()
   useDialogKeys()
   const started = useQuest((s) => s.started)
+  useDevResume(started)
 
   return started ? <Kingdom /> : <Splash />
 }
