@@ -166,7 +166,6 @@
     border-left: 2px solid var(--color-panel-edge);
     inset: 0 0 0 auto;
     width: min(360px, 100%);
-    animation: journal-from-right 160ms ease-out;
   }
 
   @media (orientation: portrait) {
@@ -177,7 +176,6 @@
       border-left: 0;
       border-top: 2px solid var(--color-panel-edge);
       border-radius: 12px 12px 0 0;
-      animation-name: journal-from-bottom;
     }
   }
 
@@ -207,7 +205,6 @@
       padding-bottom: env(safe-area-inset-bottom, 0px);
       border-width: 2px 0 0;
       border-radius: 12px 12px 0 0;
-      animation: journal-from-bottom 160ms ease-out;
     }
   }
 
@@ -243,10 +240,51 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .animate-blink,
-  .journal-drawer,
-  .sign-in-sheet {
-    animation: none;
+/* The celebration's credits. Without motion they sit in a scrollable list; with it they roll up in a loop. */
+.credits-window {
+  overflow-y: auto;
+}
+
+.credits > :last-child {
+  display: none;
+}
+
+/* Motion is opt-in (no-motion-first): everything that moves lives in this block (or behind Tailwind's
+   motion-safe: variant), so a browser that doesn't know the query, or a player who asked for less
+   motion, gets none of it. */
+@media (prefers-reduced-motion: no-preference) {
+  .journal-drawer {
+    animation: journal-from-right 160ms ease-out;
+  }
+
+  @media (orientation: portrait) {
+    .journal-drawer {
+      animation-name: journal-from-bottom;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .sign-in-sheet {
+      animation: journal-from-bottom 160ms ease-out;
+    }
+  }
+
+  .credits-window {
+    overflow: hidden;
+    mask-image: linear-gradient(transparent, black 18%, black 82%, transparent);
+  }
+
+  .credits {
+    animation: credits-roll 30s linear infinite;
+  }
+
+  .credits > :last-child {
+    display: grid;
+  }
+}
+
+@keyframes credits-roll {
+  to {
+    transform: translateY(-50%);
   }
 }

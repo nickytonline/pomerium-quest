@@ -101,6 +101,8 @@ export interface QuestState {
   readonly oracleBeside: boolean
   /** The Royal Keep let the player in: the quest is complete. */
   readonly finale: boolean
+  /** After Quest complete: fireworks, a happy Pomeranian and the cast. */
+  readonly celebrating: boolean
   /** The Journal drawer, used when the panels can't sit beside the game. Pauses the game while open. */
   readonly journalOpen: boolean
   /** Something new reached the Journal (a log entry, lesson or identity change) since it was last open. */
@@ -172,6 +174,7 @@ let state: QuestState = {
   signIn: null,
   oracleBeside: false,
   finale: false,
+  celebrating: false,
   journalOpen: false,
   journalUnread: false,
   savedAt: null,
@@ -208,6 +211,7 @@ export const quest = {
     state.deny !== null ||
     state.signIn !== null ||
     state.finale ||
+    state.celebrating ||
     state.menuOpen ||
     state.journalOpen ||
     !state.started,
@@ -243,6 +247,7 @@ export const quest = {
       deny: null,
       oracleBeside: false,
       finale: false,
+      celebrating: false,
     })
   },
   setMode: (mode: Mode, identity: Identity) => update({ mode, identity }),
@@ -337,7 +342,9 @@ export const quest = {
   summonOracle: () => update({ oracleBeside: true }),
   dismissOracle: () => update({ oracleBeside: false }),
   openFinale: () => update({ finale: true, menuOpen: false, journalOpen: false }),
-  closeFinale: () => update({ finale: false, inputResumesAt: performance.now() + 200 }),
+  /** Quest complete leads straight on to the celebration. */
+  closeFinale: () => update({ finale: false, celebrating: true }),
+  endCelebration: () => update({ celebrating: false, inputResumesAt: performance.now() + 200 }),
 
   toast: (text: string, tone: Toast['tone']) => update({ toast: { id: nextId++, text, tone } }),
   clearToast: (id: number) => {

@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 import { probe } from '../game/access.ts'
+import { Celebration } from './Celebration.tsx'
 import { INTRO, LESSONS, LESSON_ORDER } from '../game/content.ts'
 import { KNIGHT_QUOTA, questMachine, type QuestStage } from '../game/quest-machine.ts'
 import { MAX_HP, quest, useQuest, type DenyView, type Dir } from '../game/store.ts'
@@ -123,12 +124,17 @@ function useDialogKeys() {
     const onKey = (event: KeyboardEvent) => {
       // A handled key (like the Enter that starts the game) must not also advance a dialog.
       if (event.repeat) return
-      const { deny, dialog, finale, journalOpen, menuOpen, signIn } = quest.get()
+      const { celebrating, deny, dialog, finale, journalOpen, menuOpen, signIn } = quest.get()
+
+      // The celebration screen handles its own keys.
+      if (celebrating) return
       const journalKey = event.key === 'i' || event.key === 'I'
       const confirm = event.key === 'Enter' || event.key === ' ' || event.key === 'e' || event.key === 'E'
 
       // A focused tab or button inside a tabbed screen handles its own Enter and Space.
-      const onDenyButton = deny && event.target instanceof HTMLButtonElement
+      // (A button left focused in the hidden tab doesn't count.)
+      const onButton =
+        event.target instanceof HTMLButtonElement && !event.target.closest('[aria-hidden="true"]')
 
       if (signIn) {
         if (event.key === 'Escape') {
@@ -139,11 +145,11 @@ function useDialogKeys() {
         event.preventDefault()
         window.dispatchEvent(new Event(TAB_EVENT))
       } else if (finale && !dialog) {
-        if ((confirm && !(event.target instanceof HTMLButtonElement)) || event.key === 'Escape') {
+        if ((confirm && !onButton) || event.key === 'Escape') {
           event.preventDefault()
           quest.closeFinale()
         }
-      } else if (deny && ((confirm && !onDenyButton) || event.key === 'Escape')) {
+      } else if (deny && ((confirm && !onButton) || event.key === 'Escape')) {
         event.preventDefault()
         quest.closeDeny()
       } else if (dialog && confirm) {
@@ -250,7 +256,7 @@ function Splash() {
       </h1>
       <p className="m-0 max-w-[36ch] text-muted">Every gate checks you, every time.</p>
       <button
-        className="mt-2 animate-blink rounded border-3 border-night-deep bg-lime px-[22px] py-3 font-display text-[1.15rem] text-night-deep shadow-[4px_4px_0_var(--color-night-deep)]"
+        className="mt-2 motion-safe:animate-blink rounded border-3 border-night-deep bg-lime px-[22px] py-3 font-display text-[1.15rem] text-night-deep shadow-[4px_4px_0_var(--color-night-deep)]"
         type="button"
         onClick={begin}
         autoFocus
@@ -334,6 +340,7 @@ function Kingdom() {
       </div>
       <SignInSheet />
       <Finale />
+      <Celebration />
     </div>
   )
 }
@@ -772,6 +779,9 @@ function PolicyLines({ lines }: { readonly lines: readonly EvalLine[] }) {
   )
 }
 
+const enterKeep =
+  'motion-safe:animate-blink rounded border-3 border-night-deep bg-lime px-[18px] py-2.5 font-display text-[1.05rem] text-night-deep shadow-[4px_4px_0_var(--color-night-deep)]'
+
 /** The Royal Keep's doors open: the quest is done. */
 function Finale() {
   const open = useQuest((s) => s.finale)
@@ -825,15 +835,10 @@ function FinaleStory({ email }: { readonly email: string }) {
         tab.
       </p>
       <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-1">
-        <button
-          className="rounded border-2 border-ink bg-panel px-3.5 py-2 font-display text-ink hover:border-lens"
-          type="button"
-          onClick={() => quest.closeFinale()}
-          autoFocus
-        >
-          Back to the kingdom
+        <button className={enterKeep} type="button" onClick={() => quest.closeFinale()} autoFocus>
+          Enter the Keep ▸
         </button>
-        <p className={`${tabHint} text-muted`}>← → switch tabs · Enter to close</p>
+        <p className={`${tabHint} text-muted`}>← → switch tabs · Enter to go in</p>
       </div>
     </div>
   )
@@ -882,14 +887,10 @@ function FinalePomerium({ identity }: { readonly identity: Identity }) {
         )}
       </ol>
       <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-3.5">
-        <button
-          className="rounded bg-paper-ink px-3.5 py-2 text-paper"
-          type="button"
-          onClick={() => quest.closeFinale()}
-        >
-          Back to the kingdom
+        <button className={enterKeep} type="button" onClick={() => quest.closeFinale()}>
+          Enter the Keep ▸
         </button>
-        <p className={`${tabHint} text-paper-muted`}>← → switch tabs · Enter to close</p>
+        <p className={`${tabHint} text-paper-muted`}>← → switch tabs · Enter to go in</p>
       </div>
     </div>
   )

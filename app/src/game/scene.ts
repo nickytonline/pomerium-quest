@@ -316,7 +316,8 @@ export class KingdomScene extends Phaser.Scene {
 
   /** Steps the fountain's four tiles through its frames, unless the player prefers less motion. */
   private animateFountain() {
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    // Motion is opt-in: animate only when the player hasn't asked for less (or the browser can't say).
+    if (!matchMedia('(prefers-reduced-motion: no-preference)').matches) return
     const { x, y } = this.world.fountain
     let frame = 0
 
