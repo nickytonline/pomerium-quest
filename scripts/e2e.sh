@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# End-to-end checks against a running ./quest deployment: signs players in through Pomerium and
-# the Oracle with curl, then checks every zone policy and the stale-claims lesson.
+# End-to-end checks against a running ./quest deployment: signs players up and in through Pomerium
+# and the Oracle (Keycloak) with curl, then checks every zone policy and the stale-claims lesson.
 set -uo pipefail
 
 PORT="${QUEST_PORT:-443}"
@@ -26,12 +26,39 @@ check() {
 
 status() { curl -s -o /dev/null -w '%{http_code}' -b "$1" -H "$JSON" -X "${3:-GET}" "${GAME}$2"; }
 
-sign_in() {
-  local jar="$1" email="$2" page action
-  page="$(curl -s -L -c "$jar" -b "$jar" "${GAME}/zones/oracle/signin")"
-  action="$(printf '%s' "$page" | grep -o 'action="[^"]*"' | head -1 | sed 's/action="//;s/"$//')"
-  [ -n "$action" ] || { echo "  could not find the Oracle sign-in form"; return 1; }
-  curl -s -L -c "$jar" -b "$jar" -o /dev/null -w '%{url_effective}' --data-urlencode "email=${email}" "${ORACLE}${action}"
+PASSWORD="e2e-${RUN}-pass"
+
+# The first form on a Keycloak page: its action, with HTML entities undone.
+form_action() { grep -o 'action="[^"]*"' | head -1 | sed 's/action="//;s/"$//;s/&amp;/\&/g'; }
+
+# Starts a sign-in through Pomerium and prints the Oracle's sign-in page.
+sign_in_page() { curl -s -L -c "$1" -b "$1" "${GAME}/zones/oracle/signin"; }
+
+# Signs a new player up from the Oracle's sign-in page; prints where the browser lands.
+sign_up() {
+  local jar="$1" email="$2" link action
+  link="$(sign_in_page "$jar" | grep -o 'href="[^"]*registration[^"]*"' | head -1 | sed 's/href="//;s/"$//;s/&amp;/\&/g')"
+  [ -n "$link" ] || { echo "  could not find the Oracle's sign-up link"; return 1; }
+  action="$(curl -s -L -c "$jar" -b "$jar" "${ORACLE}${link}" | form_action)"
+  [ -n "$action" ] || { echo "  could not find the Oracle's sign-up form"; return 1; }
+  curl -s -L -c "$jar" -b "$jar" -o /dev/null -w '%{url_effective}' --data-urlencode "email=${email}" \
+    --data-urlencode "password=${PASSWORD}" --data-urlencode "password-confirm=${PASSWORD}" "$action"
+}
+
+# Signs an existing player in, given the sign-in page the browser is on; prints where it lands.
+sign_in_from() {
+  local jar="$1" email="$2" page="$3" action
+  action="$(printf '%s' "$page" | form_action)"
+  [ -n "$action" ] || { echo "  could not find the Oracle's sign-in form"; return 1; }
+  curl -s -L -c "$jar" -b "$jar" -o /dev/null -w '%{url_effective}' --data-urlencode "username=${email}" \
+    --data-urlencode "password=${PASSWORD}" "$action"
+}
+
+# Signs out of Pomerium (and the Oracle), which goes straight back to the Oracle's sign-in page,
+# then signs in again so the new session carries fresh claims.
+sign_in_again() {
+  local jar="$1" email="$2"
+  sign_in_from "$jar" "$email" "$(curl -s -L -c "$jar" -b "$jar" "${GAME}/.pomerium/sign_out")"
 }
 
 echo "Anonymous"
@@ -42,7 +69,7 @@ check "fields needs a session" 401 "$(status "$anon" /zones/fields/enter)"
 echo "Citizen"
 citizen="${JAR_DIR}/citizen"
 email="e2e-${RUN}@kingdom.com"
-check "sign-in lands back in the game" "${GAME}/?signedin=1" "$(sign_in "$citizen" "$email")"
+check "sign-up lands back in the game" "${GAME}/?signedin=1" "$(sign_up "$citizen" "$email")"
 check "app verified Pomerium's JWT" "$email" \
   "$(curl -s -b "$citizen" -H "$JSON" "${GAME}/zones/oracle/" | grep -o "\"email\":\"[^\"]*\"" | head -1 | cut -d'"' -f4)"
 check "fields" 200 "$(status "$citizen" /zones/fields/enter)"
@@ -54,8 +81,7 @@ check "library write (POST)" 403 "$(status "$citizen" /zones/library/ledger POST
 echo "Knighthood"
 check "Captain knights the player" 200 "$(status "$citizen" /zones/guild/knight POST)"
 check "armory still refuses (session holds old claims)" 403 "$(status "$citizen" /zones/armory/enter)"
-check "sign-out returns straight to sign-in" "${GAME}/?signedin=1" \
-  "$(curl -s -L -c "$citizen" -b "$citizen" -o /dev/null -w '%{url_effective}' "${GAME}/.pomerium/sign_out")"
+check "signing in again lands back in the game" "${GAME}/?signedin=1" "$(sign_in_again "$citizen" "$email")"
 armory=403
 for _ in $(seq 1 45); do
   armory="$(status "$citizen" /zones/armory/enter)"
@@ -67,7 +93,7 @@ check "armory opens once Pomerium sees the new claim" 200 "$armory"
 echo "The Royal Keep"
 check "keep refuses a knight who isn't a scholar" 403 "$(status "$citizen" /zones/keep/enter)"
 check "Librarian names the player a scholar" 200 "$(status "$citizen" /zones/oracle/scholar POST)"
-curl -s -L -c "$citizen" -b "$citizen" -o /dev/null "${GAME}/.pomerium/sign_out"
+sign_in_again "$citizen" "$email" >/dev/null
 keep=403
 for _ in $(seq 1 45); do
   keep="$(status "$citizen" /zones/keep/enter)"
@@ -78,7 +104,7 @@ check "keep opens for a citizen who is a knight and a scholar" 200 "$keep"
 
 echo "Outsider"
 outsider="${JAR_DIR}/outsider"
-sign_in "$outsider" "wanderer-${RUN}@outlands.net" >/dev/null
+sign_up "$outsider" "wanderer-${RUN}@outlands.net" >/dev/null
 check "fields (any signed-in user)" 200 "$(status "$outsider" /zones/fields/enter)"
 check "town (wrong domain)" 403 "$(status "$outsider" /zones/town/enter)"
 

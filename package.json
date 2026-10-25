@@ -9,8 +9,7 @@
     "url": "git+https://github.com/nickytonline/pomerium-quest.git"
   },
   "workspaces": [
-    "app",
-    "oracle"
+    "app"
   ],
   "type": "module",
   "scripts": {

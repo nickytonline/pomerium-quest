@@ -335,10 +335,19 @@ function oracle() {
     ]
 
     if (mode === 'pomerium') {
-      quest.say([...intro, { who: 'Oracle', text: 'Step into the light and tell me who you are.' }], () => {
-        learn('idp')
-        signInWithPomerium(signInUrl(), welcome)
-      })
+      quest.say(
+        [
+          ...intro,
+          {
+            who: 'Oracle',
+            text: `Step into the light and tell me who you are. New here? Introduce yourself with any email and a password. Citizens of ${KINGDOM_DOMAIN} may enter the town; any other address will watch its gate refuse you.`,
+          },
+        ],
+        () => {
+          learn('idp')
+          signInWithPomerium(signInUrl(), welcome)
+        },
+      )
 
       return
     }

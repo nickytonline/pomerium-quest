@@ -23,7 +23,17 @@ const APP_DEV_IMAGE = 'pomerium-quest/app-dev:dev'
 
 /** Where `./quest up` mounts this repo inside the k3d node. */
 const NODE_SOURCE = '/quest-src'
-const ORACLE_IMAGE = 'pomerium-quest/oracle:dev'
+
+/** The Oracle is Keycloak, with its own realm and a login theme that matches the game. */
+const KEYCLOAK_IMAGE = 'quay.io/keycloak/keycloak:26.7.5'
+const REALM = 'kingdom'
+const THEME = join(ROOT, 'deploy/keycloak/theme')
+
+const THEME_FILES = [
+  'login/theme.properties',
+  'login/messages/messages_en.properties',
+  'login/resources/css/quest.css',
+]
 
 const DOMAIN = process.env['QUEST_DOMAIN'] ?? 'localhost.pomerium.io'
 const PORT = Number(process.env['QUEST_PORT'] ?? '443')
@@ -31,35 +41,40 @@ const DEV = process.env['QUEST_DEV'] === '1'
 const hostPort = PORT === 443 ? '' : `:${PORT}`
 const publicUrl = (subdomain: string) => `https://${subdomain}.${DOMAIN}${hostPort}`
 const svc = (name: string, port: number) => `http://${name}.${NAMESPACE}.svc.cluster.local:${port}`
+const oracleIssuer = `${publicUrl('oracle')}/realms/${REALM}`
 
 interface Secrets {
   readonly sharedSecret: string
   readonly cookieSecret: string
   readonly signingKey: string
+  /** Pomerium's client secret at Keycloak. */
   readonly clientSecret: string
-  readonly oracleAdminKey: string
-  readonly oracleCookieKey: string
+  /** The game's client secret at Keycloak, for adding players to groups. */
+  readonly questClientSecret: string
+  /** Keycloak's own admin console (master realm), reached with `./quest admin`. */
+  readonly keycloakAdminPassword: string
 }
 
-/** Secrets are generated once and kept in .quest/ so sessions survive a re-render. */
+/**
+ * Secrets are generated once and kept in .quest/ so sessions survive a re-render. Secrets added
+ * since the file was written are generated and saved alongside the old ones.
+ */
 function loadSecrets(): Secrets {
   const file = join(STATE, 'secrets.json')
 
-  if (existsSync(file)) {
-    // SAFETY: written by this function below and never edited by hand.
-    return JSON.parse(readFileSync(file, 'utf8')) as Secrets
-  }
+  // SAFETY: written by this function below and never edited by hand.
+  const saved = existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as Partial<Secrets>) : {}
 
   const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' })
   const pem = privateKey.export({ format: 'pem', type: 'pkcs8' }).toString()
 
   const secrets: Secrets = {
-    sharedSecret: randomBytes(32).toString('base64'),
-    cookieSecret: randomBytes(32).toString('base64'),
-    signingKey: Buffer.from(pem).toString('base64'),
-    clientSecret: randomBytes(24).toString('hex'),
-    oracleAdminKey: randomBytes(24).toString('hex'),
-    oracleCookieKey: randomBytes(24).toString('hex'),
+    sharedSecret: saved.sharedSecret ?? randomBytes(32).toString('base64'),
+    cookieSecret: saved.cookieSecret ?? randomBytes(32).toString('base64'),
+    signingKey: saved.signingKey ?? Buffer.from(pem).toString('base64'),
+    clientSecret: saved.clientSecret ?? randomBytes(24).toString('hex'),
+    questClientSecret: saved.questClientSecret ?? randomBytes(24).toString('hex'),
+    keycloakAdminPassword: saved.keycloakAdminPassword ?? randomBytes(12).toString('hex'),
   }
 
   mkdirSync(STATE, { recursive: true })
@@ -95,14 +110,15 @@ function pomeriumConfig(secrets: Secrets): Yaml {
   return {
     address: ':8443',
     authenticate_service_url: publicUrl('authenticate'),
-    // After signing out, go straight back to sign-in: the Oracle session makes it instant and
-    // the new session carries fresh claims. This is how the game refreshes a player's groups.
+    // After signing out, go straight back to sign-in: the new session carries fresh claims.
+    // This is how the game refreshes a player's groups.
     signout_redirect_url: `${game}/zones/oracle/signin`,
     idp_provider: 'oidc',
-    idp_provider_url: publicUrl('oracle'),
+    idp_provider_url: oracleIssuer,
     idp_client_id: 'pomerium',
     idp_client_secret: secrets.clientSecret,
-    idp_scopes: ['openid', 'email', 'profile', 'groups'],
+    // Keycloak adds the groups claim through a mapper on Pomerium's client, not through a scope.
+    idp_scopes: ['openid', 'email', 'profile'],
     shared_secret: secrets.sharedSecret,
     cookie_secret: secrets.cookieSecret,
     signing_key: secrets.signingKey,
@@ -111,15 +127,20 @@ function pomeriumConfig(secrets: Secrets): Yaml {
     // Forward the identity provider's groups claim to the app as a header too.
     jwt_claims_headers: { 'X-Pomerium-Claim-Groups': 'groups' },
     routes: [
-      {
+      // Only the game's realm and Keycloak's static files are public. The admin console and the
+      // master realm stay inside the cluster (`./quest admin` forwards a port to them).
+      ...[`/realms/${REALM}/`, '/resources/'].map((prefix) => ({
         from: publicUrl('oracle'),
-        to: svc('oracle', 4000),
+        prefix,
+        to: svc('keycloak', 8080),
         allow_public_unauthenticated_access: true,
         preserve_host_header: true,
         // The game opens the Oracle's sign-in page in a frame, so the player never leaves the
-        // game. Browsers let frame-ancestors override Pomerium's default X-Frame-Options.
-        set_response_headers: { 'Content-Security-Policy': `frame-ancestors ${game}` },
-      },
+        // game. Browsers let frame-ancestors override X-Frame-Options.
+        set_response_headers: {
+          'Content-Security-Policy': `frame-src 'self'; frame-ancestors 'self' ${game}; object-src 'none';`,
+        },
+      })),
       // One route per zone: same host, its own path prefix, its own policy.
       ...ZONES.map((zone) => ({
         from: game,
@@ -158,6 +179,7 @@ function deployment(
   port: number,
   extra: { [key: string]: Yaml },
   pod: { [key: string]: Yaml },
+  strategy: 'RollingUpdate' | 'Recreate' = 'RollingUpdate',
 ): Yaml {
   return {
     apiVersion: 'apps/v1',
@@ -165,6 +187,7 @@ function deployment(
     metadata: { name, namespace: NAMESPACE, labels: labels(name) },
     spec: {
       replicas: 1,
+      strategy: { type: strategy },
       selector: { matchLabels: labels(name) },
       template: {
         metadata: { labels: labels(name) },
@@ -194,10 +217,121 @@ function service(name: string, port: number, targetPort: number, type = 'Cluster
   }
 }
 
+/** ConfigMap keys can't hold slashes: login/resources/css/quest.css → login.resources.css.quest.css */
+const themeKey = (file: string) => file.replace(/\//g, '.')
+
 const secretEnv = (name: string, key: string) => ({
   name,
   valueFrom: { secretKeyRef: { name: 'quest-secrets', key } },
 })
+
+/** Registration asks only for an email and a password: no first and last name. */
+const userProfile = {
+  attributes: [
+    {
+      name: 'username',
+      displayName: '${username}',
+      validations: {
+        length: { min: 3, max: 255 },
+        'username-prohibited-characters': {},
+        'up-username-not-idn-homograph': {},
+      },
+      permissions: { view: ['admin', 'user'], edit: ['admin', 'user'] },
+      multivalued: false,
+    },
+    {
+      name: 'email',
+      displayName: '${email}',
+      validations: { email: {}, length: { max: 255 } },
+      required: { roles: ['user'] },
+      permissions: { view: ['admin', 'user'], edit: ['admin', 'user'] },
+      multivalued: false,
+    },
+  ],
+}
+
+/**
+ * The game's Keycloak realm. Keycloak imports it on first start only; after that the realm
+ * (and every player in it) lives in Keycloak's database. `./quest reset-oracle` starts over.
+ */
+function realm(secrets: Secrets): Yaml {
+  const game = publicUrl('game')
+
+  return {
+    realm: REALM,
+    enabled: true,
+    displayName: 'The Oracle',
+    displayNameHtml: '<div class="kc-logo-text"><span>The Oracle</span></div>',
+    loginTheme: 'quest',
+    // Anyone may sign up with any email, unverified: the address decides what the game lets
+    // them reach (kingdom.com citizens get into town). Never reuse this realm for anything real.
+    registrationAllowed: true,
+    registrationEmailAsUsername: true,
+    loginWithEmailAllowed: true,
+    duplicateEmailsAllowed: false,
+    verifyEmail: false,
+    resetPasswordAllowed: false,
+    rememberMe: false,
+    sslRequired: 'external',
+    groups: [{ name: 'knights' }, { name: 'scholars' }],
+    clients: [
+      {
+        clientId: 'pomerium',
+        name: 'Pomerium',
+        enabled: true,
+        publicClient: false,
+        secret: secrets.clientSecret,
+        standardFlowEnabled: true,
+        directAccessGrantsEnabled: false,
+        redirectUris: [`${publicUrl('authenticate')}/oauth2/callback`],
+        attributes: { 'post.logout.redirect.uris': `${game}/*##${publicUrl('authenticate')}/*` },
+        protocolMappers: [
+          {
+            name: 'groups',
+            protocol: 'openid-connect',
+            protocolMapper: 'oidc-group-membership-mapper',
+            config: {
+              'claim.name': 'groups',
+              'full.path': 'false',
+              'id.token.claim': 'true',
+              'access.token.claim': 'true',
+              'userinfo.token.claim': 'true',
+              'introspection.token.claim': 'true',
+            },
+          },
+        ],
+      },
+      {
+        // The game server's own client: it may look up players and add them to groups.
+        clientId: 'quest-admin',
+        name: 'Pomerium Quest',
+        enabled: true,
+        publicClient: false,
+        secret: secrets.questClientSecret,
+        standardFlowEnabled: false,
+        directAccessGrantsEnabled: false,
+        serviceAccountsEnabled: true,
+      },
+    ],
+    users: [
+      {
+        username: 'service-account-quest-admin',
+        enabled: true,
+        serviceAccountClientId: 'quest-admin',
+        clientRoles: { 'realm-management': ['view-users', 'manage-users', 'query-groups'] },
+      },
+    ],
+    components: {
+      'org.keycloak.userprofile.UserProfileProvider': [
+        {
+          providerId: 'declarative-user-profile',
+          subComponents: {},
+          config: { 'kc.user.profile.config': [JSON.stringify(userProfile)] },
+        },
+      ],
+    },
+  }
+}
 
 function manifests(secrets: Secrets): Yaml[] {
   const escapedDomain = DOMAIN.replace(/\./g, '\\.')
@@ -209,9 +343,8 @@ function manifests(secrets: Secrets): Yaml[] {
       kind: 'Secret',
       metadata: { name: 'quest-secrets', namespace: NAMESPACE },
       stringData: {
-        'client-secret': secrets.clientSecret,
-        'oracle-admin-key': secrets.oracleAdminKey,
-        'oracle-cookie-key': secrets.oracleCookieKey,
+        'quest-client-secret': secrets.questClientSecret,
+        'keycloak-admin-password': secrets.keycloakAdminPassword,
       },
     },
     {
@@ -248,8 +381,10 @@ function manifests(secrets: Secrets): Yaml[] {
         env: [
           { name: 'QUEST_MODE', value: 'pomerium' },
           { name: 'QUEST_PUBLIC_ORIGIN', value: publicUrl('game') },
-          { name: 'ORACLE_ADMIN_URL', value: svc('oracle', 4000) },
-          secretEnv('ORACLE_ADMIN_KEY', 'oracle-admin-key'),
+          { name: 'KEYCLOAK_URL', value: svc('keycloak', 8080) },
+          { name: 'KEYCLOAK_REALM', value: REALM },
+          { name: 'KEYCLOAK_CLIENT_ID', value: 'quest-admin' },
+          secretEnv('KEYCLOAK_CLIENT_SECRET', 'quest-client-secret'),
           { name: 'NODE_EXTRA_CA_CERTS', value: '/certs/ca.crt' },
           ...(DEV ? [{ name: 'QUEST_HMR_PORT', value: String(PORT) }] : []),
         ],
@@ -272,37 +407,69 @@ function manifests(secrets: Secrets): Yaml[] {
       },
     ),
     service('quest', 3000, 3000),
+    {
+      apiVersion: 'v1',
+      kind: 'Secret',
+      metadata: { name: 'keycloak-realm', namespace: NAMESPACE },
+      stringData: { [`${REALM}-realm.json`]: JSON.stringify(realm(secrets), null, 2) },
+    },
+    {
+      apiVersion: 'v1',
+      kind: 'ConfigMap',
+      metadata: { name: 'keycloak-theme', namespace: NAMESPACE },
+      data: Object.fromEntries(
+        THEME_FILES.map((file) => [themeKey(file), readFileSync(join(THEME, file), 'utf8')]),
+      ),
+    },
     deployment(
-      'oracle',
-      ORACLE_IMAGE,
-      4000,
+      'keycloak',
+      KEYCLOAK_IMAGE,
+      8080,
       {
+        // Dev mode: an embedded H2 database on a volume, and no theme caching, so edits to
+        // deploy/keycloak/theme show up after `./quest deploy`. Use a real database in production.
+        args: ['start-dev', '--import-realm'],
         env: [
-          { name: 'ORACLE_ISSUER', value: publicUrl('oracle') },
-          { name: 'ORACLE_REDIRECT_URI', value: `${publicUrl('authenticate')}/oauth2/callback` },
-          secretEnv('ORACLE_CLIENT_SECRET', 'client-secret'),
-          secretEnv('ORACLE_ADMIN_KEY', 'oracle-admin-key'),
-          secretEnv('ORACLE_COOKIE_KEY', 'oracle-cookie-key'),
-          { name: 'ORACLE_DATA_FILE', value: '/data/groups.json' },
+          { name: 'KC_HOSTNAME', value: publicUrl('oracle') },
+          // `./quest admin` forwards this port to reach the admin console.
+          { name: 'KC_HOSTNAME_ADMIN', value: 'http://localhost:8080' },
+          // TLS ends at Pomerium; trust its X-Forwarded-* headers.
+          { name: 'KC_PROXY_HEADERS', value: 'xforwarded' },
+          { name: 'KC_HEALTH_ENABLED', value: 'true' },
+          { name: 'KC_BOOTSTRAP_ADMIN_USERNAME', value: 'admin' },
+          secretEnv('KC_BOOTSTRAP_ADMIN_PASSWORD', 'keycloak-admin-password'),
         ],
         volumeMounts: [
-          { name: 'certs', mountPath: '/certs', readOnly: true },
-          { name: 'data', mountPath: '/data' },
+          { name: 'data', mountPath: '/opt/keycloak/data/h2' },
+          { name: 'realm', mountPath: '/opt/keycloak/data/import', readOnly: true },
+          { name: 'theme', mountPath: '/opt/keycloak/themes/quest', readOnly: true },
         ],
-        readinessProbe: { httpGet: { path: '/healthz', port: 4000 }, periodSeconds: 3 },
+        readinessProbe: { httpGet: { path: '/health/ready', port: 9000 }, periodSeconds: 5 },
       },
       {
-        // The Oracle keeps granted groups on a volume so a redeploy doesn't forget knighthoods.
-        volumes: [caVolume, { name: 'data', persistentVolumeClaim: { claimName: 'oracle-data' } }],
+        // Players, their passwords and their groups live on this volume, so a redeploy keeps them.
+        volumes: [
+          { name: 'data', persistentVolumeClaim: { claimName: 'keycloak-data' } },
+          { name: 'realm', secret: { secretName: 'keycloak-realm' } },
+          {
+            name: 'theme',
+            configMap: {
+              name: 'keycloak-theme',
+              items: THEME_FILES.map((file) => ({ key: themeKey(file), path: file })),
+            },
+          },
+        ],
         securityContext: { fsGroup: 1000 },
       },
+      // H2 locks its database file, so the old pod must stop before the new one starts.
+      'Recreate',
     ),
-    service('oracle', 4000, 4000),
+    service('keycloak', 8080, 8080),
     {
       apiVersion: 'v1',
       kind: 'PersistentVolumeClaim',
-      metadata: { name: 'oracle-data', namespace: NAMESPACE },
-      spec: { accessModes: ['ReadWriteOnce'], resources: { requests: { storage: '16Mi' } } },
+      metadata: { name: 'keycloak-data', namespace: NAMESPACE },
+      spec: { accessModes: ['ReadWriteOnce'], resources: { requests: { storage: '256Mi' } } },
     },
     // Only Pomerium may reach the game; only Pomerium and the game may reach the Oracle.
     {
@@ -318,9 +485,9 @@ function manifests(secrets: Secrets): Yaml[] {
     {
       apiVersion: 'networking.k8s.io/v1',
       kind: 'NetworkPolicy',
-      metadata: { name: 'oracle-from-pomerium-and-quest', namespace: NAMESPACE },
+      metadata: { name: 'keycloak-from-pomerium-and-quest', namespace: NAMESPACE },
       spec: {
-        podSelector: { matchLabels: labels('oracle') },
+        podSelector: { matchLabels: labels('keycloak') },
         policyTypes: ['Ingress'],
         ingress: [
           {

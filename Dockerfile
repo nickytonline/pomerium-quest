@@ -1,12 +1,11 @@
 # syntax=docker/dockerfile:1
-# One Dockerfile, two images: `--target app` (the game) and `--target oracle` (the IdP).
+# The game's images: `--target app` (production build) and `--target app-dev` (`./quest dev`).
 ARG NODE_IMAGE=node:24.22.1-alpine
 
 FROM ${NODE_IMAGE} AS deps
 WORKDIR /repo
 COPY package.json package-lock.json ./
 COPY app/package.json app/
-COPY oracle/package.json oracle/
 RUN npm ci --no-audit --no-fund
 
 FROM deps AS app-build
@@ -30,20 +29,3 @@ COPY app app
 ENV PORT=3000
 EXPOSE 3000
 CMD ["npm", "run", "dev", "-w", "app", "--", "--host", "0.0.0.0"]
-
-FROM ${NODE_IMAGE} AS oracle-deps
-WORKDIR /repo
-COPY package.json package-lock.json ./
-COPY app/package.json app/
-COPY oracle/package.json oracle/
-RUN npm ci --omit=dev --workspace oracle --include-workspace-root=false --no-audit --no-fund
-
-FROM ${NODE_IMAGE} AS oracle
-WORKDIR /srv
-ENV NODE_ENV=production PORT=4000
-COPY --from=oracle-deps /repo/node_modules node_modules
-COPY oracle/package.json ./
-COPY oracle/src src
-USER node
-EXPOSE 4000
-CMD ["node", "src/main.ts"]

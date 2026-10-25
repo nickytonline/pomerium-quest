@@ -5,7 +5,9 @@
 #   ./quest dev       same, but the game runs its Vite dev server and hot-reloads app/src
 #   ./quest down      delete the cluster
 #   ./quest status    show pods
-#   ./quest logs X    follow logs for pomerium | quest | oracle
+#   ./quest logs X    follow logs for pomerium | quest | keycloak
+#   ./quest admin     open Keycloak's admin console (the Oracle) on http://localhost:8080
+#   ./quest reset-oracle  forget every player: re-import the Keycloak realm from scratch
 #
 # Environment: QUEST_PORT (default 443), QUEST_DOMAIN (default localhost.pomerium.io).
 set -euo pipefail
@@ -74,17 +76,15 @@ cluster() {
 images() {
   say "Building images"
   docker build --target app -t pomerium-quest/app:dev .
-  docker build --target oracle -t pomerium-quest/oracle:dev .
   say "Loading images into the cluster"
-  k3d image import -c "$CLUSTER" pomerium-quest/app:dev pomerium-quest/oracle:dev
+  k3d image import -c "$CLUSTER" pomerium-quest/app:dev
 }
 
 dev_image() {
   say "Building the dev image"
   docker build --target app-dev -t pomerium-quest/app-dev:dev .
-  docker build --target oracle -t pomerium-quest/oracle:dev .
   say "Loading images into the cluster"
-  k3d image import -c "$CLUSTER" pomerium-quest/app-dev:dev pomerium-quest/oracle:dev
+  k3d image import -c "$CLUSTER" pomerium-quest/app-dev:dev
 }
 
 # Clusters made before `./quest dev` existed don't have the repo mounted into the node.
@@ -97,6 +97,9 @@ deploy() {
   say "Rendering Pomerium config and manifests from app/src/game/zones.ts"
   QUEST_DEV="${QUEST_DEV:-0}" node scripts/render.ts
   kc apply -f deploy/.generated/manifests.yaml
+  # Clusters from before Keycloak still run the old Node Oracle.
+  kc -n "$NAMESPACE" delete deployment/oracle service/oracle pvc/oracle-data \
+    networkpolicy/oracle-from-pomerium-and-quest --ignore-not-found >/dev/null
   kc -n "$NAMESPACE" create secret generic quest-tls \
     --from-file=tls.crt="${CERTS}/tls.crt" \
     --from-file=tls.key="${CERTS}/tls.key" \
@@ -105,9 +108,9 @@ deploy() {
   # Pick up the DNS rewrite, new images and new config.
   kc -n kube-system rollout restart deployment/coredns
   kc -n "$NAMESPACE" rollout restart deployment
-  say "Waiting for Pomerium, the Oracle and the game"
+  say "Waiting for Pomerium, the Oracle (Keycloak) and the game"
   kc -n kube-system rollout status deployment/coredns --timeout=120s
-  for d in oracle quest pomerium; do kc -n "$NAMESPACE" rollout status "deployment/${d}" --timeout=180s; done
+  for d in keycloak quest pomerium; do kc -n "$NAMESPACE" rollout status "deployment/${d}" --timeout=300s; done
   # Pomerium needs a few seconds after the rollout to load certificates and policies.
   for _ in $(seq 1 60); do
     if curl -fsS -o /dev/null "$(url)/" 2>/dev/null; then return; fi
@@ -153,8 +156,23 @@ case "${1:-up}" in
   logs)
     kc -n "$NAMESPACE" logs -f "deployment/${2:-pomerium}"
     ;;
+  admin)
+    say "Keycloak admin console: http://localhost:8080/admin (user admin, password $(node -p "require('./${STATE}/secrets.json').keycloakAdminPassword"))"
+    say "The game's realm is \"kingdom\". Ctrl-C to stop."
+    kc -n "$NAMESPACE" port-forward service/keycloak 8080:8080
+    ;;
+  reset-oracle)
+    say "Forgetting every player and re-importing the realm"
+    kc -n "$NAMESPACE" scale deployment/keycloak --replicas=0
+    kc -n "$NAMESPACE" wait --for=delete pod -l app=keycloak --timeout=120s 2>/dev/null || true
+    kc -n "$NAMESPACE" delete pvc/keycloak-data
+    # Re-apply the last render (dev or not) to recreate the volume and start Keycloak again.
+    kc apply -f deploy/.generated/manifests.yaml >/dev/null
+    kc -n "$NAMESPACE" rollout status deployment/keycloak --timeout=300s
+    say "Ready: $(url)"
+    ;;
   *)
-    echo "usage: ./quest [up|dev|deploy|down|status|test|logs pomerium|quest|oracle]"
+    echo "usage: ./quest [up|dev|deploy|down|status|test|admin|reset-oracle|logs pomerium|quest|keycloak]"
     exit 1
     ;;
 esac

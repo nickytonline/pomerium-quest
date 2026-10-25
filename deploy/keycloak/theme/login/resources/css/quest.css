@@ -1,0 +1,88 @@
+/* Pomerium Quest: the game's night palette over Keycloak's PatternFly login page. */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=Pixelify+Sans:wght@700&display=swap');
+
+:root {
+  color-scheme: dark;
+  --night: #15102a;
+  --panel: #1d1736;
+  --edge: #6d3fc4;
+  --ink: #f3ecff;
+  --muted: #a99ecb;
+  --violet: #8b5cf6;
+  --sun: #ffd86b;
+  --deny: #ff5d73;
+
+  --pf-v5-global--FontFamily--text: 'IBM Plex Sans', system-ui, sans-serif;
+  --pf-v5-global--FontFamily--heading: 'Pixelify Sans', monospace;
+  --pf-v5-global--BackgroundColor--100: var(--panel);
+  --pf-v5-global--Color--100: var(--ink);
+  --pf-v5-global--Color--200: var(--muted);
+  --pf-v5-global--link--Color: var(--sun);
+  --pf-v5-global--link--Color--hover: var(--sun);
+  --pf-v5-global--primary-color--100: var(--violet);
+  --pf-v5-global--primary-color--200: #7c4ddf;
+  --pf-v5-global--danger-color--100: var(--deny);
+  --pf-v5-global--BorderColor--100: var(--edge);
+  --keycloak-card-top-color: var(--edge);
+}
+
+.login-pf body {
+  background: radial-gradient(circle at 50% 30%, #3a1f63, var(--night) 65%) fixed;
+  color: var(--ink);
+}
+
+.pf-v5-c-login__container {
+  grid-template-columns: min(28rem, 100%);
+}
+
+.pf-v5-c-login__main {
+  background: var(--panel);
+  border: 2px solid var(--edge);
+  border-radius: 10px;
+  box-shadow: 0 0 60px rgb(139 92 246 / 0.35);
+}
+
+.pf-v5-c-login__main-header {
+  border-top: 0;
+}
+
+/* The realm's display name stands in for Keycloak's logo. */
+div.kc-logo-text {
+  background-image: none;
+  width: auto;
+  height: auto;
+}
+
+div.kc-logo-text span {
+  display: block;
+  font-family: 'Pixelify Sans', monospace;
+  font-size: 2.4rem;
+  color: var(--sun);
+  text-align: center;
+}
+
+#kc-page-title {
+  font-family: 'Pixelify Sans', monospace;
+  color: var(--sun);
+}
+
+.pf-v5-c-form-control {
+  --pf-v5-c-form-control--BackgroundColor: #0e0a1d;
+  --pf-v5-c-form-control--Color: var(--ink);
+  --pf-v5-c-form-control--after--BorderBottomColor: var(--edge);
+  --pf-v5-c-form-control--before--BorderColor: var(--edge);
+  border-radius: 6px;
+}
+
+.pf-v5-c-button.pf-m-primary {
+  --pf-v5-c-button--m-primary--BackgroundColor: var(--violet);
+  --pf-v5-c-button--m-primary--hover--BackgroundColor: #7c4ddf;
+  --pf-v5-c-button--m-primary--focus--BackgroundColor: #7c4ddf;
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+.pf-v5-c-login__main-footer-band {
+  border-color: var(--edge);
+  color: var(--muted);
+}

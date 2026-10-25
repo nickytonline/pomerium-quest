@@ -129,7 +129,8 @@ export async function requestZone(
 export const signInUrl = () => '/zones/oracle/signin'
 
 /**
- * Sign out of the Pomerium session. Pomerium's signout_redirect_url sends the player straight
- * back to sign in, which picks up fresh claims from the Oracle.
+ * Sign out of the Pomerium session, and with it the Oracle's (Keycloak ends its session too).
+ * Pomerium's signout_redirect_url sends the player straight back to sign in, which picks up
+ * fresh claims from the Oracle.
  */
 export const refreshClaimsUrl = () => '/.pomerium/sign_out'

@@ -9,9 +9,12 @@ export class QuestConfig extends Context.Service<
     readonly mode: QuestMode
     /** Public origin of the game route, e.g. https://game.localhost.pomerium.io */
     readonly publicOrigin: string
-    /** In-cluster address of the Oracle's admin API. */
-    readonly oracleAdminUrl: string
-    readonly oracleAdminKey: Redacted.Redacted<string>
+    /** In-cluster address of Keycloak (the Oracle), for its admin API. */
+    readonly keycloakUrl: string
+    readonly keycloakRealm: string
+    /** The game's own Keycloak client, whose service account may add players to groups. */
+    readonly keycloakClientId: string
+    readonly keycloakClientSecret: Redacted.Redacted<string>
   }
 >()('QuestConfig') {}
 
@@ -26,14 +29,17 @@ export const QuestConfigLive = Layer.effect(
       Config.withDefault('http://localhost:3000'),
     )
 
-    const oracleAdminUrl = yield* Config.String('ORACLE_ADMIN_URL').pipe(
-      Config.withDefault('http://localhost:4000'),
+    const keycloakUrl = yield* Config.String('KEYCLOAK_URL').pipe(Config.withDefault('http://localhost:8080'))
+    const keycloakRealm = yield* Config.String('KEYCLOAK_REALM').pipe(Config.withDefault('kingdom'))
+
+    const keycloakClientId = yield* Config.String('KEYCLOAK_CLIENT_ID').pipe(
+      Config.withDefault('quest-admin'),
     )
 
-    const oracleAdminKey = yield* Config.Redacted('ORACLE_ADMIN_KEY').pipe(
-      Config.withDefault(Redacted.make('dev-only-oracle-key')),
+    const keycloakClientSecret = yield* Config.Redacted('KEYCLOAK_CLIENT_SECRET').pipe(
+      Config.withDefault(Redacted.make('dev-only-client-secret')),
     )
 
-    return { mode, publicOrigin, oracleAdminUrl, oracleAdminKey }
+    return { mode, publicOrigin, keycloakUrl, keycloakRealm, keycloakClientId, keycloakClientSecret }
   }),
 )

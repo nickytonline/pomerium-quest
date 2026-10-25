@@ -8,7 +8,7 @@ Chapter one covers the fundamentals:
 
 | In the game                                                    | In Pomerium                                                              |
 | -------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| The Oracle signs you in                                        | Your identity provider (OIDC)                                            |
+| The Oracle signs you in                                        | Your identity provider (Keycloak, over OIDC)                             |
 | Each gate, and the sign beside it                              | A route and its policy                                                   |
 | The town only admits `kingdom.com` citizens                    | The `domain` criterion                                                   |
 | The Captain makes you a knight; the armory checks it           | `claim/groups`, and claims coming from the IdP                           |
@@ -40,7 +40,9 @@ password the first time.
 | `./quest deploy`        | Rebuild and redeploy into the existing cluster                                          |
 | `./quest test`          | Sign players in through Pomerium with curl and check every zone policy                  |
 | `./quest status`        | Show the pods                                                                           |
-| `./quest logs pomerium` | Follow logs (`pomerium`, `quest` or `oracle`)                                           |
+| `./quest logs pomerium` | Follow logs (`pomerium`, `quest` or `keycloak`)                                         |
+| `./quest admin`         | Open Keycloak's admin console at http://localhost:8080 and print its password           |
+| `./quest reset-oracle`  | Forget every player and re-import the Keycloak realm                                    |
 | `./quest down`          | Delete the cluster                                                                      |
 
 Port 443 already in use? Run `QUEST_PORT=8443 ./quest up` and open `https://game.localhost.pomerium.io:8443`.
@@ -53,7 +55,8 @@ npm run dev -w app
 ```
 
 Open http://localhost:3000. With no Pomerium in front, the game evaluates the same policies in your
-browser, and the Oracle signs you in without leaving the game.
+browser, and the Oracle signs you in without leaving the game. This is handy for quick UI work, but
+`./quest dev` is the real thing: the same hot reload, behind Pomerium and Keycloak.
 
 ## How it fits together
 
@@ -65,7 +68,7 @@ browser ──► Pomerium ──┬─ /zones/oracle/*   authenticated_user    
                        ├─ /zones/armory/*   claim/groups: knights       │
                        ├─ /zones/library/*  citizen GET, or scribes     │
                        └─ /* (game shell)   public                     ─┘
-                       oracle.localhost.pomerium.io ──► oracle (OIDC IdP, oidc-provider)
+                       oracle.localhost.pomerium.io ──► keycloak (OIDC IdP, realm "kingdom")
 ```
 
 - **One source of truth for policy.** [`app/src/game/zones.ts`](app/src/game/zones.ts) defines every
@@ -76,18 +79,27 @@ browser ──► Pomerium ──┬─ /zones/oracle/*   authenticated_user    
   UI. Its `/zones/*` server routes use Effect 4 to verify Pomerium's signed JWT against Pomerium's JWKS
   and to call the Oracle. Quest progression is an XState machine
   ([`app/src/game/quest-machine.ts`](app/src/game/quest-machine.ts)).
-- **The Oracle** ([`oracle/`](oracle)) is a small OIDC identity provider built on `oidc-provider`. It
-  exists so the game can change a player's `groups` claim, and so playing needs no setup.
+- **The Oracle** is [Keycloak](https://www.keycloak.org). `scripts/render.ts` writes its `kingdom`
+  realm: open sign-up, the `knights` and `scholars` groups, a mapper that puts them in a `groups`
+  claim, Pomerium's client, and a `quest-admin` client whose service account lets the game add a
+  player to a group. Its login theme lives in [`deploy/keycloak/theme`](deploy/keycloak/theme) and
+  matches the game. Only `/realms/kingdom/` and `/resources/` are routed through Pomerium; the admin
+  console stays inside the cluster (`./quest admin`).
 - **Kubernetes:** NetworkPolicies allow only Pomerium to reach the game, and only Pomerium and the game
   to reach the Oracle. A CoreDNS rewrite sends in-cluster requests for `*.localhost.pomerium.io` to
   Pomerium.
 
 ### Things worth knowing
 
-- **The Oracle is not a real identity provider.** It has no passwords: anyone can sign in as anyone.
-  That's fine for a local learning game. Never put it in front of anything real. To use a real IdP (for
-  example in a homelab), point Pomerium's `idp_*` settings at it and give the game an `OracleAdmin`
-  implementation for that IdP's admin API.
+- **Anyone can sign up as anyone.** The realm takes any email without verifying it, because the
+  address is what the game's gates check. That's fine for a learning game. Never reuse the realm, or
+  this Pomerium, for anything real.
+- **Keycloak runs in dev mode** (`start-dev`) with its H2 database on a volume, so players survive a
+  redeploy. It imports the realm on first start only: after changing the realm in `render.ts`, or
+  `QUEST_DOMAIN`/`QUEST_PORT`, run `./quest reset-oracle`. A public deployment should run
+  `start` with a real database.
+- **Signing in again signs you out of Keycloak too.** Pomerium's sign-out calls Keycloak's
+  end-session endpoint, so refreshing your claims asks for your password again.
 - **New claims take a moment.** After you sign in again, Pomerium's authorize service can take up to
   about a minute to use the new claim. Until then the armory still answers 403.
 - **`groups` vs `claim/groups`.** The `groups` PPL criterion is Pomerium Enterprise only (it needs

@@ -61,7 +61,7 @@ export const PomeriumIdentityLive = Layer.effect(
 
         return {
           email,
-          name: claims.name ?? email.split('@')[0] ?? email,
+          name: claims.name || (email.split('@')[0] ?? email),
           groups: headerGroups.length > 0 ? headerGroups : (claims.groups ?? []),
           issuer: claims.iss,
         }
