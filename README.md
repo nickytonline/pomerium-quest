@@ -12,7 +12,7 @@ Chapter one covers the fundamentals:
 | Each gate, and the sign beside it                              | A route and its policy                                                   |
 | The town only admits `kingdom.com` citizens                    | The `domain` criterion                                                   |
 | The Captain makes you a knight; the armory checks it           | `claim/groups`, and claims coming from the IdP                           |
-| Being knighted doesn't open the armory until you sign in again | Your session holds the claims from sign-in                               |
+| Being knighted doesn't open the armory until you sign in again | Your session holds the claims from sign-in until Pomerium refreshes it   |
 | The library lets you read but not write                        | Allow rules can check `http_method`                                      |
 | The access log and the denial screen                           | Every request is checked, and denied by default                          |
 | The game server knows who you are                              | Pomerium's signed `X-Pomerium-Jwt-Assertion` header, verified by the app |

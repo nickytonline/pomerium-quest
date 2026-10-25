@@ -145,12 +145,12 @@ function denyView(
       title: 'Sign in required',
       story: {
         title: "The gate doesn't know you",
-        text: "Gates here only open for people the Oracle has vouched for, and he hasn't met you yet. His temple is to the west.",
+        text: "Gates here only open for people the Oracle has vouched for, and he hasn't met you yet. His temple is back in Hearth Village.",
       },
       requestLine,
       who: 'anonymous',
       lines: decision.lines,
-      hint: 'You have no session yet. Pomerium sends anyone without one to the identity provider to sign in, then back here. Visit the Oracle in the temple to the west.',
+      hint: 'You have no session yet. Pomerium sends anyone without one to the identity provider to sign in, then back here. Visit the Oracle in his temple back in Hearth Village.',
       links: [link('idp'), link('authz')],
       ...fromPomerium,
     }
@@ -164,7 +164,7 @@ function denyView(
           title: 'Old papers',
           text: "The Oracle has named you a knight, but the gate reads the papers he gave you when you signed in, and those don't say so yet. Visit his temple and sign in again for new papers.",
         },
-        hint: 'Pomerium said no, yet by the game’s records you qualify. Your session still holds the claims from when you signed in: visit the Oracle to sign in again. If you just did, give Pomerium up to a minute to pick up the new claim.',
+        hint: 'Pomerium said no, yet by the game’s records you qualify. Your session still holds the claims from when you signed in. Pomerium refreshes them from the identity provider from time to time, but signing in again with the Oracle picks up the change now. If you just did, give Pomerium up to a minute to pick up the new claim.',
       }
     : refusal(zone, method, id)
 
@@ -306,7 +306,7 @@ function refreshClaims(onDone: () => void) {
 
 const refreshPage = (): Page => ({
   who: 'Oracle',
-  text: 'Your session still holds the claims I gave you when you signed in, and Pomerium decides with those. Let me sign you in again so it carries the new one.',
+  text: 'Pomerium decides with the claims in your session, and those are the ones I gave you when you signed in. It refreshes them from me now and then, but that can take a while. Let me sign you in again so your session carries the new one now.',
   code: claimsCode(identity()),
   links: [link('refresh')],
 })
@@ -329,7 +329,7 @@ function oracle() {
       { who: 'Oracle', text: "I am the Oracle. I don't open gates. I answer one question: who is this?" },
       {
         who: 'Oracle',
-        text: 'In Pomerium terms, I am your identity provider, like Google, Okta or GitHub. Pomerium never sees your password. It sends you to me, and I send you back with signed claims.',
+        text: 'In Pomerium terms, I am your identity provider, like Google, Okta or GitHub. Pomerium never sees your password. It sends you to me, I check who you are, and then I give Pomerium a signed token with your claims.',
         links: [link('idp')],
       },
     ]
@@ -381,8 +381,8 @@ async function captain() {
         who: 'Captain',
         text:
           stage() === 'knighted'
-            ? 'The Oracle has your new claim, but your session still carries the old one. Visit him in the temple and sign in again, then claim your steel in the armory east of the square.'
-            : 'Go claim your steel. The armory is east of the square.',
+            ? 'The Oracle has your new claim, but your session still carries the old one. Visit him in the temple and sign in again, then claim your steel in the armory, east of here across the square.'
+            : 'Go claim your steel. The armory is east of here, across the square.',
       },
     ])
 
@@ -432,7 +432,7 @@ async function captain() {
       },
       {
         who: 'Captain',
-        text: "One catch: your session still holds the claims from when you signed in, so your groups don't say knights yet. Ah, here comes the Oracle.",
+        text: "One catch: your session still holds the claims from when you signed in, so your groups don't say knights yet. Pomerium would catch up on its own in time, but you needn't wait. Ah, here comes the Oracle.",
       },
     ],
     () => {
@@ -556,7 +556,7 @@ const SCRIPTS: Record<NpcId, () => void> = {
       citizen: armorerIntro,
       proven: `${armorerIntro} The Captain can vouch for you.`,
       knighted:
-        "The Oracle lists you as a knight? Then your session hasn't caught up. The gate reads the claims in your session, and those were set when you signed in: groups: []. Sign in with the Oracle again.",
+        "The Oracle lists you as a knight? Then your session hasn't caught up. The gate reads the claims in your session, and those were set when you signed in: groups: []. Pomerium refreshes them from the Oracle now and then, but sign in with him again and you won't have to wait.",
       knight:
         'Your session says groups: [knights] now, so the gate will let you through. The steel sword is in the chest inside.',
       armed:
@@ -593,7 +593,7 @@ async function librarian() {
     quest.say([
       {
         who: 'Librarian',
-        text: 'The Royal Keep lies at the end of the road south of here. Its gate wants citizens who are knights and scholars, and checks all three at once.',
+        text: 'The Royal Keep lies at the end of the road that runs south, just west of the library. Its gate wants citizens who are knights and scholars, and checks all three at once.',
       },
     ])
 
@@ -635,7 +635,7 @@ async function librarian() {
       },
       {
         who: 'Librarian',
-        text: "Scholars read and scribes write, so the ledger still won't take your pen. But the Royal Keep, south of here, wants knights who are scholars too.",
+        text: "Scholars read and scribes write, so the ledger still won't take your pen. But the Royal Keep, down the road southwest of here, wants knights who are scholars too.",
         links: [link('claims')],
       },
     ],

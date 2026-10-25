@@ -908,7 +908,7 @@ export class KingdomScene extends Phaser.Scene {
     quest.setHp(MAX_HP)
     quest.progress({ x: this.pos.x, y: this.pos.y })
     quest.setRegion(regionAt(this.pos))
-    quest.toast('You wake up at home. Your identity and gear are still yours.', 'info')
+    quest.toast('You wake up back in Hearth Village. Your identity and gear are still yours.', 'info')
   }
 }
 

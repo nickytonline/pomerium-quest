@@ -2,7 +2,8 @@
 //
 // Pomerium signs players in against it exactly as it would against Google or Okta. The game
 // server can add a group to a player through the admin API; the new claim reaches Pomerium
-// the next time the player signs in, which is the lesson the game teaches.
+// the next time the player signs in, or when Pomerium next refreshes the session (refresh tokens
+// are on, and access tokens last an hour). Signing in again is the lesson the game teaches.
 import { generateKeyPairSync, timingSafeEqual } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
