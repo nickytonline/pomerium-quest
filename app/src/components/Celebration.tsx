@@ -1,6 +1,7 @@
 // The end of the quest: fireworks over the kingdom, the Pomeranian, and the cast,
 // each with the part they played in Pomerium.
 import { useEffect, useRef } from 'react'
+import { signOutUrl } from '../game/access.ts'
 import { SHEETS } from '../game/sheets.ts'
 import { quest, useQuest } from '../game/store.ts'
 
@@ -226,9 +227,14 @@ function CastList({ hidden = false }: { readonly hidden?: boolean }) {
   )
 }
 
+/** Clears progress and signs out of the Oracle, so the next game starts as a stranger. */
 export const playAgain = () => {
+  const { mode, identity } = quest.get()
+
   quest.resetProgress()
-  location.reload()
+
+  if (mode === 'pomerium' && identity.authenticated) location.assign(signOutUrl())
+  else location.reload()
 }
 
 /** The final screen, after the Royal Keep's Quest complete. */

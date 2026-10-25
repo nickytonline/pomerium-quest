@@ -134,3 +134,10 @@ export const signInUrl = () => '/zones/oracle/signin'
  * fresh claims from the Oracle.
  */
 export const refreshClaimsUrl = () => '/.pomerium/sign_out'
+
+/**
+ * Sign out of Pomerium and the Oracle, landing back on the title screen signed out.
+ * Overriding signout_redirect_url needs Pomerium's allow_any_sign_out_redirect_uri flag.
+ */
+export const signOutUrl = () =>
+  `/.pomerium/sign_out?pomerium_redirect_uri=${encodeURIComponent(`${location.origin}/`)}`

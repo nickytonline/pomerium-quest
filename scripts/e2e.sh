@@ -102,6 +102,12 @@ for _ in $(seq 1 45); do
 done
 check "keep opens for a citizen who is a knight and a scholar" 200 "$keep"
 
+echo "Starting over"
+check "signing out to restart lands on the title screen" "${GAME}/" \
+  "$(curl -s -L -c "$citizen" -b "$citizen" -o /dev/null -w '%{url_effective}' \
+    "${GAME}/.pomerium/sign_out?pomerium_redirect_uri=${GAME}/")"
+check "and the session is gone" 401 "$(status "$citizen" /zones/fields/enter)"
+
 echo "Outsider"
 outsider="${JAR_DIR}/outsider"
 sign_up "$outsider" "wanderer-${RUN}@outlands.net" >/dev/null

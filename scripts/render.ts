@@ -113,6 +113,8 @@ function pomeriumConfig(secrets: Secrets): Yaml {
     // After signing out, go straight back to sign-in: the new session carries fresh claims.
     // This is how the game refreshes a player's groups.
     signout_redirect_url: `${game}/zones/oracle/signin`,
+    // Restarting the game signs out to the title screen instead, through pomerium_redirect_uri.
+    runtime_flags: { allow_any_sign_out_redirect_uri: true },
     idp_provider: 'oidc',
     idp_provider_url: oracleIssuer,
     idp_client_id: 'pomerium',

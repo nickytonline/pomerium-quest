@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 import { probe } from '../game/access.ts'
-import { Celebration } from './Celebration.tsx'
+import { Celebration, playAgain } from './Celebration.tsx'
 import { Phished } from './Phished.tsx'
 import { INTRO, LESSONS, LESSON_ORDER, type Choice } from '../game/content.ts'
 import { KNIGHT_QUOTA, questMachine, type QuestStage } from '../game/quest-machine.ts'
@@ -214,15 +214,6 @@ const begin = () => {
   if (firstTime) setTimeout(() => quest.say(INTRO), 0)
 }
 
-/** Clears progress and starts from the village. Your sign-in (and its claims) is kept. */
-const newGame = () => {
-  quest.resetProgress()
-  const { identity } = quest.get()
-
-  if (identity.authenticated) quest.send({ type: 'SIGNED_IN', groups: identity.groups })
-  begin()
-}
-
 const menuButton =
   'w-full rounded border-2 border-panel-edge bg-panel px-4 py-2.5 text-left font-display text-[1.05rem] text-ink hover:border-lens focus-visible:border-lens'
 
@@ -268,7 +259,7 @@ function Splash() {
         (confirmingNew ? (
           <p className="m-0 text-[0.9rem]">
             Start a new game? Your lessons and progress are cleared.{' '}
-            <button className={linkButton} type="button" onClick={newGame}>
+            <button className={linkButton} type="button" onClick={playAgain}>
               Yes, start over
             </button>{' '}
             <button className={linkButton} type="button" onClick={() => setConfirmingNew(false)}>
@@ -500,11 +491,6 @@ function PauseMenu() {
 
   if (!open) return null
 
-  const restart = () => {
-    quest.resetProgress()
-    location.reload()
-  }
-
   return (
     <div
       className="absolute inset-0 grid place-items-center bg-night-deep/85 p-4"
@@ -531,7 +517,7 @@ function PauseMenu() {
           <div className="grid gap-2 rounded border-2 border-deny p-3 text-[0.9rem]">
             <span>Restart from the village? Your lessons and progress are cleared.</span>
             <div className="flex gap-2">
-              <button className={menuButton} type="button" onClick={restart}>
+              <button className={menuButton} type="button" onClick={playAgain}>
                 Restart
               </button>
               <button className={menuButton} type="button" onClick={() => setConfirmingRestart(false)}>
