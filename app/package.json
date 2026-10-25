@@ -1,5 +1,6 @@
 {
   "name": "pomerium-quest",
+  "version": "0.1.0",
   "private": true,
   "license": "Apache-2.0",
   "author": "Nick Taylor <nick@nickyt.co>",
@@ -21,7 +22,8 @@
     "jose": "6.2.13",
     "phaser": "4.2.1",
     "react": "19.3.1",
-    "react-dom": "19.3.1"
+    "react-dom": "19.3.1",
+    "xstate": "5.33.3"
   },
   "devDependencies": {
     "@types/node": "26.6.5",

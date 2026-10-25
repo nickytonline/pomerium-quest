@@ -1,0 +1,113 @@
+// Chapter one's progression as a statechart. Each state is a step in how the player's
+// identity changes, which is what the chapter teaches:
+//
+//   anonymous → citizen → proven → knighted → knight → armed
+//
+// `knighted` is the important one: the Oracle (identity provider) now lists the player
+// in the knights group, but their Pomerium session still holds the claims from sign-in,
+// so the armory still says no until they sign in again.
+import { assign, createActor, setup, type SnapshotFrom } from 'xstate'
+
+export const KNIGHT_XP = 3
+
+export type QuestEvent =
+  | { readonly type: 'SIGNED_IN'; readonly groups: readonly string[] }
+  | { readonly type: 'SIGNED_OUT' }
+  | { readonly type: 'SLIME_DEFEATED' }
+  | { readonly type: 'KNIGHTED' }
+  | { readonly type: 'STEEL_TAKEN' }
+
+export const questMachine = setup({
+  types: {
+    context: {} as { xp: number },
+    events: {} as QuestEvent,
+  },
+  guards: {
+    proven: ({ context }) => context.xp >= KNIGHT_XP,
+    hasKnightsClaim: ({ event }) => event.type === 'SIGNED_IN' && event.groups.includes('knights'),
+  },
+}).createMachine({
+  id: 'quest',
+  initial: 'anonymous',
+  context: { xp: 0 },
+  on: {
+    SLIME_DEFEATED: { actions: assign({ xp: ({ context }) => context.xp + 1 }) },
+  },
+  states: {
+    anonymous: {
+      description: 'No session. Every gate redirects to the identity provider.',
+      on: { SIGNED_IN: 'citizen' },
+    },
+    citizen: {
+      description: 'Signed in as a kingdom.com citizen; no groups yet.',
+      always: { guard: 'proven', target: 'proven' },
+      on: { SIGNED_OUT: 'anonymous' },
+    },
+    proven: {
+      description: 'Has defeated enough slimes for the Captain to vouch for them.',
+      on: { KNIGHTED: 'knighted', SIGNED_OUT: 'anonymous' },
+    },
+    knighted: {
+      description: "The identity provider lists 'knights', but the Pomerium session holds older claims.",
+      on: { SIGNED_IN: { guard: 'hasKnightsClaim', target: 'knight' } },
+    },
+    knight: {
+      description: 'The session carries groups: [knights]; the armory policy matches.',
+      on: { STEEL_TAKEN: 'armed' },
+    },
+    armed: {
+      description: 'Holds the steel sword; can break the rocks to the library.',
+    },
+  },
+})
+
+export type QuestStage = SnapshotFrom<typeof questMachine>['value']
+
+const STORAGE_KEY = 'pomerium-quest/machine/v1'
+
+function restore() {
+  try {
+    const raw = globalThis.localStorage?.getItem(STORAGE_KEY)
+    // SAFETY: written by persist() below from actor.getPersistedSnapshot().
+    return raw ? (JSON.parse(raw) as SnapshotFrom<typeof questMachine>) : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function start(snapshot = restore()) {
+  try {
+    return createActor(questMachine, snapshot ? { snapshot } : {}).start()
+  } catch {
+    // A snapshot from an older machine version: start over rather than crash.
+    return createActor(questMachine).start()
+  }
+}
+
+export let questActor = start()
+
+export function persist() {
+  try {
+    globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify(questActor.getPersistedSnapshot()))
+  } catch {
+    // Storage unavailable; progression lasts for this tab only.
+  }
+}
+
+export function resetQuest() {
+  questActor.stop()
+  try {
+    globalThis.localStorage?.removeItem(STORAGE_KEY)
+  } catch {
+    // Nothing stored.
+  }
+  questActor = start(undefined)
+}
+
+export const stage = (): QuestStage => questActor.getSnapshot().value
+export const xp = () => questActor.getSnapshot().context.xp
+export const hasSteel = () => stage() === 'armed'
+export const isAtLeast = (target: QuestStage) => {
+  const order: readonly QuestStage[] = ['anonymous', 'citizen', 'proven', 'knighted', 'knight', 'armed']
+  return order.indexOf(stage()) >= order.indexOf(target)
+}
