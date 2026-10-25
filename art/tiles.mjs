@@ -61,6 +61,119 @@ const path = (rect) => {
   rect(13, 13, 1, 1, '#b08e58')
 }
 
+/**
+ * Paints a 32x32 picture and splits it into four tiles (top-left, top-right, bottom-left,
+ * bottom-right), each over cobble.
+ */
+const quad = (paint) => {
+  const pixels = Array.from({ length: 32 }, () => Array.from({ length: 32 }, () => null))
+
+  const rect = (x, y, w, h, color) => {
+    for (let py = Math.max(0, y); py < Math.min(32, y + h); py++)
+      for (let px = Math.max(0, x); px < Math.min(32, x + w); px++) pixels[py][px] = color
+  }
+
+  paint(rect)
+
+  return [
+    [0, 0],
+    [16, 0],
+    [0, 16],
+    [16, 16],
+  ].map(([ox, oy]) => (tile) => {
+    cobble(tile)
+
+    for (let y = 0; y < 16; y++)
+      for (let x = 0; x < 16; x++) {
+        const color = pixels[oy + y][ox + x]
+
+        if (color) tile(x, y, 1, 1, color)
+      }
+  })
+}
+
+/** Rows of [y, x0, x1], filled in one color: how the round shapes below are drawn. */
+const rows = (rect, spans, color) => {
+  for (const [y, x0, x1] of spans) rect(x0, y, x1 - x0 + 1, 1, color)
+}
+
+const range = (y0, y1, x0, x1) => Array.from({ length: y1 - y0 + 1 }, (_, i) => [y0 + i, x0, x1])
+
+// A round stone basin seen from the front, a pillar and bowl, and water arcing back down.
+const fountain = quad((rect) => {
+  const outline = '#241a2e'
+  const stone = '#c3c6d3'
+  const face = '#8d90a2'
+  const mortar = '#6c6f80'
+  const water = '#3d7fcf'
+  const ripple = '#7fb6ef'
+  const spray = '#cfe6ff'
+
+  // Basin: outline, front wall, then the rim and the water on top.
+  rows(
+    rect,
+    [
+      [9, 8, 23],
+      [10, 5, 26],
+      [11, 3, 28],
+      ...range(12, 25, 1, 30),
+      [26, 2, 29],
+      [27, 3, 28],
+      [28, 5, 26],
+      [29, 8, 23],
+    ],
+    outline,
+  )
+  rows(rect, [...range(16, 25, 2, 29), [26, 3, 28], [27, 5, 26], [28, 8, 23]], face)
+  rect(2, 22, 28, 1, mortar)
+
+  for (const x of [8, 16, 24]) rect(x, 19, 1, 3, mortar)
+
+  for (const x of [4, 12, 20, 28]) rect(x, 23, 1, 3, mortar)
+  rows(
+    rect,
+    [[10, 8, 23], [11, 5, 26], [12, 3, 28], ...range(13, 15, 2, 29), [16, 3, 28], [17, 5, 26], [18, 8, 23]],
+    stone,
+  )
+  rows(rect, [[19, 5, 26]], mortar)
+  rows(
+    rect,
+    [
+      [12, 8, 23],
+      [13, 5, 26],
+      [14, 5, 26],
+      [15, 6, 25],
+      [16, 8, 23],
+    ],
+    water,
+  )
+  rect(7, 13, 3, 1, ripple)
+  rect(22, 15, 3, 1, ripple)
+
+  // Pillar and bowl.
+  rect(13, 5, 6, 11, outline)
+  rect(14, 6, 4, 9, stone)
+  rect(17, 6, 1, 9, face)
+  rect(10, 3, 12, 4, outline)
+  rect(11, 4, 10, 2, stone)
+  rect(12, 4, 8, 1, water)
+  rect(12, 15, 8, 1, ripple)
+
+  // Spray: a jet up the middle, arcing down into the basin on both sides.
+  rect(15, 0, 2, 4, spray)
+
+  for (const [x, y] of [
+    [12, 1],
+    [9, 2],
+    [7, 4],
+    [6, 7],
+    [6, 10],
+  ]) {
+    rect(x, y, 2, 2, spray)
+    rect(30 - x, y, 2, 2, spray)
+  }
+})
+
 const wallBlocks = (rect) => {
   rect(0, 0, 16, 16, '#4a4c59')
 
@@ -237,13 +350,8 @@ const painters = [
     for (let x = 4; x <= 12; x += 2) rect(x, 3, 1, 2, '#2b2b33')
     rect(6, 0, 4, 3, '#4ade80')
   },
-  // 17 fountain
-  (rect) => {
-    cobble(rect)
-    rect(0, 3, 16, 11, '#a7a9b6')
-    rect(2, 5, 12, 7, '#3d7fcf')
-    rect(7, 2, 2, 5, '#cfe6ff')
-  },
+  // 17–20 fountain: top-left, top-right, bottom-left, bottom-right
+  ...fountain,
 ]
 
 export const tiles = painters.map((paint) => {

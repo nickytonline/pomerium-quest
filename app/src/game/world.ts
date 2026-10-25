@@ -21,7 +21,10 @@ export const TILE = {
   nightGate: 14,
   gateClosed: 15,
   gateOpen: 16,
-  fountain: 17,
+  fountainTopLeft: 17,
+  fountainTopRight: 18,
+  fountainBottomLeft: 19,
+  fountainBottomRight: 20,
 } as const
 
 export type TileId = (typeof TILE)[keyof typeof TILE]
@@ -186,7 +189,11 @@ export function buildWorld(): World {
   // Kingdom Town: square, guild hall, armory.
   fill(17, 12, 38, 12, TILE.cobble)
   fill(24, 9, 31, 15, TILE.cobble)
-  fill(27, 12, 28, 12, TILE.fountain)
+  // One 2x2 fountain in the middle of the square.
+  set(27, 11, TILE.fountainTopLeft)
+  set(28, 11, TILE.fountainTopRight)
+  set(27, 12, TILE.fountainBottomLeft)
+  set(28, 12, TILE.fountainBottomRight)
   room(18, 2, 24, 7)
   room(30, 2, 37, 7)
   fill(21, 8, 21, 11, TILE.cobble)
