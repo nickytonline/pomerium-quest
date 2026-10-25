@@ -2,7 +2,7 @@
 
 A Zelda-style browser game that teaches how [Pomerium](https://www.pomerium.com) works. You play the
 Pomerium Pomeranian, and every gate in the kingdom is a real Pomerium route with a real policy. When a
-guard turns you away, the game shows you the exact policy rule that failed.
+gate turns you away, the game shows you the exact policy rule that failed.
 
 Chapter one covers the fundamentals:
 

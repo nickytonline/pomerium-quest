@@ -310,7 +310,7 @@ function traveler() {
       { who: 'Traveler', text: "The Oracle knows me. I'm wanderer@outlands.net, signed in and everything." },
       {
         who: 'Traveler',
-        text: `But this town only lets in people whose email domain is ${KINGDOM_DOMAIN}. Signing in got me to the guard. It didn't get me in.`,
+        text: `But this town only lets in people whose email domain is ${KINGDOM_DOMAIN}. Signing in got me to the gate. It didn't get me in.`,
       },
       {
         who: 'Traveler',
@@ -343,7 +343,7 @@ const SCRIPTS: Record<NpcId, () => void> = {
       quest.say([
         {
           who: 'Sage',
-          text: 'The Oracle vouches for you now. Head north through the Fields Gate. Read the sign beside each gate: it shows the exact rule its guard enforces.',
+          text: 'The Oracle vouches for you now. Head north through the Fields Gate. Read the sign beside each gate: it shows the exact rule that gate enforces.',
         },
       ])
 
@@ -359,12 +359,12 @@ const SCRIPTS: Record<NpcId, () => void> = {
         },
         {
           who: 'Sage',
-          text: 'Here every gate has a guard, and every guard checks you each time you pass. Pomerium works the same way: each request to each app is checked against that app’s policy.',
+          text: 'Here every gate checks you each time you pass. Pomerium works the same way: each request to each app is checked against that app’s policy.',
           links: [link('every')],
         },
         {
           who: 'Sage',
-          text: 'Guards only let in people they can identify. Visit the Oracle in the temple to the west.',
+          text: 'Gates only let in people they can identify. Visit the Oracle in the temple to the west.',
         },
       ],
       () => learn('every'),
@@ -375,9 +375,9 @@ const SCRIPTS: Record<NpcId, () => void> = {
   captain: () => void captain(),
   armorer: () => {
     const armorerIntro =
-      "I forge the blades. I don't decide who gets in: the gate does. It's the guard here, and it checks your claims on every visit. Its rule is on the sign: only the knights group."
+      "I forge the blades. I don't decide who gets in: the gate does. It checks your claims on every visit. Its rule is on the sign: only the knights group."
 
-    // The Armorer keeps the forge; the gate is the guard. Each stage gets a line about what the gate sees.
+    // The Armorer keeps the forge; the gate decides. Each stage gets a line about what the gate sees.
     const lines: Record<QuestStage, string> = {
       anonymous: armorerIntro,
       citizen: armorerIntro,
@@ -399,7 +399,7 @@ const SCRIPTS: Record<NpcId, () => void> = {
       [
         {
           who: 'Librarian',
-          text: "Read anything you like. There's no guard in here, but the gate you came through still checks every request. Opening a book sends a GET to the library, and the gate checks it again, even though you're already inside.",
+          text: "Read anything you like. There's no gate in here, but the one you came through still checks every request. Opening a book sends a GET to the library, and the gate checks it again, even though you're already inside.",
         },
         {
           who: 'Librarian',

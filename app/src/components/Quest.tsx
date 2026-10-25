@@ -243,7 +243,7 @@ function Splash() {
         Pomerium Quest
       </h1>
       <p className="m-0 max-w-[36ch] text-muted">
-        Every gate has a guard. Every guard checks you, every time.
+        Every gate checks you, every time.
       </p>
       <button
         className="mt-2 animate-blink rounded border-3 border-night-deep bg-lime px-[22px] py-3 font-display text-[1.15rem] text-night-deep shadow-[4px_4px_0_var(--color-night-deep)]"
@@ -836,7 +836,7 @@ function AccessLog() {
     <section className={panel}>
       <h2 className={panelTitle}>Access log</h2>
       {log.length === 0 ? (
-        <p className={panelMuted}>Every request a guard checks shows up here.</p>
+        <p className={panelMuted}>Every request a gate checks shows up here.</p>
       ) : (
         <ol className="m-0 grid max-h-60 list-none gap-1.5 overflow-auto p-0 text-[0.8rem]">
           {log.map((entry) => (

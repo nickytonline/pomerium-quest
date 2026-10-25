@@ -91,7 +91,7 @@ export const SIGN_TEXT: Partial<Record<ZoneId, string>> = {
     'This gate is a route. Pomerium checks every request for this path against the policy below, then forwards it to the app behind the route.',
   town: 'The town only lets in citizens: people whose email domain is kingdom.com.',
   guild: "The Knights' Guild hall. Any citizen may enter.",
-  armory: 'Only knights. The guard reads the groups claim your identity provider put in your session.',
+  armory: 'Only knights. The gate reads the groups claim your identity provider put in your session.',
   library:
     'Two allow rules on one route. Citizens may read (GET); scribes may also write (POST). Pomerium lets a request in when any rule matches.',
 }
@@ -123,7 +123,7 @@ export const BOOKS: Page[] = [
     links: [link('defaultDeny')],
   },
   {
-    who: 'Book · The Guard’s Seal',
+    who: 'Book · The Gate’s Seal',
     text: 'When Pomerium lets a request through, it adds a signed JWT in the X-Pomerium-Jwt-Assertion header. The app behind the route learns who you are without running its own login.',
     links: [link('jwt')],
   },
