@@ -10,17 +10,12 @@ import {
 import { probe } from '../game/access.ts'
 import { INTRO, LESSONS, LESSON_ORDER } from '../game/content.ts'
 import { KNIGHT_QUOTA, questMachine, type QuestStage } from '../game/quest-machine.ts'
-import { MAX_HP, quest, useQuest, type Dir, type Mode } from '../game/store.ts'
+import { MAX_HP, quest, useQuest, type Dir } from '../game/store.ts'
+import { SIGNED_IN_MESSAGE } from '../game/zones.ts'
 
 /** Wide enough for the panels beside the game. The game fits the height, so width alone decides. */
 const SIDE_BY_SIDE = '(min-width: 960px)'
 const ANY_TOUCH = '(any-pointer: coarse)'
-
-const MODE_LABEL: Record<Mode, string> = {
-  loading: 'Detecting…',
-  pomerium: 'Live Pomerium',
-  simulated: 'Simulated',
-}
 
 const STAGE_LABEL: Record<QuestStage, string> = {
   anonymous: 'Anonymous',
@@ -29,12 +24,6 @@ const STAGE_LABEL: Record<QuestStage, string> = {
   knighted: 'Knighted (stale claims)',
   knight: 'Knight',
   armed: 'Armed knight',
-}
-
-const MODE_CHIP: Record<Mode, string> = {
-  loading: 'text-muted',
-  pomerium: 'text-lime',
-  simulated: 'text-lens',
 }
 
 const TOAST_TONE: Record<'allow' | 'deny' | 'info', string> = {
@@ -133,11 +122,16 @@ function useDialogKeys() {
     const onKey = (event: KeyboardEvent) => {
       // A handled key (like the Enter that starts the game) must not also advance a dialog.
       if (event.repeat) return
-      const { deny, dialog, journalOpen, menuOpen } = quest.get()
+      const { deny, dialog, journalOpen, menuOpen, signIn } = quest.get()
       const journalKey = event.key === 'i' || event.key === 'I'
       const confirm = event.key === 'Enter' || event.key === ' ' || event.key === 'e' || event.key === 'E'
 
-      if (deny && (confirm || event.key === 'Escape')) {
+      if (signIn) {
+        if (event.key === 'Escape') {
+          event.preventDefault()
+          quest.cancelSignIn()
+        }
+      } else if (deny && (confirm || event.key === 'Escape')) {
         event.preventDefault()
         quest.closeDeny()
       } else if (dialog && confirm) {
@@ -326,6 +320,7 @@ function Kingdom() {
         </section>
         <Journal drawer={!wide} />
       </div>
+      <SignInSheet />
     </div>
   )
 }
@@ -410,6 +405,68 @@ function JournalDrawer({ children }: { readonly children: ReactNode }) {
         </div>
         {children}
       </aside>
+    </>
+  )
+}
+
+/** The Oracle's sign-in page, framed over the game: a modal on wide screens, a bottom sheet on phones. */
+function SignInSheet() {
+  const signIn = useQuest((s) => s.signIn)
+  const frame = useRef<HTMLIFrameElement>(null)
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    if (!signIn) return
+    setLoaded(false)
+
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== location.origin || event.source !== frame.current?.contentWindow) return
+
+      if (event.data === SIGNED_IN_MESSAGE) quest.finishSignIn()
+    }
+
+    window.addEventListener('message', onMessage)
+
+    return () => window.removeEventListener('message', onMessage)
+  }, [signIn])
+
+  if (!signIn) return null
+
+  return (
+    <>
+      <div
+        className="fixed inset-0 z-40 bg-night-deep/70"
+        aria-hidden="true"
+        onClick={() => quest.cancelSignIn()}
+      />
+      <section className="sign-in-sheet" role="dialog" aria-modal="true" aria-labelledby="sign-in-title">
+        <div className="flex items-center justify-between gap-2 px-4 py-2.5">
+          <h2 id="sign-in-title" className="m-0 font-display text-[1.2rem] text-sun">
+            Sign in with the Oracle
+          </h2>
+          <button className={headerButton} type="button" onClick={() => quest.cancelSignIn()}>
+            Close
+          </button>
+        </div>
+        <div className="relative min-h-0 flex-1">
+          {!loaded && (
+            <p className="absolute inset-0 m-0 grid place-items-center text-muted" role="status">
+              Pomerium is sending you to the Oracle…
+            </p>
+          )}
+          <iframe
+            ref={frame}
+            className="size-full border-0"
+            src={signIn.url}
+            title="The Oracle, your identity provider"
+            onLoad={() => setLoaded(true)}
+          />
+        </div>
+        <p className="m-0 px-4 py-2 text-[0.8rem] text-muted">
+          Signing in through Pomerium, without leaving the game.{' '}
+          <a href={signIn.url}>Open it full page instead</a>
+        </p>
+      </section>
     </>
   )
 }
@@ -773,11 +830,11 @@ function IdentityPanel() {
   return (
     <section className={panel}>
       <h2 className={panelTitle}>Your identity</h2>
-      <p
-        className={`mb-1.5 inline-block rounded-full border border-current px-2 text-xs tracking-[0.06em] uppercase ${MODE_CHIP[mode]}`}
-      >
-        {MODE_LABEL[mode]}
-      </p>
+      {mode === 'simulated' && (
+        <p className="mb-1.5 inline-block rounded-full border border-current px-2 text-xs tracking-[0.06em] text-lens uppercase">
+          Simulated
+        </p>
+      )}
       {claims ? (
         <pre className={`mt-1 ${codeBlock}`}>{claims}</pre>
       ) : (

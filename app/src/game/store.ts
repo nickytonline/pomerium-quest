@@ -89,6 +89,8 @@ export interface QuestState {
   /** Timestamp until which the scene ignores input, so the key that closed a dialog does not reopen it. */
   readonly inputResumesAt: number
   readonly menuOpen: boolean
+  /** The Oracle's sign-in, running through Pomerium in a frame over the game. Pauses the game. */
+  readonly signIn: { readonly url: string } | null
   /** The Journal drawer, used when the panels can't sit beside the game. Pauses the game while open. */
   readonly journalOpen: boolean
   /** Something new reached the Journal (a log entry, lesson or identity change) since it was last open. */
@@ -155,6 +157,7 @@ let state: QuestState = {
   controls: { dir: null, interact: 0, attack: 0 },
   inputResumesAt: 0,
   menuOpen: false,
+  signIn: null,
   journalOpen: false,
   journalUnread: false,
   savedAt: null,
@@ -163,6 +166,7 @@ let state: QuestState = {
 const listeners = new Set<() => void>()
 let dialogDone: (() => void) | undefined
 let denyDone: (() => void) | undefined
+let signedIn: (() => void) | undefined
 let nextId = 1
 
 /** A change the Journal shows; flags it unread unless the drawer is open. */
@@ -185,7 +189,12 @@ export const quest = {
     return () => listeners.delete(listener)
   },
   isPaused: () =>
-    state.dialog !== null || state.deny !== null || state.menuOpen || state.journalOpen || !state.started,
+    state.dialog !== null ||
+    state.deny !== null ||
+    state.signIn !== null ||
+    state.menuOpen ||
+    state.journalOpen ||
+    !state.started,
 
   start: () => update({ started: true }),
   openMenu: () => {
@@ -280,6 +289,21 @@ export const quest = {
     denyDone = undefined
     update({ deny: null, inputResumesAt: performance.now() + 200 })
     done?.()
+  },
+
+  openSignIn: (url: string, onSignedIn: () => void) => {
+    signedIn = onSignedIn
+    update({ signIn: { url }, menuOpen: false, journalOpen: false })
+  },
+  finishSignIn: () => {
+    const done = signedIn
+    signedIn = undefined
+    update({ signIn: null, inputResumesAt: performance.now() + 200 })
+    done?.()
+  },
+  cancelSignIn: () => {
+    signedIn = undefined
+    update({ signIn: null, inputResumesAt: performance.now() + 200 })
   },
 
   toast: (text: string, tone: Toast['tone']) => update({ toast: { id: nextId++, text, tone } }),

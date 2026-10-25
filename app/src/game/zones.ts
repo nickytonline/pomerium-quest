@@ -37,6 +37,9 @@ export interface Zone {
 
 export const KINGDOM_DOMAIN = 'kingdom.com'
 
+/** Posted to the game by the sign-in frame once Pomerium hands it back with a session. */
+export const SIGNED_IN_MESSAGE = 'pomerium-quest/signed-in'
+
 const all = (...criteria: Criterion[]): AllowRule => ({ match: 'and', criteria })
 const signedIn: Criterion = { kind: 'authenticated_user' }
 const citizen: Criterion = { kind: 'domain', is: KINGDOM_DOMAIN }

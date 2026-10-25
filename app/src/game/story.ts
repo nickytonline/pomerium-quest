@@ -1,6 +1,6 @@
 // What happens when the player talks, reads or walks into a gate. The scene handles
 // movement and drawing; this module handles the conversation with Pomerium.
-import { refreshClaimsUrl, requestZone, signInUrl, simulatedIdentity, type Outcome } from './access.ts'
+import { probe, refreshClaimsUrl, requestZone, signInUrl, simulatedIdentity, type Outcome } from './access.ts'
 import {
   BOOKS,
   END_SIGN,
@@ -145,9 +145,30 @@ export function readSign(signId: ZoneId | 'end') {
   quest.say([signPage(zoneById(signId))], () => learn('route'))
 }
 
-function goTo(url: string) {
-  location.assign(url)
+/** Runs a Pomerium sign-in in a frame over the game, then reads the session it left behind. */
+function signInWithPomerium(url: string, onSignedIn: (next: Identity) => void) {
+  quest.openSignIn(url, () => {
+    void probe(quest.get().progress).then(({ identity: next }) => {
+      if (!next.authenticated) {
+        quest.toast('The Oracle did not sign you in', 'deny')
+
+        return
+      }
+
+      quest.setIdentity(next)
+      quest.send({ type: 'SIGNED_IN', groups: next.groups })
+      onSignedIn(next)
+    })
+  })
 }
+
+const welcome = (next: Identity) =>
+  quest.say([
+    { who: 'Oracle', text: `There. You are ${next.email}. Here are your claims.`, code: claimsCode(next) },
+  ])
+
+const welcomeBack = (next: Identity) =>
+  quest.say([{ who: 'Oracle', text: 'Signed in again. Your new claims:', code: claimsCode(next) }])
 
 function oracle() {
   const { mode, progress } = quest.get()
@@ -164,19 +185,10 @@ function oracle() {
     ]
 
     if (mode === 'pomerium') {
-      quest.say(
-        [
-          ...intro,
-          {
-            who: 'Oracle',
-            text: 'Step into the light. You will leave the game for a moment to sign in with me, then come straight back.',
-          },
-        ],
-        () => {
-          learn('idp')
-          goTo(signInUrl())
-        },
-      )
+      quest.say([...intro, { who: 'Oracle', text: 'Step into the light and tell me who you are.' }], () => {
+        learn('idp')
+        signInWithPomerium(signInUrl(), welcome)
+      })
 
       return
     }
@@ -187,13 +199,7 @@ function oracle() {
       quest.setIdentity(next)
       quest.send({ type: 'SIGNED_IN', groups: next.groups })
       learn('idp')
-      quest.say([
-        {
-          who: 'Oracle',
-          text: `There. You are ${next.email}. Here are your claims.`,
-          code: claimsCode(next),
-        },
-      ])
+      welcome(next)
     })
 
     return
@@ -214,7 +220,7 @@ function oracle() {
         learn('refresh')
 
         if (mode === 'pomerium') {
-          goTo(refreshClaimsUrl())
+          signInWithPomerium(refreshClaimsUrl(), welcomeBack)
 
           return
         }
@@ -224,7 +230,7 @@ function oracle() {
         const next = simulatedIdentity(quest.get().progress)
         quest.setIdentity(next)
         quest.send({ type: 'SIGNED_IN', groups: next.groups })
-        quest.say([{ who: 'Oracle', text: 'Signed in again. Your new claims:', code: claimsCode(next) }])
+        welcomeBack(next)
       },
     )
 

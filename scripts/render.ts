@@ -110,6 +110,9 @@ function pomeriumConfig(secrets: Secrets): Yaml {
         to: svc('oracle', 4000),
         allow_public_unauthenticated_access: true,
         preserve_host_header: true,
+        // The game opens the Oracle's sign-in page in a frame, so the player never leaves the
+        // game. Browsers let frame-ancestors override Pomerium's default X-Frame-Options.
+        set_response_headers: { 'Content-Security-Policy': `frame-ancestors ${game}` },
       },
       // One route per zone: same host, its own path prefix, its own policy.
       ...ZONES.map((zone) => ({

@@ -1,5 +1,5 @@
 import { Effect } from 'effect'
-import { ZONES } from '../game/zones.ts'
+import { SIGNED_IN_MESSAGE, ZONES } from '../game/zones.ts'
 import { QuestConfig } from './config.ts'
 import { PomeriumIdentity, type Player } from './identity.ts'
 import { OracleAdmin } from './oracle-admin.ts'
@@ -18,6 +18,13 @@ const currentPlayer = (request: Request) =>
 
     return yield* identity.verify(request)
   })
+
+/** The end of a sign-in that ran in the game's frame: tell the game, which closes the frame. */
+const signedInFrame = (origin: string) =>
+  new Response(
+    `<!doctype html><meta charset="utf-8"><title>Signed in</title><script>parent.postMessage(${JSON.stringify(SIGNED_IN_MESSAGE)}, ${JSON.stringify(origin)})</script>`,
+    { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } },
+  )
 
 const greeting = (zoneName: string, player: Player | undefined) =>
   player ? `${zoneName} welcomes ${player.email}.` : `${zoneName} welcomes you (simulated mode).`
@@ -38,7 +45,10 @@ export const handleZone = (request: Request, splat: string) =>
       case 'GET oracle/':
         return json(200, { mode: config.mode, player: player ?? null })
       case 'GET oracle/signin':
-        return Response.redirect(new URL('/?signedin=1', config.publicOrigin), 302)
+        // Pomerium redirects back here after sign-in, inside the game's frame or as a full page.
+        return request.headers.get('sec-fetch-dest') === 'iframe'
+          ? signedInFrame(new URL(config.publicOrigin).origin)
+          : Response.redirect(new URL('/?signedin=1', config.publicOrigin), 302)
       case 'POST guild/knight': {
         if (player) {
           const oracle = yield* OracleAdmin
