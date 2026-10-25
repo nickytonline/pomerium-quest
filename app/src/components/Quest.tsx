@@ -19,6 +19,37 @@ const STAGE_LABEL: Record<QuestStage, string> = {
   armed: 'Armed knight',
 }
 
+const MODE_CHIP: Record<Mode, string> = {
+  loading: 'text-muted',
+  pomerium: 'text-lime',
+  simulated: 'text-lens',
+}
+
+const TOAST_TONE: Record<'allow' | 'deny' | 'info', string> = {
+  allow: 'border-allow text-allow',
+  deny: 'border-deny text-deny',
+  info: 'border-lens',
+}
+
+const gutter = 'pl-[max(16px,env(safe-area-inset-left,0px))] pr-[max(16px,env(safe-area-inset-right,0px))]'
+
+const codeBlock =
+  'overflow-x-auto rounded border border-panel-edge bg-code-bg px-3 py-2.5 text-[0.8rem] leading-[1.45] text-lens'
+
+const docLinks = 'mt-2.5 flex list-none flex-wrap gap-x-3.5 gap-y-1.5 p-0 text-[0.85rem]'
+const panel = 'min-w-0 rounded-md border border-panel-edge bg-panel px-3.5 py-3'
+
+const panelTitle =
+  'mb-2 flex justify-between gap-2 font-display text-base font-bold tracking-[0.04em] text-sun'
+
+const panelMuted = 'font-body text-[0.85rem] text-muted'
+const padButton = 'rounded-lg border-2 border-panel-edge bg-panel text-ink'
+
+const actionButton =
+  'grid size-16 place-items-center rounded-full border-2 bg-panel font-display text-[1.3rem] leading-none text-ink'
+
+const linkButton = 'mt-2.5 border-0 bg-transparent p-0 text-[0.8rem] text-muted underline'
+
 const stageDescription = (stage: QuestStage) =>
   questMachine.getStateNodeById(`quest.${stage}`).description ?? ''
 
@@ -41,23 +72,6 @@ function useBoot() {
         if (identity.authenticated) quest.toast(`Signed in as ${identity.email}`, 'allow')
       }
     })
-  }, [])
-}
-
-const SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'PageUp', 'PageDown'])
-
-/** While playing, keys that move the dog must not also scroll the page. */
-function useNoScrollKeys() {
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement
-
-      if (quest.get().started && !typing && SCROLL_KEYS.has(event.key)) event.preventDefault()
-    }
-
-    window.addEventListener('keydown', onKey)
-
-    return () => window.removeEventListener('keydown', onKey)
   }, [])
 }
 
@@ -87,7 +101,6 @@ function useDialogKeys() {
 export function Quest() {
   useBoot()
   useDialogKeys()
-  useNoScrollKeys()
   const started = useQuest((s) => s.started)
 
   return started ? <Kingdom /> : <Splash />
@@ -116,18 +129,29 @@ function Splash() {
   }, [])
 
   return (
-    <main className="splash">
+    <main
+      className={`splash-bg grid min-h-screen place-items-center content-center gap-3 py-8 text-center ${gutter}`}
+    >
       <img
-        className="splash-art"
+        className="h-auto w-[min(360px,78vw)] drop-shadow-[0_12px_40px_rgb(255_79_184/0.35)]"
         src="/assets/splash.png"
         alt="The Pomerium Pomeranian in aviators and a leather jacket"
       />
-      <h1 className="splash-title">Pomerium Quest</h1>
-      <p className="splash-tagline">Every gate has a guard. Every guard checks you, every time.</p>
-      <button className="splash-start" type="button" onClick={begin} autoFocus>
+      <h1 className="sunset-text m-0 font-display text-[clamp(2.2rem,7vw,3.6rem)] font-bold tracking-[0.02em] text-balance">
+        Pomerium Quest
+      </h1>
+      <p className="m-0 max-w-[36ch] text-muted">
+        Every gate has a guard. Every guard checks you, every time.
+      </p>
+      <button
+        className="mt-2 animate-blink rounded border-3 border-night-deep bg-lime px-[22px] py-3 font-display text-[1.15rem] text-night-deep shadow-[4px_4px_0_var(--color-night-deep)]"
+        type="button"
+        onClick={begin}
+        autoFocus
+      >
         Press Enter to start
       </button>
-      <p className="splash-mode">
+      <p className="m-0 text-[0.85rem] text-muted">
         {mode === 'loading' && 'Looking for Pomerium…'}
         {mode === 'pomerium' && 'Connected to a real Pomerium. Every gate is a live route.'}
         {mode === 'simulated' && 'Simulated mode: no Pomerium detected, so policies run in your browser.'}
@@ -138,24 +162,28 @@ function Splash() {
 
 function Kingdom() {
   return (
-    <div className="kingdom">
-      <header className="masthead">
-        <h1>Pomerium Quest</h1>
-        <p>Chapter one · Identity and access</p>
+    <div className={`mx-auto max-w-[1240px] pt-[18px] pb-10 ${gutter}`}>
+      <header className="mb-3.5 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <h1 className="m-0 font-display text-[1.7rem] font-bold text-sun">Pomerium Quest</h1>
+        <p className="m-0 text-xs tracking-[0.04em] text-muted uppercase">
+          Chapter one · Identity and access
+        </p>
       </header>
-      <div className="layout">
-        <section className="game-column" aria-label="Game">
+      <div className="grid grid-cols-1 items-start gap-5 min-[921px]:grid-cols-[minmax(0,1fr)_340px]">
+        <section className="grid min-w-0 gap-2" aria-label="Game">
           <Hud />
-          <div className="screen">
+          <div className="relative aspect-[4/3] w-full max-w-full overflow-hidden rounded-md border-4 border-night-deep bg-night-deep shadow-[0_0_0_2px_var(--color-panel-edge),0_18px_50px_rgb(0_0_0/0.45)]">
             <GameCanvas />
             <Toast />
             <DialogBox />
             <DenyScreen />
           </div>
-          <p className="help">Move: arrows or WASD · Talk and read: E or Enter · Sword: Space or J</p>
+          <p className="m-0 text-[0.85rem] text-muted">
+            Move: arrows or WASD · Talk and read: E or Enter · Sword: Space or J
+          </p>
           <TouchPad />
         </section>
-        <aside className="panels">
+        <aside className="grid min-w-0 gap-3.5">
           <IdentityPanel />
           <GearPanel />
           <AccessLog />
@@ -184,7 +212,7 @@ function GameCanvas() {
     }
   }, [])
 
-  return <div className="canvas-host" ref={host} />
+  return <div className="pixelated" ref={host} />
 }
 
 function Hud() {
@@ -193,16 +221,16 @@ function Hud() {
   const xp = useQuest((s) => s.xp)
 
   return (
-    <div className="hud">
-      <span className="hearts" aria-label={`${hp} of ${MAX_HP} hearts`}>
+    <div className="flex items-center justify-between gap-3 font-display text-[1.05rem]">
+      <span aria-label={`${hp} of ${MAX_HP} hearts`}>
         {Array.from({ length: MAX_HP }, (_, i) => (
-          <span key={i} className={i < hp ? 'heart full' : 'heart'}>
+          <span key={i} className={i < hp ? 'mr-0.5 text-deny' : 'mr-0.5 text-heart-empty'}>
             ♥
           </span>
         ))}
       </span>
-      <span className="region">{region}</span>
-      <span className="xp">Slimes {xp}</span>
+      <span className="text-sun">{region}</span>
+      <span className="text-muted tabular-nums">Slimes {xp}</span>
     </div>
   )
 }
@@ -219,7 +247,10 @@ function Toast() {
   if (!toast) return null
 
   return (
-    <div className={`toast toast-${toast.tone}`} role="status">
+    <div
+      className={`pointer-events-none absolute top-2.5 left-1/2 max-w-[calc(100%-24px)] -translate-x-1/2 rounded border-2 bg-night-deep/92 px-3 py-1.5 font-mono text-[0.8rem] ${TOAST_TONE[toast.tone]}`}
+      role="status"
+    >
       {toast.text}
     </div>
   )
@@ -235,12 +266,17 @@ function DialogBox() {
   const last = dialog.index === dialog.pages.length - 1
 
   return (
-    <div className="dialog" role="dialog" aria-live="polite" onClick={() => quest.advance()}>
-      <p className="dialog-who">{page.who}</p>
-      <p className="dialog-text">{page.text}</p>
-      {page.code && <pre className="dialog-code">{page.code}</pre>}
+    <div
+      className="absolute right-2.5 bottom-2.5 left-2.5 max-h-[calc(100%-20px)] cursor-pointer overflow-auto rounded-md border-3 border-ink bg-night-deep/96 px-4 py-3 shadow-[0_0_0_3px_var(--color-night-deep)]"
+      role="dialog"
+      aria-live="polite"
+      onClick={() => quest.advance()}
+    >
+      <p className="mb-1 font-display tracking-[0.03em] text-sun">{page.who}</p>
+      <p className="m-0 max-w-[68ch] text-[clamp(0.9rem,1.6vw,1.02rem)]">{page.text}</p>
+      {page.code && <pre className={`mt-2.5 ${codeBlock}`}>{page.code}</pre>}
       {page.links && page.links.length > 0 && (
-        <ul className="doc-links">
+        <ul className={docLinks}>
           {page.links.map((doc) => (
             <li key={doc.href + doc.label}>
               <a
@@ -255,7 +291,9 @@ function DialogBox() {
           ))}
         </ul>
       )}
-      <p className="dialog-next">{last ? 'Enter to close' : 'Enter to continue ▾'}</p>
+      <p className="mt-2 text-right font-display text-[0.85rem] text-muted">
+        {last ? 'Enter to close' : 'Enter to continue ▾'}
+      </p>
     </div>
   )
 }
@@ -266,33 +304,44 @@ function DenyScreen() {
   if (!deny) return null
 
   return (
-    <div className="deny" role="alertdialog" aria-labelledby="deny-title">
-      <div className="deny-card">
-        <p className="deny-status">{deny.status}</p>
-        <h2 id="deny-title">{deny.title}</h2>
-        <p className="deny-request">
+    <div
+      className="absolute inset-0 grid items-start justify-items-center overflow-auto bg-[rgb(10_7_22/0.88)] p-3.5"
+      role="alertdialog"
+      aria-labelledby="deny-title"
+    >
+      <div className="w-[min(560px,100%)] rounded-lg border-t-6 border-deny bg-paper px-5 py-[18px] text-paper-ink [&_a]:text-paper-link">
+        <p className="m-0 font-display text-[2.2rem] leading-none text-deny">{deny.status}</p>
+        <h2 className="mt-0.5 mb-2 text-[1.25rem] font-bold" id="deny-title">
+          {deny.title}
+        </h2>
+        <p className="m-0 text-[0.85rem] wrap-anywhere">
           <code>{deny.requestLine}</code>
         </p>
-        <p className="deny-who">as {deny.who}</p>
+        <p className="mt-0.5 mb-2.5 text-[0.85rem] text-paper-muted">as {deny.who}</p>
         {deny.lines.length > 0 && (
-          <div className="deny-policy">
-            <p className="deny-label">Policy evaluation</p>
+          <div className="overflow-x-auto rounded bg-paper-tint px-2.5 py-2">
+            <p className="mb-1 text-[0.72rem] tracking-[0.08em] text-paper-muted uppercase">
+              Policy evaluation
+            </p>
             {deny.lines.map((line, i) => (
-              <div key={i} className={line.ok ? 'eval ok' : 'eval no'}>
-                <span className="eval-mark">{line.ok ? '✓' : '✗'}</span>
-                <code className="eval-text">{line.text}</code>
-                {line.actual && <span className="eval-actual">{line.actual}</span>}
+              <div
+                key={i}
+                className={`grid grid-cols-[1.2em_max-content_1fr] items-baseline gap-2 text-[0.8rem] ${line.ok ? '' : 'text-[#c2183a]'}`}
+              >
+                <span className={line.ok ? 'text-[#15803d]' : ''}>{line.ok ? '✓' : '✗'}</span>
+                <code className="whitespace-pre">{line.text}</code>
+                {line.actual && <span className="text-[0.75rem] text-paper-muted">{line.actual}</span>}
               </div>
             ))}
           </div>
         )}
-        <p className="deny-hint">{deny.hint}</p>
+        <p className="mt-3">{deny.hint}</p>
         {deny.requestId && (
-          <p className="deny-request-id">
+          <p className="mt-2.5 text-[0.75rem] text-paper-muted wrap-anywhere">
             Pomerium request ID <code>{deny.requestId}</code>
           </p>
         )}
-        <ul className="doc-links">
+        <ul className={docLinks}>
           {deny.links.map((doc) => (
             <li key={doc.href + doc.label}>
               <a href={doc.href} target="_blank" rel="noreferrer">
@@ -301,7 +350,11 @@ function DenyScreen() {
             </li>
           ))}
         </ul>
-        <button className="deny-back" type="button" onClick={() => quest.closeDeny()}>
+        <button
+          className="mt-3.5 rounded bg-paper-ink px-3.5 py-2 text-paper"
+          type="button"
+          onClick={() => quest.closeDeny()}
+        >
           Back to the kingdom
         </button>
       </div>
@@ -326,27 +379,43 @@ function TouchPad() {
   }
 
   return (
-    <div className="pad" aria-label="Touch controls">
-      <div className="dpad">
-        <button type="button" className="up" aria-label="Up" {...hold('up')}>
+    <div
+      className="touch-pad touch-none items-center justify-between gap-4 px-1 py-2 select-none"
+      aria-label="Touch controls"
+    >
+      <div className="dpad grid grid-cols-[repeat(3,52px)] grid-rows-[repeat(3,52px)]">
+        <button type="button" className={`${padButton} [grid-area:up]`} aria-label="Up" {...hold('up')}>
           ▲
         </button>
-        <button type="button" className="left" aria-label="Left" {...hold('left')}>
+        <button type="button" className={`${padButton} [grid-area:left]`} aria-label="Left" {...hold('left')}>
           ◀
         </button>
-        <button type="button" className="right" aria-label="Right" {...hold('right')}>
+        <button
+          type="button"
+          className={`${padButton} [grid-area:right]`}
+          aria-label="Right"
+          {...hold('right')}
+        >
           ▶
         </button>
-        <button type="button" className="down" aria-label="Down" {...hold('down')}>
+        <button type="button" className={`${padButton} [grid-area:down]`} aria-label="Down" {...hold('down')}>
           ▼
         </button>
       </div>
-      <div className="actions">
-        <button type="button" className="btn-b" onClick={tap(() => quest.press('attack'))}>
-          B<small>Sword</small>
+      <div className="flex gap-3.5">
+        <button
+          type="button"
+          className={`${actionButton} border-neon`}
+          onClick={tap(() => quest.press('attack'))}
+        >
+          B<small className="font-body text-[0.6rem]">Sword</small>
         </button>
-        <button type="button" className="btn-a" onClick={tap(() => quest.press('interact'))}>
-          A<small>Talk</small>
+        <button
+          type="button"
+          className={`${actionButton} border-lime`}
+          onClick={tap(() => quest.press('interact'))}
+        >
+          A<small className="font-body text-[0.6rem]">Talk</small>
         </button>
       </div>
     </div>
@@ -363,17 +432,21 @@ function IdentityPanel() {
     : null
 
   return (
-    <section className="panel">
-      <h2>Your identity</h2>
-      <p className={`mode mode-${mode}`}>{MODE_LABEL[mode]}</p>
+    <section className={panel}>
+      <h2 className={panelTitle}>Your identity</h2>
+      <p
+        className={`mb-1.5 inline-block rounded-full border border-current px-2 text-xs tracking-[0.06em] uppercase ${MODE_CHIP[mode]}`}
+      >
+        {MODE_LABEL[mode]}
+      </p>
       {claims ? (
-        <pre className="claims">{claims}</pre>
+        <pre className={`mt-1 ${codeBlock}`}>{claims}</pre>
       ) : (
-        <p className="muted">No session. Visit the Oracle to sign in.</p>
+        <p className={`my-[15px] ${panelMuted}`}>No session. Visit the Oracle to sign in.</p>
       )}
-      <p className="stage">
-        <span className="stage-label">{STAGE_LABEL[stage]}</span>
-        <span className="muted">{stageDescription(stage)}</span>
+      <p className="mt-2.5 grid gap-0.5">
+        <span className="font-semibold">{STAGE_LABEL[stage]}</span>
+        <span className={panelMuted}>{stageDescription(stage)}</span>
       </p>
     </section>
   )
@@ -385,20 +458,20 @@ function GearPanel() {
   const steel = stage === 'armed'
 
   return (
-    <section className="panel">
-      <h2>Gear</h2>
-      <ul className="gear">
+    <section className={panel}>
+      <h2 className={panelTitle}>Gear</h2>
+      <ul className="m-0 grid list-none gap-1 p-0 [&>li]:flex [&>li]:justify-between [&>li]:gap-2">
         <li>
           <span>{steel ? 'Steel sword' : 'Wooden sword'}</span>
-          <span className="muted">{steel ? 'breaks rock' : 'starter'}</span>
+          <span className={panelMuted}>{steel ? 'breaks rock' : 'starter'}</span>
         </li>
         <li>
           <span>Wooden shield</span>
-          <span className="muted">starter</span>
+          <span className={panelMuted}>starter</span>
         </li>
         <li>
           <span>Slimes defeated</span>
-          <span className="num">
+          <span className="tabular-nums">
             {xp}
             {xp < KNIGHT_XP && ` / ${KNIGHT_XP}`}
           </span>
@@ -412,22 +485,27 @@ function AccessLog() {
   const log = useQuest((s) => s.log)
 
   return (
-    <section className="panel">
-      <h2>Access log</h2>
+    <section className={panel}>
+      <h2 className={panelTitle}>Access log</h2>
       {log.length === 0 ? (
-        <p className="muted">Every request a guard checks shows up here.</p>
+        <p className={panelMuted}>Every request a guard checks shows up here.</p>
       ) : (
-        <ol className="log">
+        <ol className="m-0 grid max-h-60 list-none gap-1.5 overflow-auto p-0 text-[0.8rem]">
           {log.map((entry) => (
-            <li key={entry.id}>
-              <span className="log-time">{entry.at}</span>
-              <span className={`chip chip-${entry.decision === 'ALLOW' ? 'allow' : 'deny'}`}>
+            <li
+              key={entry.id}
+              className="grid grid-cols-[auto_auto_minmax(0,1fr)] items-baseline gap-x-2 gap-y-0.5"
+            >
+              <span className="font-mono text-muted tabular-nums">{entry.at}</span>
+              <span
+                className={`rounded-[3px] px-1.5 font-mono text-[0.7rem] font-semibold ${entry.decision === 'ALLOW' ? 'bg-allow/15 text-allow' : 'bg-deny/15 text-deny'}`}
+              >
                 {entry.decision}
               </span>
-              <code className="log-req">
+              <code className="wrap-anywhere">
                 {entry.method} {entry.path}
               </code>
-              <span className="log-who">{entry.who}</span>
+              <span className="col-[2/-1] text-muted wrap-anywhere">{entry.who}</span>
             </li>
           ))}
         </ol>
@@ -441,14 +519,14 @@ function Lessons() {
   const [confirming, setConfirming] = useState(false)
 
   return (
-    <section className="panel">
-      <h2>
+    <section className={panel}>
+      <h2 className={panelTitle}>
         Lessons{' '}
-        <span className="muted">
+        <span className={panelMuted}>
           {learned.length} of {LESSON_ORDER.length}
         </span>
       </h2>
-      <ol className="lessons">
+      <ol className="m-0 grid list-decimal gap-[3px] pl-[1.4em] text-[0.88rem]">
         {LESSON_ORDER.map((id) =>
           learned.includes(id) ? (
             <li key={id}>
@@ -457,16 +535,17 @@ function Lessons() {
               </a>
             </li>
           ) : (
-            <li key={id} className="locked">
+            <li key={id} className="text-locked">
               Not learned yet
             </li>
           ),
         )}
       </ol>
       {confirming ? (
-        <p className="reset">
+        <p className="mt-2.5 text-[0.85rem]">
           Start over from the beginning?{' '}
           <button
+            className={linkButton}
             type="button"
             onClick={() => {
               quest.resetProgress()
@@ -475,12 +554,12 @@ function Lessons() {
           >
             Yes, reset
           </button>{' '}
-          <button type="button" onClick={() => setConfirming(false)}>
+          <button className={linkButton} type="button" onClick={() => setConfirming(false)}>
             Keep playing
           </button>
         </p>
       ) : (
-        <button className="reset-link" type="button" onClick={() => setConfirming(true)}>
+        <button className={linkButton} type="button" onClick={() => setConfirming(true)}>
           Reset progress
         </button>
       )}
