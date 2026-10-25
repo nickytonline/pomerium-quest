@@ -695,7 +695,7 @@ function DenyScreen() {
     <div
       className="absolute inset-0 grid items-start justify-items-center overflow-auto bg-[rgb(10_7_22/0.88)] p-3.5"
       role="alertdialog"
-      aria-labelledby="deny-title"
+      aria-labelledby={`deny-title-${tab}`}
     >
       <div className="w-[min(560px,100%)]">
         <div className="flex gap-1" role="tablist" aria-label="Why the gate refused">
@@ -706,7 +706,7 @@ function DenyScreen() {
               type="button"
               role="tab"
               aria-selected={tab === id}
-              aria-controls="deny-panel"
+              aria-controls={`deny-panel-${id}`}
               className={`rounded-t-md border-2 border-b-0 px-3 py-1.5 font-display text-[0.95rem] ${tab === id ? (id === 'kingdom' ? 'border-ink bg-night-deep text-sun' : 'border-paper bg-paper text-paper-ink') : 'border-panel-edge bg-panel text-muted hover:text-ink'}`}
               onClick={() => setTab(id)}
             >
@@ -714,8 +714,20 @@ function DenyScreen() {
             </button>
           ))}
         </div>
-        <div id="deny-panel" role="tabpanel" aria-labelledby={`deny-tab-${tab}`}>
-          {tab === 'kingdom' ? <DenyStory deny={deny} /> : <DenyPomerium deny={deny} />}
+        {/* Both tabs share one grid cell, so the screen keeps the taller one's size when switching. */}
+        <div className="grid">
+          {DENY_TABS.map(({ id }) => (
+            <div
+              key={id}
+              id={`deny-panel-${id}`}
+              className={`grid [grid-area:1/1] ${tab === id ? '' : 'invisible'}`}
+              role="tabpanel"
+              aria-labelledby={`deny-tab-${id}`}
+              aria-hidden={tab !== id}
+            >
+              {id === 'kingdom' ? <DenyStory deny={deny} /> : <DenyPomerium deny={deny} />}
+            </div>
+          ))}
         </div>
       </div>
     </div>
@@ -726,8 +738,8 @@ const denyHint = 'mt-3 text-right font-display text-[0.85rem]'
 
 function DenyStory({ deny }: { readonly deny: DenyView }) {
   return (
-    <div className="rounded-tr-lg rounded-b-lg border-3 border-ink bg-night-deep px-5 py-[18px]">
-      <h2 className="m-0 font-display text-[1.6rem] leading-tight text-deny" id="deny-title">
+    <div className="flex flex-col rounded-tr-lg rounded-b-lg border-3 border-ink bg-night-deep px-5 py-[18px]">
+      <h2 className="m-0 font-display text-[1.6rem] leading-tight text-deny" id="deny-title-kingdom">
         {deny.story.title}
       </h2>
       <p className="mt-2 mb-0 max-w-[60ch] text-[clamp(0.95rem,1.6vw,1.05rem)]">{deny.story.text}</p>
@@ -742,7 +754,7 @@ function DenyStory({ deny }: { readonly deny: DenyView }) {
         </button>{' '}
         tab.
       </p>
-      <div className="mt-3.5 flex flex-wrap items-center justify-between gap-2">
+      <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-3.5">
         <button
           className="rounded border-2 border-ink bg-panel px-3.5 py-2 font-display text-ink hover:border-lens"
           type="button"
@@ -758,14 +770,14 @@ function DenyStory({ deny }: { readonly deny: DenyView }) {
 
 function DenyPomerium({ deny }: { readonly deny: DenyView }) {
   return (
-    <div className="rounded-tr-lg rounded-b-lg border-t-6 border-deny bg-paper px-5 py-[18px] text-paper-ink [&_a]:text-paper-link">
+    <div className="flex flex-col rounded-tr-lg rounded-b-lg border-t-6 border-deny bg-paper px-5 py-[18px] text-paper-ink [&_a]:text-paper-link">
       {deny.onBehalfOf && (
         <p className="mb-2 rounded bg-paper-tint px-2.5 py-1.5 text-[0.8rem] text-paper-muted">
           Not your request: this is what {deny.onBehalfOf} saw at the gate.
         </p>
       )}
       <p className="m-0 font-display text-[2.2rem] leading-none text-deny">{deny.status}</p>
-      <h2 className="mt-0.5 mb-2 text-[1.25rem] font-bold" id="deny-title">
+      <h2 className="mt-0.5 mb-2 text-[1.25rem] font-bold" id="deny-title-pomerium">
         {deny.title}
       </h2>
       <p className="m-0 text-[0.85rem] wrap-anywhere">
@@ -806,7 +818,7 @@ function DenyPomerium({ deny }: { readonly deny: DenyView }) {
           </li>
         ))}
       </ul>
-      <div className="mt-3.5 flex flex-wrap items-center justify-between gap-2">
+      <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-3.5">
         <button
           className="rounded bg-paper-ink px-3.5 py-2 text-paper"
           type="button"
