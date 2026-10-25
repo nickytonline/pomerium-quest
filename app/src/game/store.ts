@@ -24,6 +24,8 @@ export interface Progress {
   readonly brokenRocks: readonly string[]
   /** Half hearts the town fountain has restored this game (it gives at most FOUNTAIN_LIMIT). */
   readonly fountainHealed: number
+  /** Half hearts pond fish have restored this game (at most FISH_LIMIT). */
+  readonly fishEaten: number
   /** True once a game has been started, so the title screen offers Continue. */
   readonly playedBefore: boolean
   /** Simulated-mode identity; in Pomerium mode the identity comes from the session. */
@@ -113,6 +115,7 @@ const freshProgress = (): Progress => ({
   lessons: [],
   brokenRocks: [],
   fountainHealed: 0,
+  fishEaten: 0,
   playedBefore: false,
   sim: { signedIn: false, groups: [], pendingGroups: [] },
 })

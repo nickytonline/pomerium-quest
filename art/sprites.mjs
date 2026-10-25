@@ -205,6 +205,54 @@ const PHISH_LIT = [
   '................',
 ]
 
+// A pond koi the dog can catch and eat; its tail flicks between the two frames.
+const FISH_COLORS = { g: '#f08a4b', s: '#ffd2a8' }
+
+const FISH = [
+  {
+    rows: [
+      '................',
+      '................',
+      '................',
+      '................',
+      '................',
+      '.....KKKKK..KK..',
+      '...KKgggggK.KgK.',
+      '..KgWKggggKKgK..',
+      '..KggggggggggK..',
+      '...KssssggKKgK..',
+      '....KKKKKK..KgK.',
+      '............KK..',
+      '................',
+      '................',
+      '................',
+      '................',
+    ],
+    palette: FISH_COLORS,
+  },
+  {
+    rows: [
+      '................',
+      '................',
+      '................',
+      '................',
+      '................',
+      '.....KKKKK......',
+      '...KKgggggK..KK.',
+      '..KgWKggggKKKgK.',
+      '..KggggggggggK..',
+      '...KssssggKKKgK.',
+      '....KKKKKK...KK.',
+      '................',
+      '................',
+      '................',
+      '................',
+      '................',
+    ],
+    palette: FISH_COLORS,
+  },
+]
+
 const PHISH = [PHISH_LIT, PHISH_LIT.map((r, i) => (i === 4 || i === 5 ? r.replace(/y/g, 'W') : r))]
 
 // ---- tiny PNG encoder ----
@@ -494,6 +542,7 @@ const grids = {
   ...dog,
   bot_slime: BOT_SLIME,
   phish: PHISH,
+  fish: FISH.map((f) => f.rows),
   sword_wood: [SWORD_WOOD],
   sword_steel: [SWORD_STEEL],
   shield_wood: [SHIELD_WOOD],
@@ -512,7 +561,7 @@ const dogCells = [dog.down, dog.up, dog.right, dog.left]
 // Game sheets. Frame order is load-bearing: see app/src/game/sprites.ts.
 sheet(join(assets, 'dog.png'), [dogCells.flat()])
 
-sheet(join(assets, 'items.png'), [[SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, ...BOT_SLIME, ...PHISH]])
+sheet(join(assets, 'items.png'), [[SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, ...BOT_SLIME, ...PHISH, ...FISH]])
 
 sheet(join(assets, 'npcs.png'), [npcs])
 
@@ -523,7 +572,7 @@ sheet(
   join(out, 'preview.png'),
   [
     ...dogCells.map((r) => [...r, null, null]),
-    [SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, ...BOT_SLIME, ...PHISH],
+    [SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, ...BOT_SLIME, ...PHISH, ...FISH],
     npcs.slice(0, 5),
     [npcs[5], ...tiles.slice(0, 4)],
   ],

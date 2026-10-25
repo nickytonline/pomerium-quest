@@ -7,6 +7,7 @@ import { KNIGHT_QUOTA, defeated, hasSteel, type MonsterKind } from './quest-mach
 import { MAX_HP, buzz, quest, type Dir } from './store.ts'
 import {
   drinkFromFountain,
+  eatFish,
   enterGate,
   nightGate,
   openChest,
@@ -84,6 +85,12 @@ const SWIM_DEPTH = 11
 /** A monster's bite takes a full heart (health counts half hearts). */
 const HIT_DAMAGE = 2
 
+/** Fish swim in the village pond, at most FISH_MAX at a time; a new one arrives FISH_RESPAWN_MS after one is eaten. */
+const VILLAGE_POND = { x0: 2, y0: 25, x1: 4, y1: 27 }
+const FISH_MAX = 2
+const FISH_RESPAWN_MS = 30_000
+const FISH_FRAME = 7
+
 /** Monsters never leave the fields. */
 const FIELDS = { x0: 1, y0: 1, x1: 15, y1: 16 }
 
@@ -91,6 +98,14 @@ const FIELDS = { x0: 1, y0: 1, x1: 15, y1: 16 }
 const MONSTER: Record<MonsterKind, { readonly frame: number; readonly hp: number; readonly name: string }> = {
   bot: { frame: 3, hp: 2, name: 'Bot slime' },
   phish: { frame: 5, hp: 2, name: 'Phish' },
+}
+
+interface Fish {
+  readonly sprite: Phaser.GameObjects.Sprite
+  x: number
+  y: number
+  nextMoveAt: number
+  moving: boolean
 }
 
 interface Monster {
@@ -120,6 +135,9 @@ export class KingdomScene extends Phaser.Scene {
   /** An item shown rising out of a chest until the player closes its dialog. */
   private shownItem: Phaser.GameObjects.Image | undefined
   private monsters: Monster[] = []
+  private fish: Fish[] = []
+  /** After a full dog turns down a fish, bumping it again stays quiet for a moment. */
+  private fishRefusedUntil = 0
   private seen = { interact: 0, attack: 0 }
   private pending = new Set<Action>()
   private lastRockHint = 0
@@ -180,6 +198,15 @@ export class KingdomScene extends Phaser.Scene {
 
     this.monsters = [...this.world.bots.map(spawn('bot')), ...this.world.phish.map(spawn('phish'))]
 
+    this.anims.create({
+      key: 'fish',
+      frames: this.anims.generateFrameNumbers('items', { frames: [FISH_FRAME, FISH_FRAME + 1] }),
+      frameRate: 4,
+      repeat: -1,
+    })
+
+    for (let i = 0; i < FISH_MAX; i++) this.spawnFish()
+
     for (const dir of DIRS) {
       const base = DOG_FRAME[dir]
       this.anims.create({
@@ -239,6 +266,7 @@ export class KingdomScene extends Phaser.Scene {
     }
 
     this.updateMonsters(time)
+    this.updateFish(time)
     this.dismissItem()
 
     if (!this.mode.idle()) {
@@ -318,7 +346,11 @@ export class KingdomScene extends Phaser.Scene {
   }
 
   private occupied(p: Point) {
-    return this.world.npcs.some((npc) => same(npc, p)) || this.monsters.some((monster) => same(monster, p))
+    return (
+      this.world.npcs.some((npc) => same(npc, p)) ||
+      this.monsters.some((monster) => same(monster, p)) ||
+      this.fish.some((fish) => same(fish, p))
+    )
   }
 
   private face(dir: Dir) {
@@ -332,6 +364,14 @@ export class KingdomScene extends Phaser.Scene {
     const target = this.front()
 
     if (this.world.npcs.some((npc) => same(npc, target))) return
+
+    const fish = this.fish.find((candidate) => same(candidate, target))
+
+    if (fish) {
+      this.catchFish(fish)
+
+      return
+    }
 
     if (this.monsters.some((monster) => same(monster, target))) {
       this.hurt(OPPOSITE[dir])
@@ -411,6 +451,14 @@ export class KingdomScene extends Phaser.Scene {
 
     if (npc) {
       talk(npc.npcId)
+
+      return
+    }
+
+    const fish = this.fish.find((candidate) => same(candidate, target))
+
+    if (fish) {
+      this.catchFish(fish)
 
       return
     }
@@ -649,6 +697,71 @@ export class KingdomScene extends Phaser.Scene {
       }
 
       if (this.monsterCanEnter(monster, target)) this.moveMonster(monster, target)
+    }
+  }
+
+  private inPond(p: Point) {
+    const inside =
+      p.x >= VILLAGE_POND.x0 && p.x <= VILLAGE_POND.x1 && p.y >= VILLAGE_POND.y0 && p.y <= VILLAGE_POND.y1
+
+    return inside && this.tileAt(p) === TILE.water && !this.occupied(p) && !same(p, this.pos)
+  }
+
+  /** Puts a fish on a free pond tile; if the dog and the other fish fill the pond, tries again shortly. */
+  private spawnFish() {
+    const free: Point[] = []
+
+    for (let y = VILLAGE_POND.y0; y <= VILLAGE_POND.y1; y++)
+      for (let x = VILLAGE_POND.x0; x <= VILLAGE_POND.x1; x++) if (this.inPond({ x, y })) free.push({ x, y })
+    const spot = free[Math.floor(Math.random() * free.length)]
+
+    if (!spot) {
+      this.time.delayedCall(2000, () => this.spawnFish())
+
+      return
+    }
+
+    const sprite = this.add.sprite(center(spot.x), center(spot.y), 'items', FISH_FRAME).play('fish')
+    this.fish.push({ sprite, x: spot.x, y: spot.y, nextMoveAt: 0, moving: false })
+  }
+
+  private catchFish(fish: Fish) {
+    if (performance.now() < this.fishRefusedUntil) return
+
+    if (!eatFish()) {
+      this.fishRefusedUntil = performance.now() + 2000
+
+      return
+    }
+
+    fish.sprite.destroy()
+    this.fish = this.fish.filter((candidate) => candidate !== fish)
+    this.time.delayedCall(FISH_RESPAWN_MS, () => this.spawnFish())
+  }
+
+  /** Fish drift around the pond at random, turning to face the way they swim. */
+  private updateFish(time: number) {
+    for (const fish of this.fish) {
+      if (fish.moving || time < fish.nextMoveAt) continue
+      fish.nextMoveAt = time + 800 + Math.random() * 1200
+      const dir = DIRS[Math.floor(Math.random() * DIRS.length)] ?? 'left'
+      const target = { x: fish.x + STEP[dir].x, y: fish.y + STEP[dir].y }
+
+      if (!this.inPond(target)) continue
+
+      if (dir === 'left' || dir === 'right') fish.sprite.setFlipX(dir === 'right')
+      fish.moving = true
+      fish.x = target.x
+      fish.y = target.y
+      this.tweens.add({
+        targets: fish.sprite,
+        x: center(target.x),
+        y: center(target.y),
+        duration: 400,
+        onComplete: () => {
+          fish.moving = false
+        },
+      })
     }
   }
 

@@ -516,6 +516,38 @@ export const readWorkbench = () =>
     },
   ])
 
+/** Each fish from the village pond restores half a heart, up to two full hearts each game. */
+export const FISH_LIMIT = 4
+
+/** Eats a caught fish if it would help. Returns false to leave the fish in the pond. */
+export function eatFish(): boolean {
+  const { hp, progress } = quest.get()
+  const left = FISH_LIMIT - progress.fishEaten
+
+  if (hp >= MAX_HP) {
+    quest.toast("You're full. The fish can stay in the pond for now.", 'info')
+
+    return false
+  }
+
+  if (left <= 0) {
+    quest.toast("You've eaten all the fish you can this game.", 'info')
+
+    return false
+  }
+
+  quest.setHp(hp + 1)
+  quest.progress({ fishEaten: progress.fishEaten + 1 })
+  quest.toast(
+    left > 1
+      ? `You catch a fish and eat it: half a heart restored. Fish can give ${hearts(left - 1)} more this game.`
+      : "You catch a fish and eat it: half a heart restored. That's the last the pond can give this game.",
+    'info',
+  )
+
+  return true
+}
+
 export function nightGate() {
   quest.log({ decision: 'NO ROUTE', method: 'GET', path: 'night-market', who: who(identity()) })
   quest.showDeny(
