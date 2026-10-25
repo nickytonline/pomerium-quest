@@ -1,0 +1,8 @@
+node_modules/
+.output/
+dist/
+.DS_Store
+*.local
+.env*
+!.env.example
+certs/
