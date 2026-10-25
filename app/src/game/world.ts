@@ -25,6 +25,8 @@ export const TILE = {
   fountainTopRight: 18,
   fountainBottomLeft: 19,
   fountainBottomRight: 20,
+  /** The fountain's second animation frame starts here, in the same order. */
+  fountainFrame2: 21,
 } as const
 
 export type TileId = (typeof TILE)[keyof typeof TILE]
@@ -82,6 +84,8 @@ export interface World {
   readonly chest: Point
   readonly ledger: Point
   readonly nightGate: Point
+  /** Top-left tile of the 2x2 fountain. */
+  readonly fountain: Point
   readonly spawn: Point
 }
 
@@ -190,10 +194,11 @@ export function buildWorld(): World {
   fill(17, 12, 38, 12, TILE.cobble)
   fill(24, 9, 31, 15, TILE.cobble)
   // One 2x2 fountain in the middle of the square.
-  set(27, 11, TILE.fountainTopLeft)
-  set(28, 11, TILE.fountainTopRight)
-  set(27, 12, TILE.fountainBottomLeft)
-  set(28, 12, TILE.fountainBottomRight)
+  const fountain = { x: 27, y: 11 }
+  set(fountain.x, fountain.y, TILE.fountainTopLeft)
+  set(fountain.x + 1, fountain.y, TILE.fountainTopRight)
+  set(fountain.x, fountain.y + 1, TILE.fountainBottomLeft)
+  set(fountain.x + 1, fountain.y + 1, TILE.fountainBottomRight)
   room(18, 2, 24, 7)
   room(30, 2, 37, 7)
   fill(21, 8, 21, 11, TILE.cobble)
@@ -280,6 +285,7 @@ export function buildWorld(): World {
     chest,
     ledger,
     nightGate,
+    fountain,
     npcs: [
       { x: 12, y: 25, npcId: 'sage' },
       { x: 4, y: 20, npcId: 'oracle' },

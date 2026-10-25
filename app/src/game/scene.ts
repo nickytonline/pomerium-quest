@@ -135,6 +135,7 @@ export class KingdomScene extends Phaser.Scene {
     if (!tileset) throw new Error('tileset failed to load')
     map.createLayer(0, tileset, 0, 0)
     this.map = map
+    this.animateFountain()
 
     for (const npc of this.world.npcs)
       this.add.sprite(center(npc.x), center(npc.y), 'npcs', NPC_FRAME[npc.npcId])
@@ -258,6 +259,27 @@ export class KingdomScene extends Phaser.Scene {
 
   private tileAt(p: Point) {
     return this.world.tiles[p.y]?.[p.x] ?? TILE.tree
+  }
+
+  /** Swaps the fountain's four tiles between its two frames, unless the player prefers less motion. */
+  private animateFountain() {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    const { x, y } = this.world.fountain
+    let frame = 0
+
+    this.time.addEvent({
+      delay: 260,
+      loop: true,
+      callback: () => {
+        frame = 1 - frame
+        const first = frame ? TILE.fountainFrame2 : TILE.fountainTopLeft
+
+        this.map?.putTileAt(first, x, y)
+        this.map?.putTileAt(first + 1, x + 1, y)
+        this.map?.putTileAt(first + 2, x, y + 1)
+        this.map?.putTileAt(first + 3, x + 1, y + 1)
+      },
+    })
   }
 
   private setTile(p: Point, tile: number, draw = true) {

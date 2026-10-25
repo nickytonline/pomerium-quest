@@ -100,7 +100,7 @@ const rows = (rect, spans, color) => {
 const range = (y0, y1, x0, x1) => Array.from({ length: y1 - y0 + 1 }, (_, i) => [y0 + i, x0, x1])
 
 // A round stone basin seen from the front, a pillar and bowl, and water arcing back down.
-const fountain = quad((rect) => {
+const paintFountain = (rect, frame) => {
   const outline = '#241a2e'
   const stone = '#c3c6d3'
   const face = '#8d90a2'
@@ -147,8 +147,17 @@ const fountain = quad((rect) => {
     ],
     water,
   )
-  rect(7, 13, 3, 1, ripple)
-  rect(22, 15, 3, 1, ripple)
+
+  for (const [x, y] of frame
+    ? [
+        [10, 14],
+        [19, 13],
+      ]
+    : [
+        [7, 13],
+        [22, 15],
+      ])
+    rect(x, y, 3, 1, ripple)
 
   // Pillar and bowl.
   rect(13, 5, 6, 11, outline)
@@ -157,22 +166,34 @@ const fountain = quad((rect) => {
   rect(10, 3, 12, 4, outline)
   rect(11, 4, 10, 2, stone)
   rect(12, 4, 8, 1, water)
-  rect(12, 15, 8, 1, ripple)
+  rect(frame ? 13 : 12, 15, frame ? 6 : 8, 1, ripple)
 
   // Spray: a jet up the middle, arcing down into the basin on both sides.
-  rect(15, 0, 2, 4, spray)
+  // The second frame moves each drop partway along its arc and pulses the jet.
+  rect(15, frame ? 1 : 0, 2, frame ? 3 : 4, spray)
 
-  for (const [x, y] of [
-    [12, 1],
-    [9, 2],
-    [7, 4],
-    [6, 7],
-    [6, 10],
-  ]) {
+  for (const [x, y] of frame
+    ? [
+        [10, 1],
+        [8, 3],
+        [6, 5],
+        [6, 8],
+        [7, 11],
+      ]
+    : [
+        [12, 1],
+        [9, 2],
+        [7, 4],
+        [6, 7],
+        [6, 10],
+      ]) {
     rect(x, y, 2, 2, spray)
     rect(30 - x, y, 2, 2, spray)
   }
-})
+}
+
+/** Two frames, swapped by the scene to animate the water. */
+const fountain = [0, 1].flatMap((frame) => quad((rect) => paintFountain(rect, frame)))
 
 const wallBlocks = (rect) => {
   rect(0, 0, 16, 16, '#4a4c59')
@@ -350,7 +371,7 @@ const painters = [
     for (let x = 4; x <= 12; x += 2) rect(x, 3, 1, 2, '#2b2b33')
     rect(6, 0, 4, 3, '#4ade80')
   },
-  // 17–20 fountain: top-left, top-right, bottom-left, bottom-right
+  // 17–20 fountain: top-left, top-right, bottom-left, bottom-right; 21–24 its second frame
   ...fountain,
 ]
 
