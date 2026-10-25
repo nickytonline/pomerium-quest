@@ -26,8 +26,9 @@ const grass = (rect) => {
   rect(8, 13, 1, 1, '#2f6838')
 }
 
+// Paving in the dirt road's sand color, so roads read as one system and gray walls and rocks stand out.
 const cobble = (rect) => {
-  rect(0, 0, 16, 16, '#6f7182')
+  rect(0, 0, 16, 16, '#9a7a4a')
 
   for (const [x, y] of [
     [1, 1],
@@ -35,11 +36,11 @@ const cobble = (rect) => {
     [5, 9],
     [13, 9],
   ]) {
-    rect(x, y, 6, 6, '#9a9cab')
-    rect(x, y, 6, 1, '#aeb0bd')
+    rect(x, y, 6, 6, '#c7a46b')
+    rect(x, y, 6, 1, '#d6b77f')
   }
 
-  rect(0, 9, 4, 6, '#9a9cab')
+  rect(0, 9, 4, 6, '#c7a46b')
 }
 
 const floor = (rect) => {
