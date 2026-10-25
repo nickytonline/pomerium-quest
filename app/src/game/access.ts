@@ -65,7 +65,9 @@ export async function probe(progress: Progress): Promise<{ mode: Mode; identity:
     // SAFETY: our own server route returns this JSON shape (app/src/server/zones.ts).
     const body = (await response.json()) as OracleResponse
 
-    if (body.mode === 'pomerium' && body.player) {
+    if (body.mode === 'simulated') return { mode: 'simulated', identity: simulatedIdentity(progress) }
+
+    if (body.player) {
       const { email, groups } = body.player
 
       return {
@@ -74,9 +76,11 @@ export async function probe(progress: Progress): Promise<{ mode: Mode; identity:
       }
     }
 
-    return { mode: 'simulated', identity: simulatedIdentity(progress) }
+    return { mode: 'pomerium', identity: ANONYMOUS }
   } catch {
-    return { mode: 'simulated', identity: simulatedIdentity(progress) }
+    // Only the game's own server says "simulated". An error (Pomerium restarting, a proxy's HTML
+    // error page) must not hand out the simulated hero: treat the player as signed out instead.
+    return { mode: 'pomerium', identity: ANONYMOUS }
   }
 }
 
