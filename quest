@@ -122,6 +122,9 @@ case "${1:-up}" in
   status)
     kc -n "$NAMESPACE" get pods,svc
     ;;
+  test)
+    bash scripts/e2e.sh
+    ;;
   logs)
     kc -n "$NAMESPACE" logs -f "deployment/${2:-pomerium}"
     ;;
