@@ -21,7 +21,8 @@
   "devDependencies": {
     "@oxlint/plugins": "1.89.0",
     "typescript": "5.9.3",
-    "vite-plus": "1.4.0"
+    "vite-plus": "1.4.0",
+    "yaml": "^2.9.1"
   },
   "overrides": {
     "vite": "npm:@voidzero-dev/vite-plus-core@1.4.0",

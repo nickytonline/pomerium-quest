@@ -7,6 +7,7 @@
 import { generateKeyPairSync, randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { stringify } from 'yaml'
 import { ZONES, type AllowRule, type Criterion } from '../app/src/game/zones.ts'
 
 type Yaml = string | number | boolean | readonly Yaml[] | { readonly [key: string]: Yaml }
@@ -45,6 +46,7 @@ function loadSecrets(): Secrets {
 
   const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' })
   const pem = privateKey.export({ format: 'pem', type: 'pkcs8' }).toString()
+
   const secrets: Secrets = {
     sharedSecret: randomBytes(32).toString('base64'),
     cookieSecret: randomBytes(32).toString('base64'),
@@ -78,44 +80,7 @@ function criterion(node: Criterion): Yaml {
 const policy = (rules: readonly AllowRule[]): Yaml =>
   rules.map((rule) => ({ allow: { [rule.match]: rule.criteria.map(criterion) } }))
 
-const SIMPLE_KEY = /^[A-Za-z_][\w./-]*$/
-
-function scalar(value: string | number | boolean) {
-  return typeof value === 'string' ? JSON.stringify(value) : String(value)
-}
-
-function toYaml(value: Yaml, indent = 0): string {
-  const pad = ' '.repeat(indent)
-
-  if (Array.isArray(value)) {
-    if (value.length === 0) return '[]'
-
-    return value
-      .map((item: Yaml) => {
-        const body = toYaml(item, indent + 2)
-
-        return `${pad}- ${body.trimStart()}`
-      })
-      .join('\n')
-  }
-
-  if (value !== null && typeof value === 'object') {
-    const entries = Object.entries(value)
-
-    if (entries.length === 0) return '{}'
-
-    return entries
-      .map(([key, item]) => {
-        const name = SIMPLE_KEY.test(key) ? key : JSON.stringify(key)
-        const nested = Array.isArray(item) ? item.length > 0 : item !== null && typeof item === 'object'
-
-        return nested ? `${pad}${name}:\n${toYaml(item, indent + 2)}` : `${pad}${name}: ${toYaml(item)}`
-      })
-      .join('\n')
-  }
-
-  return scalar(value)
-}
+const toYaml = (value: Yaml) => stringify(value, { lineWidth: 0 }).trimEnd()
 
 function pomeriumConfig(secrets: Secrets): Yaml {
   const app = svc('quest', 3000)
@@ -312,11 +277,14 @@ function manifests(secrets: Secrets): Yaml[] {
 const secrets = loadSecrets()
 
 mkdirSync(OUT, { recursive: true })
+
 writeFileSync(join(OUT, 'pomerium-config.yaml'), `${toYaml(pomeriumConfig(secrets))}\n`)
+
 writeFileSync(
   join(OUT, 'manifests.yaml'),
   `${manifests(secrets)
     .map((doc) => toYaml(doc))
     .join('\n---\n')}\n`,
 )
+
 console.log(`rendered ${OUT}/manifests.yaml for ${publicUrl('game')}`)
