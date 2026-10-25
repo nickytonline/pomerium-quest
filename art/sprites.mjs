@@ -1,6 +1,8 @@
 // Pixel-art source for Pomerium Quest. Each sprite is a 16x16 grid of palette keys.
-// Run: node art/sprites.mjs  → writes art/out/*.png (1x sheets + 8x previews)
-import { writeFileSync } from 'node:fs'
+// Run: node art/sprites.mjs  → writes app/public/assets/*.png and art/out/ previews
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { tiles } from './tiles.mjs'
 import { deflateSync } from 'node:zlib'
 
 const PALETTE = {
@@ -201,37 +203,93 @@ function png(w, h, rgba) {
 }
 const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16))
 
-// Lay sprites out on a grid; `cells` is rows of 16x16 sprites (null = empty cell).
-function sheet(name, cells, { scale = 1, checker = false } = {}) {
+// NPCs share one body template; each gets its own colors for hair/hood (A),
+// skin (F), robe (B), robe shade (C) and beard or mouth (X).
+const PERSON = [
+  '................',
+  '.....KKKKKK.....',
+  '....KAAAAAAK....',
+  '....KAFFFFAK....',
+  '....KFKFFKFK....',
+  '....KFFFFFFK....',
+  '.....KFXXFK.....',
+  '....KBBBBBBK....',
+  '...KBBCBBCBBK...',
+  '...KBBBBBBBBK...',
+  '...KFBBBBBBFK...',
+  '...KBBBBBBBBK...',
+  '....KBBBBBBK....',
+  '....KCCKKCCK....',
+  '....KKK..KKK....',
+  '................',
+]
+const NPC_COLORS = {
+  sage: { A: '#e8e8ee', F: '#f1c27d', B: '#7d8091', C: '#5f6272', X: '#e8e8ee' },
+  oracle: { A: '#6d3fc4', F: '#f6d3b3', B: '#8b5cf6', C: '#6d3fc4', X: '#f6d3b3' },
+  traveler: { A: '#7a5126', F: '#d9a066', B: '#8a6a45', C: '#6b5034', X: '#d9a066' },
+  captain: { A: '#c9d2df', F: '#f1c27d', B: '#2e5fa8', C: '#24497f', X: '#f1c27d' },
+  armorer: { A: '#4a2c17', F: '#e0ac69', B: '#b03a2e', C: '#85291f', X: '#4a2c17' },
+  librarian: { A: '#2d2438', F: '#f1c27d', B: '#1f8a8a', C: '#166666', X: '#f1c27d' },
+}
+const npcs = Object.entries(NPC_COLORS).map(([name, colors]) => ({ name, rows: PERSON, palette: colors }))
+
+
+// A cell is a grid (array of 16 strings), { rows, palette } for recolored grids, a raw
+// 16x16 RGBA Buffer (tiles), or null.
+function pixel(cell, x, y) {
+  if (!cell) return null
+  if (Buffer.isBuffer(cell)) {
+    const o = (y * 16 + x) * 4
+    return cell[o + 3] ? [cell[o], cell[o + 1], cell[o + 2]] : null
+  }
+  const rows = Array.isArray(cell) ? cell : cell.rows
+  const palette = Array.isArray(cell) ? PALETTE : { ...PALETTE, ...cell.palette }
+  const key = rows[y][x]
+  if (!(key in palette)) throw new Error(`unknown palette key "${key}"`)
+  return palette[key] ? hex(palette[key]) : null
+}
+
+function sheet(file, cells, { scale = 1, checker = false } = {}) {
   const cols = Math.max(...cells.map(r => r.length))
   const w = cols * 16 * scale
   const h = cells.length * 16 * scale
   const buf = Buffer.alloc(w * h * 4)
   for (let py = 0; py < h; py++)
     for (let px = 0; px < w; px++) {
-      const sprite = cells[Math.floor(py / scale / 16)][Math.floor(px / scale / 16)]
-      const sx = Math.floor(px / scale) % 16
-      const sy = Math.floor(py / scale) % 16
-      const key = sprite?.[sy]?.[sx] ?? '.'
-      if (!(key in PALETTE)) throw new Error(`${name}: unknown key "${key}"`)
-      const color = PALETTE[key]
+      const cell = cells[Math.floor(py / scale / 16)][Math.floor(px / scale / 16)]
+      const rgb = pixel(cell, Math.floor(px / scale) % 16, Math.floor(py / scale) % 16)
       const o = (py * w + px) * 4
-      if (color) buf.set([...hex(color), 255], o)
+      if (rgb) buf.set([...rgb, 255], o)
       else if (checker) {
         const g = (Math.floor(px / 8) + Math.floor(py / 8)) % 2 ? 0x3a : 0x30
         buf.set([g, g + 4, g + 12, 255], o)
       }
     }
-  writeFileSync(new URL(`./out/${name}.png`, import.meta.url), png(w, h, buf))
+  mkdirSync(dirname(file), { recursive: true })
+  writeFileSync(file, png(w, h, buf))
 }
 
-for (const [label, frames] of Object.entries({ ...dog, slime: SLIME, sword_wood: [SWORD_WOOD], sword_steel: [SWORD_STEEL], shield_wood: [SHIELD_WOOD] }))
+const grids = { ...dog, slime: SLIME, sword_wood: [SWORD_WOOD], sword_steel: [SWORD_STEEL], shield_wood: [SHIELD_WOOD], person: [PERSON] }
+for (const [label, frames] of Object.entries(grids))
   frames.forEach((f, i) => {
     if (f.length !== 16 || f.some(r => r.length !== 16)) throw new Error(`${label}[${i}] is not 16x16`)
   })
 
+const assets = new URL('../app/public/assets/', import.meta.url).pathname
+const out = new URL('./out/', import.meta.url).pathname
 const dogCells = [dog.down, dog.up, dog.right, dog.left]
-sheet('dog', dogCells)
-sheet('items', [[SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, ...SLIME]])
-sheet('preview', [...dogCells.map(r => [...r, null]), [SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, SLIME[0]]], { scale: 10, checker: true })
-console.log('wrote art/out/dog.png, items.png, preview.png')
+
+// Game sheets. Frame order is load-bearing: see app/src/game/sprites.ts.
+sheet(join(assets, 'dog.png'), [dogCells.flat()])
+sheet(join(assets, 'items.png'), [[SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, ...SLIME]])
+sheet(join(assets, 'npcs.png'), [npcs])
+sheet(join(assets, 'tiles.png'), [tiles])
+
+// Review sheet at 10x.
+sheet(
+  join(out, 'preview.png'),
+  [...dogCells.map(r => [...r, null, null]), [SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, SLIME[0], SLIME[1]], npcs.slice(0, 5), [npcs[5], ...tiles.slice(0, 4)]],
+  { scale: 10, checker: true },
+)
+sheet(join(out, 'tiles-preview.png'), [tiles.slice(0, 9), tiles.slice(9)], { scale: 8 })
+console.log(`wrote ${assets}{dog,items,npcs,tiles}.png and art/out previews`)
