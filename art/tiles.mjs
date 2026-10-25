@@ -74,6 +74,46 @@ const wallBlocks = (rect) => {
   rect(0, 0, 16, 1, '#858898')
 }
 
+// A rounded boulder: light from the top-left, a crack down the middle, a soft ground shadow.
+const ROCK = [
+  '................',
+  '.....KKKKK......',
+  '...KKLHHLLKKK...',
+  '..KLHHLLMMMMDK..',
+  '.KLHLLMMCMMMMDKK',
+  '.KLLLMMMCMMMLMDK',
+  'KLLMMMMCMMMMMDDK',
+  'KLMMMMMMCCMMMDDK',
+  'KMMLMMMMMMCMMDDK',
+  'KMMMMMMMMMCMDDDK',
+  'KMMMMMMMMMMMDDDK',
+  '.KMMMMMDMMMDDDK.',
+  '.KDMMMMMMDDDDDK.',
+  '..KDDDDDDDDDDK..',
+  '..SKKKKKKKKKKS..',
+  '....SSSSSSSS....',
+]
+
+const ROCK_COLORS = {
+  K: '#2d2e35', // outline
+  H: '#c3c5cd', // highlight
+  L: '#9a9ca6', // light
+  M: '#7b7d86', // mid
+  D: '#565862', // shadow side
+  C: '#2d2e35', // crack
+  S: '#55576a', // ground shadow
+}
+
+/** Paints a 16x16 grid of color keys; '.' leaves the pixel underneath. */
+const pixels = (rect, rows, colors) => {
+  rows.forEach((row, y) => {
+    if (row.length !== 16) throw new Error(`row ${y} is ${row.length} wide`)
+    ;[...row].forEach((key, x) => {
+      if (key !== '.') rect(x, y, 1, 1, colors[key])
+    })
+  })
+}
+
 const painters = [
   // 0 grass
   grass,
@@ -157,12 +197,7 @@ const painters = [
   // 13 cracked rock
   (rect) => {
     cobble(rect)
-    rect(2, 4, 12, 10, '#7b7d86')
-    rect(3, 3, 10, 12, '#7b7d86')
-    rect(4, 4, 4, 2, '#9a9ca6')
-    rect(8, 5, 1, 3, '#2d2e35')
-    rect(7, 8, 1, 2, '#2d2e35')
-    rect(9, 9, 1, 3, '#2d2e35')
+    pixels(rect, ROCK, ROCK_COLORS)
   },
   // 14 night market gate (no route yet)
   (rect) => {

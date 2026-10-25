@@ -444,6 +444,7 @@ export class KingdomScene extends Phaser.Scene {
     }
 
     this.setTile(target, TILE.cobble)
+    this.shatterRock(target)
     quest.progress({ brokenRocks: [...quest.get().progress.brokenRocks, keyOf(target)] })
     quest.toast('The steel sword splits the rock.', 'info')
   }
@@ -471,6 +472,36 @@ export class KingdomScene extends Phaser.Scene {
       duration: 300,
       onComplete: () => item.destroy(),
     })
+  }
+
+  /** Bursts a broken rock into a handful of chunks that arc outward, tumble and fade. */
+  private shatterRock(at: Point) {
+    const colors = [0x9a9ca6, 0x7b7d86, 0x565862, 0xc3c5cd, 0x7b7d86]
+    const pieces = 5
+
+    this.cameras.main.shake(90, 0.002)
+
+    for (let i = 0; i < pieces; i++) {
+      const angle = -Math.PI / 2 + (i - (pieces - 1) / 2) * 0.75 + Phaser.Math.FloatBetween(-0.2, 0.2)
+      const size = Phaser.Math.Between(3, 5)
+      const x = center(at.x) + Phaser.Math.Between(-3, 3)
+      const y = center(at.y) + Phaser.Math.Between(-2, 2)
+      const color = colors[i % colors.length] ?? 0x7b7d86
+      const chunk = this.add.rectangle(x, y, size, size, color).setStrokeStyle(1, 0x2d2e35).setDepth(11)
+      const dx = Math.cos(angle) * Phaser.Math.Between(10, 16)
+      // y(t) = (1 + a)t² − at: pops up, then gravity pulls it 6px below where it started.
+      const lift = Phaser.Math.FloatBetween(3, 6)
+
+      this.tweens.add({
+        targets: chunk,
+        x: { value: x + dx, ease: 'Quad.easeOut' },
+        y: { value: y + 6, ease: (t: number) => (1 + lift) * t * t - lift * t },
+        angle: Phaser.Math.Between(-200, 200),
+        alpha: { value: 0, ease: 'Quad.easeIn' },
+        duration: Phaser.Math.Between(350, 450),
+        onComplete: () => chunk.destroy(),
+      })
+    }
   }
 
   private rockHint() {
