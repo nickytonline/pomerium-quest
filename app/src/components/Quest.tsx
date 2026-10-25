@@ -11,8 +11,8 @@ import { probe } from '../game/access.ts'
 import { INTRO, LESSONS, LESSON_ORDER } from '../game/content.ts'
 import { KNIGHT_QUOTA, questMachine, type QuestStage } from '../game/quest-machine.ts'
 import { MAX_HP, quest, useQuest, type DenyView, type Dir } from '../game/store.ts'
-import { decide } from '../game/ppl.ts'
-import { SIGNED_IN_MESSAGE, zoneById } from '../game/zones.ts'
+import { decide, type EvalLine, type Identity } from '../game/ppl.ts'
+import { KINGDOM_DOMAIN, SIGNED_IN_MESSAGE, zoneById } from '../game/zones.ts'
 
 /** Wide enough for the panels beside the game. The game fits the height, so width alone decides. */
 const SIDE_BY_SIDE = '(min-width: 960px)'
@@ -127,7 +127,7 @@ function useDialogKeys() {
       const journalKey = event.key === 'i' || event.key === 'I'
       const confirm = event.key === 'Enter' || event.key === ' ' || event.key === 'e' || event.key === 'E'
 
-      // A focused tab or button inside the denial screen handles its own Enter and Space.
+      // A focused tab or button inside a tabbed screen handles its own Enter and Space.
       const onDenyButton = deny && event.target instanceof HTMLButtonElement
 
       if (signIn) {
@@ -135,14 +135,14 @@ function useDialogKeys() {
           event.preventDefault()
           quest.cancelSignIn()
         }
+      } else if ((deny || (finale && !dialog)) && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+        event.preventDefault()
+        window.dispatchEvent(new Event(TAB_EVENT))
       } else if (finale && !dialog) {
-        if (confirm || event.key === 'Escape') {
+        if ((confirm && !(event.target instanceof HTMLButtonElement)) || event.key === 'Escape') {
           event.preventDefault()
           quest.closeFinale()
         }
-      } else if (deny && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
-        event.preventDefault()
-        window.dispatchEvent(new Event(DENY_TAB_EVENT))
       } else if (deny && ((confirm && !onDenyButton) || event.key === 'Escape')) {
         event.preventDefault()
         quest.closeDeny()
@@ -319,7 +319,6 @@ function Kingdom() {
             <Toast />
             <DialogBox />
             <DenyScreen />
-            <Finale />
             <PauseMenu />
           </div>
           {touch ? (
@@ -334,6 +333,7 @@ function Kingdom() {
         <Journal drawer={!wide} />
       </div>
       <SignInSheet />
+      <Finale />
     </div>
   )
 }
@@ -666,102 +666,234 @@ function DialogBox() {
   )
 }
 
-/** The Royal Keep's doors open: the quest is done. Shows the rule that let the player in, every check passing. */
-function Finale() {
-  const open = useQuest((s) => s.finale)
-  const identity = useQuest((s) => s.identity)
-  const learned = useQuest((s) => s.progress.lessons)
+type Tab = 'kingdom' | 'pomerium'
 
-  if (!open) return null
+const TABS: readonly { readonly id: Tab; readonly label: string }[] = [
+  { id: 'kingdom', label: 'In the kingdom' },
+  { id: 'pomerium', label: 'In Pomerium' },
+]
 
-  const keep = zoneById('keep')
-  const lines = decide(keep, identity, { method: 'GET', path: `${keep.prefix}/enter` }).lines
-  const claims = JSON.stringify({ email: identity.email, groups: identity.groups }, null, 2)
+/** ← and → switch the open tabbed screen's tabs; the screen listens for it. */
+const TAB_EVENT = 'quest:switch-tab'
+
+const switchTab = () => window.dispatchEvent(new Event(TAB_EVENT))
+
+/**
+ * A moment told twice: first as the game tells it, then as Pomerium decided it. Both tabs share
+ * one grid cell, so the screen keeps the taller one's size when switching.
+ */
+function TabbedScreen({
+  name,
+  label,
+  showing,
+  overlay,
+  kingdom,
+  pomerium,
+}: {
+  readonly name: string
+  readonly label: string
+  /** What the screen is showing; a new one starts back on the kingdom tab. */
+  readonly showing: unknown
+  readonly overlay: string
+  readonly kingdom: ReactNode
+  readonly pomerium: ReactNode
+}) {
+  const [tab, setTab] = useState<Tab>('kingdom')
+
+  useEffect(() => {
+    setTab('kingdom')
+  }, [showing])
+
+  useEffect(() => {
+    const onSwitch = () => setTab((current) => (current === 'kingdom' ? 'pomerium' : 'kingdom'))
+    window.addEventListener(TAB_EVENT, onSwitch)
+
+    return () => window.removeEventListener(TAB_EVENT, onSwitch)
+  }, [])
 
   return (
-    <div
-      className="absolute inset-0 grid items-start justify-items-center overflow-auto bg-[rgb(10_7_22/0.88)] p-3.5"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="finale-title"
-    >
-      <div className="grid w-[min(560px,100%)] gap-3 rounded-lg border-3 border-sun bg-night-deep px-5 py-[18px] shadow-[0_0_40px_rgb(255_216_107/0.25)]">
-        <h2 id="finale-title" className="sunset-text m-0 font-display text-[2rem] leading-tight">
-          Quest complete
-        </h2>
-        <p className="m-0">
-          The Royal Keep opens its doors. Citizen, knight, scholar: the gate checked all three, and your
-          session carried every one.
-        </p>
-        <div className="overflow-x-auto rounded border border-panel-edge bg-code-bg px-3 py-2">
-          <p className="mb-1 text-[0.72rem] tracking-[0.08em] text-muted uppercase">
-            The rule that let you in
-          </p>
-          {lines.map((line, i) => (
-            <div
-              key={i}
-              className="grid grid-cols-[1.2em_max-content_1fr] items-baseline gap-2 text-[0.8rem]"
+    <div className={overlay} role="alertdialog" aria-modal="true" aria-labelledby={`${name}-title-${tab}`}>
+      <div className="flex max-h-full w-[min(600px,100%)] min-h-0 flex-col">
+        <div className="flex gap-1" role="tablist" aria-label={label}>
+          {TABS.map(({ id, label: tabLabel }) => (
+            <button
+              key={id}
+              id={`${name}-tab-${id}`}
+              type="button"
+              role="tab"
+              aria-selected={tab === id}
+              aria-controls={`${name}-panel-${id}`}
+              className={`rounded-t-md border-2 border-b-0 px-3 py-1.5 font-display text-[0.95rem] ${tab === id ? (id === 'kingdom' ? 'border-ink bg-night-deep text-sun' : 'border-paper bg-paper text-paper-ink') : 'border-panel-edge bg-panel text-muted hover:text-ink'}`}
+              onClick={() => setTab(id)}
             >
-              <span className="text-allow">{line.ok === undefined ? '' : line.ok ? '✓' : '✗'}</span>
-              <code className="whitespace-pre text-lens">{line.text}</code>
-              {line.actual && <span className="text-[0.75rem] text-muted">{line.actual}</span>}
-            </div>
+              {tabLabel}
+            </button>
           ))}
         </div>
-        <div>
-          <p className="mb-1 text-[0.72rem] tracking-[0.08em] text-muted uppercase">Your claims</p>
-          <pre className={`m-0 ${codeBlock}`}>{claims}</pre>
-        </div>
-        <div>
-          <p className="mb-1 text-[0.72rem] tracking-[0.08em] text-muted uppercase">
-            Lessons learned · {LESSON_ORDER.filter((id) => learned.includes(id)).length} of{' '}
-            {LESSON_ORDER.length}
-          </p>
-          <ol className="m-0 grid list-decimal gap-[3px] pl-[1.4em] text-[0.88rem]">
-            {LESSON_ORDER.map((id) =>
-              learned.includes(id) ? (
-                <li key={id}>
-                  <a href={LESSONS[id].link.href} target="_blank" rel="noreferrer">
-                    {LESSONS[id].title} ↗
-                  </a>
-                </li>
-              ) : (
-                <li key={id} className="text-locked">
-                  Not learned yet
-                </li>
-              ),
-            )}
-          </ol>
-        </div>
-        <p className="m-0 text-[0.85rem] text-muted">
-          Every gate you passed was a real Pomerium route, and every rule on its sign was the policy Pomerium
-          enforced. More of the kingdom opens soon.
-        </p>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <button
-            className="rounded border-2 border-ink bg-panel px-3.5 py-2 font-display text-ink hover:border-lens"
-            type="button"
-            onClick={() => quest.closeFinale()}
-            autoFocus
-          >
-            Back to the kingdom
-          </button>
-          <p className="m-0 font-display text-[0.85rem] text-muted">Enter to close</p>
+        <div className="grid min-h-0 overflow-y-auto overscroll-contain">
+          {TABS.map(({ id }) => (
+            <div
+              key={id}
+              id={`${name}-panel-${id}`}
+              className={`grid [grid-area:1/1] ${tab === id ? '' : 'invisible'}`}
+              role="tabpanel"
+              aria-labelledby={`${name}-tab-${id}`}
+              aria-hidden={tab !== id}
+            >
+              {id === 'kingdom' ? kingdom : pomerium}
+            </div>
+          ))}
         </div>
       </div>
     </div>
   )
 }
 
-type DenyTab = 'kingdom' | 'pomerium'
+const tabHint = 'm-0 text-right font-display text-[0.85rem]'
 
-const DENY_TABS: readonly { readonly id: DenyTab; readonly label: string }[] = [
-  { id: 'kingdom', label: 'In the kingdom' },
-  { id: 'pomerium', label: 'In Pomerium' },
+/** The rule Pomerium evaluated, line by line; only criteria carry a ✓ or ✗. */
+function PolicyLines({ lines }: { readonly lines: readonly EvalLine[] }) {
+  return (
+    <div className="overflow-x-auto rounded bg-paper-tint px-2.5 py-2">
+      <p className="mb-1 text-[0.72rem] tracking-[0.08em] text-paper-muted uppercase">Policy evaluation</p>
+      {lines.map((line, i) => (
+        <div
+          key={i}
+          className={`grid grid-cols-[1.2em_max-content_1fr] items-baseline gap-2 text-[0.8rem] ${line.ok === false ? 'text-[#c2183a]' : ''}`}
+        >
+          <span className={line.ok ? 'text-[#15803d]' : ''}>
+            {line.ok === undefined ? '' : line.ok ? '✓' : '✗'}
+          </span>
+          <code className="whitespace-pre">{line.text}</code>
+          {line.actual && <span className="text-[0.75rem] text-paper-muted">{line.actual}</span>}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** The Royal Keep's doors open: the quest is done. */
+function Finale() {
+  const open = useQuest((s) => s.finale)
+  const identity = useQuest((s) => s.identity)
+
+  if (!open) return null
+
+  return (
+    <TabbedScreen
+      name="finale"
+      label="How you got in"
+      showing={open}
+      overlay="fixed inset-0 z-50 grid place-items-center bg-[rgb(10_7_22/0.88)] p-4"
+      kingdom={<FinaleStory email={identity.email} />}
+      pomerium={<FinalePomerium identity={identity} />}
+    />
+  )
+}
+
+const VOUCHED_BY: readonly { readonly role: string; readonly by: string }[] = [
+  { role: `A citizen of ${KINGDOM_DOMAIN}`, by: 'the Oracle knows who you are' },
+  { role: 'A knight', by: 'the Captain vouched for you' },
+  { role: 'A scholar', by: 'the Librarian vouched for you' },
 ]
 
-/** ← and → switch the denial screen's tabs; the screen listens for it. */
-const DENY_TAB_EVENT = 'quest:deny-tab'
+function FinaleStory({ email }: { readonly email: string }) {
+  return (
+    <div className="flex flex-col gap-3 rounded-tr-lg rounded-b-lg border-3 border-sun bg-night-deep px-5 py-[18px]">
+      <h2 id="finale-title-kingdom" className="sunset-text m-0 font-display text-[2rem] leading-tight">
+        Quest complete
+      </h2>
+      <p className="m-0">
+        The Royal Keep opens its doors to {email}. The gate admits only someone who is all three, and you are:
+      </p>
+      <ul className="m-0 grid list-none gap-1.5 p-0">
+        {VOUCHED_BY.map(({ role, by }) => (
+          <li key={role} className="flex items-baseline gap-2">
+            <span className="text-allow">✓</span>
+            <span>
+              <strong className="font-display text-sun">{role}</strong>{' '}
+              <span className="text-muted">· {by}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="m-0 text-[0.85rem] text-muted">
+        Every gate in the kingdom is a Pomerium route. See how Pomerium let you in on the{' '}
+        <button className="border-0 bg-transparent p-0 text-lens underline" type="button" onClick={switchTab}>
+          In Pomerium
+        </button>{' '}
+        tab.
+      </p>
+      <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-1">
+        <button
+          className="rounded border-2 border-ink bg-panel px-3.5 py-2 font-display text-ink hover:border-lens"
+          type="button"
+          onClick={() => quest.closeFinale()}
+          autoFocus
+        >
+          Back to the kingdom
+        </button>
+        <p className={`${tabHint} text-muted`}>← → switch tabs · Enter to close</p>
+      </div>
+    </div>
+  )
+}
+
+function FinalePomerium({ identity }: { readonly identity: Identity }) {
+  const learned = useQuest((s) => s.progress.lessons)
+  const keep = zoneById('keep')
+  const path = `${keep.prefix}/enter`
+  const lines = decide(keep, identity, { method: 'GET', path }).lines
+
+  return (
+    <div className="flex flex-col rounded-tr-lg rounded-b-lg border-t-6 border-allow bg-paper px-5 py-[18px] text-paper-ink [&_a]:text-paper-link">
+      <p className="m-0 font-mono text-[2.2rem] leading-none font-bold text-[#15803d]">200</p>
+      <h2 className="mt-0.5 mb-2 text-[1.25rem] font-bold" id="finale-title-pomerium">
+        Access allowed
+      </h2>
+      <p className="m-0 text-[0.85rem] wrap-anywhere">
+        <code>
+          GET {location.origin}
+          {path}
+        </code>
+      </p>
+      <p className="mt-0.5 mb-2.5 text-[0.85rem] text-paper-muted">as {identity.email}</p>
+      <PolicyLines lines={lines} />
+      <p className="mt-3 mb-0">
+        One allow rule, three criteria under and. Each matched a claim in your session, so Pomerium forwarded
+        the request to the app behind the route. Every gate you passed worked the same way.
+      </p>
+      <p className="mt-3 mb-1 text-[0.72rem] tracking-[0.08em] text-paper-muted uppercase">
+        Lessons learned · {LESSON_ORDER.filter((id) => learned.includes(id)).length} of {LESSON_ORDER.length}
+      </p>
+      <ol className="m-0 grid list-decimal gap-x-6 gap-y-[3px] pl-[1.4em] text-[0.82rem] sm:grid-cols-2">
+        {LESSON_ORDER.map((id) =>
+          learned.includes(id) ? (
+            <li key={id}>
+              <a href={LESSONS[id].link.href} target="_blank" rel="noreferrer">
+                {LESSONS[id].title} ↗
+              </a>
+            </li>
+          ) : (
+            <li key={id} className="text-paper-muted">
+              Not learned yet
+            </li>
+          ),
+        )}
+      </ol>
+      <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-3.5">
+        <button
+          className="rounded bg-paper-ink px-3.5 py-2 text-paper"
+          type="button"
+          onClick={() => quest.closeFinale()}
+        >
+          Back to the kingdom
+        </button>
+        <p className={`${tabHint} text-paper-muted`}>← → switch tabs · Enter to close</p>
+      </div>
+    </div>
+  )
+}
 
 /**
  * A refusal, told twice. The first tab is the game: who turned you away and why, in the kingdom's
@@ -770,65 +902,20 @@ const DENY_TAB_EVENT = 'quest:deny-tab'
  */
 function DenyScreen() {
   const deny = useQuest((s) => s.deny)
-  const [tab, setTab] = useState<DenyTab>('kingdom')
-
-  useEffect(() => {
-    setTab('kingdom')
-  }, [deny])
-
-  useEffect(() => {
-    const onSwitch = () => setTab((current) => (current === 'kingdom' ? 'pomerium' : 'kingdom'))
-    window.addEventListener(DENY_TAB_EVENT, onSwitch)
-
-    return () => window.removeEventListener(DENY_TAB_EVENT, onSwitch)
-  }, [])
 
   if (!deny) return null
 
   return (
-    <div
-      className="absolute inset-0 grid items-start justify-items-center overflow-auto bg-[rgb(10_7_22/0.88)] p-3.5"
-      role="alertdialog"
-      aria-labelledby={`deny-title-${tab}`}
-    >
-      <div className="w-[min(560px,100%)]">
-        <div className="flex gap-1" role="tablist" aria-label="Why the gate refused">
-          {DENY_TABS.map(({ id, label }) => (
-            <button
-              key={id}
-              id={`deny-tab-${id}`}
-              type="button"
-              role="tab"
-              aria-selected={tab === id}
-              aria-controls={`deny-panel-${id}`}
-              className={`rounded-t-md border-2 border-b-0 px-3 py-1.5 font-display text-[0.95rem] ${tab === id ? (id === 'kingdom' ? 'border-ink bg-night-deep text-sun' : 'border-paper bg-paper text-paper-ink') : 'border-panel-edge bg-panel text-muted hover:text-ink'}`}
-              onClick={() => setTab(id)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        {/* Both tabs share one grid cell, so the screen keeps the taller one's size when switching. */}
-        <div className="grid">
-          {DENY_TABS.map(({ id }) => (
-            <div
-              key={id}
-              id={`deny-panel-${id}`}
-              className={`grid [grid-area:1/1] ${tab === id ? '' : 'invisible'}`}
-              role="tabpanel"
-              aria-labelledby={`deny-tab-${id}`}
-              aria-hidden={tab !== id}
-            >
-              {id === 'kingdom' ? <DenyStory deny={deny} /> : <DenyPomerium deny={deny} />}
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
+    <TabbedScreen
+      name="deny"
+      label="Why the gate refused"
+      showing={deny}
+      overlay="absolute inset-0 grid items-start justify-items-center overflow-auto bg-[rgb(10_7_22/0.88)] p-3.5"
+      kingdom={<DenyStory deny={deny} />}
+      pomerium={<DenyPomerium deny={deny} />}
+    />
   )
 }
-
-const denyHint = 'mt-3 text-right font-display text-[0.85rem]'
 
 function DenyStory({ deny }: { readonly deny: DenyView }) {
   return (
@@ -839,11 +926,7 @@ function DenyStory({ deny }: { readonly deny: DenyView }) {
       <p className="mt-2 mb-0 max-w-[60ch] text-[clamp(0.95rem,1.6vw,1.05rem)]">{deny.story.text}</p>
       <p className="mt-3 mb-0 text-[0.85rem] text-muted">
         Every gate in the kingdom is a Pomerium route. See how Pomerium made this call in the{' '}
-        <button
-          className="border-0 bg-transparent p-0 text-lens underline"
-          type="button"
-          onClick={() => window.dispatchEvent(new Event(DENY_TAB_EVENT))}
-        >
+        <button className="border-0 bg-transparent p-0 text-lens underline" type="button" onClick={switchTab}>
           In Pomerium
         </button>{' '}
         tab.
@@ -856,7 +939,7 @@ function DenyStory({ deny }: { readonly deny: DenyView }) {
         >
           Back to the kingdom
         </button>
-        <p className={`m-0 ${denyHint} text-muted`}>← → switch tabs · Enter to close</p>
+        <p className={`${tabHint} text-muted`}>← → switch tabs · Enter to close</p>
       </div>
     </div>
   )
@@ -870,7 +953,7 @@ function DenyPomerium({ deny }: { readonly deny: DenyView }) {
           Not your request: this is what {deny.onBehalfOf} saw at the gate.
         </p>
       )}
-      <p className="m-0 font-display text-[2.2rem] leading-none text-deny">{deny.status}</p>
+      <p className="m-0 font-mono text-[2.2rem] leading-none font-bold text-deny">{deny.status}</p>
       <h2 className="mt-0.5 mb-2 text-[1.25rem] font-bold" id="deny-title-pomerium">
         {deny.title}
       </h2>
@@ -878,25 +961,7 @@ function DenyPomerium({ deny }: { readonly deny: DenyView }) {
         <code>{deny.requestLine}</code>
       </p>
       <p className="mt-0.5 mb-2.5 text-[0.85rem] text-paper-muted">as {deny.who}</p>
-      {deny.lines.length > 0 && (
-        <div className="overflow-x-auto rounded bg-paper-tint px-2.5 py-2">
-          <p className="mb-1 text-[0.72rem] tracking-[0.08em] text-paper-muted uppercase">
-            Policy evaluation
-          </p>
-          {deny.lines.map((line, i) => (
-            <div
-              key={i}
-              className={`grid grid-cols-[1.2em_max-content_1fr] items-baseline gap-2 text-[0.8rem] ${line.ok === false ? 'text-[#c2183a]' : ''}`}
-            >
-              <span className={line.ok ? 'text-[#15803d]' : ''}>
-                {line.ok === undefined ? '' : line.ok ? '✓' : '✗'}
-              </span>
-              <code className="whitespace-pre">{line.text}</code>
-              {line.actual && <span className="text-[0.75rem] text-paper-muted">{line.actual}</span>}
-            </div>
-          ))}
-        </div>
-      )}
+      {deny.lines.length > 0 && <PolicyLines lines={deny.lines} />}
       <p className="mt-3">{deny.hint}</p>
       {deny.requestId && (
         <p className="mt-2.5 text-[0.75rem] text-paper-muted wrap-anywhere">
@@ -920,7 +985,7 @@ function DenyPomerium({ deny }: { readonly deny: DenyView }) {
         >
           Back to the kingdom
         </button>
-        <p className={`m-0 ${denyHint} text-paper-muted`}>← → switch tabs · Enter to close</p>
+        <p className={`${tabHint} text-paper-muted`}>← → switch tabs · Enter to close</p>
       </div>
     </div>
   )
