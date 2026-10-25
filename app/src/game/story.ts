@@ -399,11 +399,11 @@ const SCRIPTS: Record<NpcId, () => void> = {
       [
         {
           who: 'Librarian',
-          text: 'Read anything you like. Opening a book is a GET request, and the guard checks it every time.',
+          text: "Read anything you like. There's no guard in here, but the gate you came through still checks every request. Opening a book sends a GET to the library, and the gate checks it again, even though you're already inside.",
         },
         {
           who: 'Librarian',
-          text: 'The Royal Ledger is different. Writing in it is a POST, and only scribes may do that. Go ahead and try: the denial will show you which rule failed.',
+          text: "The Royal Ledger on the lectern is different. Writing in it sends a POST, and the gate's rule only lets scribes do that. Go ahead and try: the denial will show you which rule failed.",
           links: [link('request')],
         },
         {
