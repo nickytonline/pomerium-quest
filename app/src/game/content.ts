@@ -93,7 +93,7 @@ export const SIGN_TEXT: Partial<Record<ZoneId, string>> = {
   guild: "The Knights' Guild hall. Any citizen may enter.",
   armory: 'Only knights. The guard reads the groups claim your identity provider put in your session.',
   library:
-    'One route, different answers. Reading (GET) is open to citizens. Writing (POST) needs the scribes group.',
+    'Two allow rules on one route. Citizens may read (GET); scribes may also write (POST). Pomerium lets a request in when any rule matches.',
 }
 
 export const SIGN_DOCS: Partial<Record<ZoneId, readonly DocLink[]>> = {

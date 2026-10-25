@@ -1,7 +1,7 @@
 // A small PPL evaluator for the criteria the game uses. In Pomerium mode the real decision
 // comes from Pomerium; this evaluator only explains it (which line passed, which failed).
 // In simulated mode it is the decision.
-import type { PPLNode, Zone } from './zones.ts'
+import type { AllowRule, Criterion, Zone } from './zones.ts'
 
 export interface Identity {
   readonly authenticated: boolean
@@ -26,14 +26,10 @@ export interface Decision {
   readonly lines: readonly EvalLine[]
 }
 
-interface Evaluated {
+interface Check {
   readonly ok: boolean
-  readonly lines: readonly EvalLine[]
+  readonly actual: string
 }
-
-type Operator = Extract<PPLNode, { kind: 'and' | 'or' }>
-
-type Criterion = Exclude<PPLNode, Operator>
 
 const pad = (n: number) => ' '.repeat(n)
 
@@ -65,23 +61,17 @@ function criterionLabel(node: Criterion): string {
   }
 }
 
-export function pplYaml(node: PPLNode, indent: number): string[] {
-  if (node.kind === 'and' || node.kind === 'or') {
-    const items = node.rules.flatMap((rule) => {
-      const [first = '', ...rest] = pplYaml(rule, indent + 4)
+/** A route's policy as YAML lines, starting at `indent`. */
+export function policyYaml(policy: readonly AllowRule[], indent: number): string[] {
+  return policy.flatMap((rule) => [
+    `${pad(indent)}- allow:`,
+    `${pad(indent + 4)}${rule.match}:`,
+    ...rule.criteria.flatMap((criterion) => {
+      const [first = '', ...rest] = criterionYaml(criterion)
 
-      return [`${pad(indent + 2)}- ${first.trimStart()}`, ...rest]
-    })
-
-    return [`${pad(indent)}${node.kind}:`, ...items]
-  }
-
-  return criterionYaml(node).map((line) => `${pad(indent)}${line}`)
-}
-
-interface Check {
-  readonly ok: boolean
-  readonly actual: string
+      return [`${pad(indent + 6)}- ${first}`, ...rest.map((line) => `${pad(indent + 8)}${line}`)]
+    }),
+  ])
 }
 
 function check(node: Criterion, id: Identity, req: RequestInfo): Check {
@@ -104,29 +94,25 @@ function check(node: Criterion, id: Identity, req: RequestInfo): Check {
   }
 }
 
-function evaluate(node: PPLNode, id: Identity, req: RequestInfo, indent: number): Evaluated {
-  if (node.kind === 'and' || node.kind === 'or') {
-    const parts = node.rules.map((rule) => evaluate(rule, id, req, indent + 4))
-    const ok = node.kind === 'and' ? parts.every((part) => part.ok) : parts.some((part) => part.ok)
+function evaluateRule(rule: AllowRule, id: Identity, req: RequestInfo): Decision {
+  const checks = rule.criteria.map((criterion) => ({ criterion, ...check(criterion, id, req) }))
+  const ok = rule.match === 'and' ? checks.every((c) => c.ok) : checks.some((c) => c.ok)
 
-    const children = parts.flatMap((part) => {
-      const [first, ...rest] = part.lines
-
-      return first ? [{ ...first, text: `${pad(indent + 2)}- ${first.text.trimStart()}` }, ...rest] : []
-    })
-
-    return { ok, lines: [{ text: `${pad(indent)}${node.kind}:`, ok }, ...children] }
+  return {
+    allow: ok,
+    lines: [
+      { text: '- allow:', ok },
+      { text: `    ${rule.match}:`, ok },
+      ...checks.map((c) => ({ text: `      - ${criterionLabel(c.criterion)}`, ok: c.ok, actual: c.actual })),
+    ],
   }
-
-  const { ok, actual } = check(node, id, req)
-
-  return { ok, lines: [{ text: `${pad(indent)}${criterionLabel(node)}`, ok, actual }] }
 }
 
+/** Allowed when any allow rule matches; with no matching rule, Pomerium denies. */
 export function decide(zone: Zone, id: Identity, req: RequestInfo): Decision {
-  const ev = evaluate(zone.policy.allow, id, req, 2)
+  const rules = zone.policy.map((rule) => evaluateRule(rule, id, req))
 
-  return { allow: ev.ok, lines: [{ text: 'allow:', ok: ev.ok }, ...ev.lines] }
+  return { allow: rules.some((rule) => rule.allow), lines: rules.flatMap((rule) => rule.lines) }
 }
 
 /** Route config as YAML, the way it appears in the Pomerium config file. */
@@ -137,7 +123,6 @@ export function routeYaml(zone: Zone, host: string, upstream: string): string {
     `  to: ${upstream}`,
     `  pass_identity_headers: true`,
     `  policy:`,
-    `    allow:`,
-    ...pplYaml(zone.policy.allow, 6),
+    ...policyYaml(zone.policy, 4),
   ].join('\n')
 }

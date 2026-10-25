@@ -7,7 +7,7 @@
 import { generateKeyPairSync, randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { ZONES, type PPLNode } from '../app/src/game/zones.ts'
+import { ZONES, type AllowRule, type Criterion } from '../app/src/game/zones.ts'
 
 type Yaml = string | number | boolean | readonly Yaml[] | { readonly [key: string]: Yaml }
 
@@ -60,12 +60,9 @@ function loadSecrets(): Secrets {
   return secrets
 }
 
-/** PPL as the YAML structure Pomerium reads. */
-function ppl(node: PPLNode): Yaml {
+/** A criterion as the YAML structure Pomerium reads. */
+function criterion(node: Criterion): Yaml {
   switch (node.kind) {
-    case 'and':
-    case 'or':
-      return { [node.kind]: node.rules.map(ppl) }
     case 'authenticated_user':
       return { authenticated_user: true }
     case 'claim':
@@ -76,6 +73,10 @@ function ppl(node: PPLNode): Yaml {
       return { [node.kind]: { is: node.is } }
   }
 }
+
+/** A route policy: a list of allow rules, any of which lets the request through. */
+const policy = (rules: readonly AllowRule[]): Yaml =>
+  rules.map((rule) => ({ allow: { [rule.match]: rule.criteria.map(criterion) } }))
 
 const SIMPLE_KEY = /^[A-Za-z_][\w./-]*$/
 
@@ -148,7 +149,7 @@ function pomeriumConfig(secrets: Secrets): Yaml {
         prefix: zone.prefix,
         to: app,
         pass_identity_headers: true,
-        policy: { allow: ppl(zone.policy.allow) },
+        policy: policy(zone.policy),
       })),
       // Everything else (the game shell and its assets) is public.
       { from: game, to: app, allow_public_unauthenticated_access: true, pass_identity_headers: true },
@@ -185,7 +186,14 @@ function deployment(name: string, image: string, port: number, extra: { [key: st
                   { name: 'certs', secret: { secretName: 'quest-tls' } },
                 ],
               }
-            : { volumes: [{ name: 'certs', secret: { secretName: 'quest-tls', items: [{ key: 'ca.crt', path: 'ca.crt' }] } }] }),
+            : {
+                volumes: [
+                  {
+                    name: 'certs',
+                    secret: { secretName: 'quest-tls', items: [{ key: 'ca.crt', path: 'ca.crt' }] },
+                  },
+                ],
+              }),
         },
       },
     },
@@ -201,7 +209,10 @@ function service(name: string, port: number, targetPort: number, type = 'Cluster
   }
 }
 
-const secretEnv = (name: string, key: string) => ({ name, valueFrom: { secretKeyRef: { name: 'quest-secrets', key } } })
+const secretEnv = (name: string, key: string) => ({
+  name,
+  valueFrom: { secretKeyRef: { name: 'quest-secrets', key } },
+})
 
 function manifests(secrets: Secrets): Yaml[] {
   const escapedDomain = DOMAIN.replace(/\./g, '\\.')
@@ -263,9 +274,9 @@ function manifests(secrets: Secrets): Yaml[] {
       kind: 'NetworkPolicy',
       metadata: { name: 'quest-only-via-pomerium', namespace: NAMESPACE },
       spec: {
-        podSelector: labels('quest'),
+        podSelector: { matchLabels: labels('quest') },
         policyTypes: ['Ingress'],
-        ingress: [{ from: [{ podSelector: labels('pomerium') }] }],
+        ingress: [{ from: [{ podSelector: { matchLabels: labels('pomerium') } }] }],
       },
     },
     {
@@ -273,9 +284,16 @@ function manifests(secrets: Secrets): Yaml[] {
       kind: 'NetworkPolicy',
       metadata: { name: 'oracle-from-pomerium-and-quest', namespace: NAMESPACE },
       spec: {
-        podSelector: labels('oracle'),
+        podSelector: { matchLabels: labels('oracle') },
         policyTypes: ['Ingress'],
-        ingress: [{ from: [{ podSelector: labels('pomerium') }, { podSelector: labels('quest') }] }],
+        ingress: [
+          {
+            from: [
+              { podSelector: { matchLabels: labels('pomerium') } },
+              { podSelector: { matchLabels: labels('quest') } },
+            ],
+          },
+        ],
       },
     },
     // Inside the cluster, *.localhost.pomerium.io would resolve to the pod itself. Send it to
@@ -295,5 +313,10 @@ const secrets = loadSecrets()
 
 mkdirSync(OUT, { recursive: true })
 writeFileSync(join(OUT, 'pomerium-config.yaml'), `${toYaml(pomeriumConfig(secrets))}\n`)
-writeFileSync(join(OUT, 'manifests.yaml'), `${manifests(secrets).map((doc) => toYaml(doc)).join('\n---\n')}\n`)
+writeFileSync(
+  join(OUT, 'manifests.yaml'),
+  `${manifests(secrets)
+    .map((doc) => toYaml(doc))
+    .join('\n---\n')}\n`,
+)
 console.log(`rendered ${OUT}/manifests.yaml for ${publicUrl('game')}`)
