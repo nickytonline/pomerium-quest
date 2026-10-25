@@ -1035,7 +1035,8 @@ function Lessons() {
       <h2 className={panelTitle}>
         Lessons{' '}
         <span className={panelMuted}>
-          {learned.length} of {LESSON_ORDER.length}
+          {/* A save from before a lesson was retired can still list it; count only current lessons. */}
+          {LESSON_ORDER.filter((id) => learned.includes(id)).length} of {LESSON_ORDER.length}
         </span>
       </h2>
       <ol className="m-0 grid list-decimal gap-[3px] pl-[1.4em] text-[0.88rem]">

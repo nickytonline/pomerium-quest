@@ -9,7 +9,6 @@ import {
   drinkFromFountain,
   eatFish,
   enterGate,
-  nightGate,
   openChest,
   readAnvil,
   readBook,
@@ -403,12 +402,6 @@ export class KingdomScene extends Phaser.Scene {
       return
     }
 
-    if (tile === TILE.nightGate) {
-      nightGate()
-
-      return
-    }
-
     if (tile === TILE.rock) {
       this.rockHint()
 
@@ -494,8 +487,6 @@ export class KingdomScene extends Phaser.Scene {
     if (tile === TILE.shelf) void readBook(target.x)
 
     if (tile === TILE.lectern) void writeLedger()
-
-    if (tile === TILE.nightGate) nightGate()
 
     if (isFountain(tile)) drinkFromFountain()
 

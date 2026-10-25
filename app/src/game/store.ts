@@ -37,7 +37,7 @@ export interface Progress {
 }
 
 export interface DenyView {
-  readonly status: 401 | 403 | 404
+  readonly status: 401 | 403
   readonly title: string
   /** The refusal as the kingdom tells it, shown first; the rest is how Pomerium decided. */
   readonly story: { readonly title: string; readonly text: string }
@@ -55,7 +55,7 @@ export interface DenyView {
 export interface LogEntry {
   readonly id: number
   readonly at: string
-  readonly decision: 'ALLOW' | 'DENY' | 'SIGN IN' | 'NO ROUTE'
+  readonly decision: 'ALLOW' | 'DENY' | 'SIGN IN'
   readonly method: string
   readonly path: string
   readonly who: string

@@ -60,10 +60,6 @@ export const LESSONS = {
     title: 'Apps should verify that signature',
     link: { label: 'JWT verification', href: `${DOCS}/get-started/fundamentals/core/jwt-verification` },
   },
-  notFound: {
-    title: 'No route means no way through',
-    link: { label: 'Route matching', href: `${DOCS}/reference/routes/from` },
-  },
 } as const
 
 export type LessonId = keyof typeof LESSONS
@@ -80,7 +76,6 @@ export const LESSON_ORDER: readonly LessonId[] = [
   'defaultDeny',
   'jwt',
   'verify',
-  'notFound',
 ]
 
 export const link = (lesson: LessonId) => LESSONS[lesson].link
@@ -103,18 +98,6 @@ export const SIGN_DOCS: Partial<Record<ZoneId, readonly DocLink[]>> = {
   armory: [link('claims'), { label: 'Claim headers', href: `${DOCS}/reference/jwt-claim-headers` }],
   library: [link('request'), { label: 'Path matching', href: `${DOCS}/reference/routes/path-matching` }],
 }
-
-export const END_SIGN: Page[] = [
-  {
-    who: 'Sign · East Road',
-    text: 'You have reached the edge of chapter one. Ahead: the Night Market (time-based rules), the Thieves’ Guild (device identity) and an owl familiar that acts for you over MCP.',
-  },
-  {
-    who: 'Sign · East Road',
-    text: 'Everything you walked through ran on a real Pomerium. The routes and policies on the signs are the same YAML in deploy/pomerium.',
-    links: [{ label: 'Pomerium docs', href: DOCS }, link('route')],
-  },
-]
 
 export const BOOKS: Page[] = [
   {

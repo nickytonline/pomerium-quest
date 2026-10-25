@@ -3,7 +3,6 @@
 import { probe, refreshClaimsUrl, requestZone, signInUrl, simulatedIdentity, type Outcome } from './access.ts'
 import {
   BOOKS,
-  END_SIGN,
   LESSONS,
   LESSON_ORDER,
   SIGN_DOCS,
@@ -196,13 +195,7 @@ const signPage = (zone: Zone): Page => ({
   links: SIGN_DOCS[zone.id] ?? [],
 })
 
-export function readSign(signId: ZoneId | 'end') {
-  if (signId === 'end') {
-    quest.say(END_SIGN)
-
-    return
-  }
-
+export function readSign(signId: ZoneId) {
   quest.say([signPage(zoneById(signId))], () => learn('route'))
 }
 
@@ -555,13 +548,6 @@ export async function writeLedger() {
     quest.say([{ who: 'Royal Ledger', text: 'Your words are recorded. You must be a scribe.' }])
 }
 
-// game.localhost.pomerium.io → localhost.pomerium.io; a bare host like localhost stays as is.
-const siblingDomain = () => {
-  const [first, ...rest] = location.hostname.split('.')
-
-  return rest.length > 0 ? rest.join('.') : first
-}
-
 /** The town fountain restores half a heart per drink, up to two full hearts each game. */
 export const FOUNTAIN_LIMIT = 4
 
@@ -646,27 +632,4 @@ export function eatFish(): boolean {
   )
 
   return true
-}
-
-export function nightGate() {
-  quest.log({ decision: 'NO ROUTE', method: 'GET', path: 'night-market', who: who(identity()) })
-  quest.showDeny(
-    {
-      status: 404,
-      title: 'No route',
-      story: {
-        title: 'Nothing here yet',
-        text: "The gate to the Night Market is barred, and no road lies beyond it yet. You've reached the end of chapter one: the market opens in chapter two.",
-      },
-      requestLine: `GET https://night-market.${siblingDomain()}/`,
-      who: who(identity()),
-      lines: [],
-      hint: 'Pomerium only proxies addresses it has a route for, and there is no route for the Night Market yet. You have reached the end of chapter one: the market opens in chapter two, with time-based rules.',
-      links: [link('notFound')],
-    },
-    () => {
-      learn('notFound')
-      quest.say(END_SIGN)
-    },
-  )
 }
