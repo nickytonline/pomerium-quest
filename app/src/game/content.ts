@@ -60,6 +60,10 @@ export const LESSONS = {
     title: 'Apps should verify that signature',
     link: { label: 'JWT verification', href: `${DOCS}/get-started/fundamentals/core/jwt-verification` },
   },
+  allOf: {
+    title: 'An and rule needs every check to pass',
+    link: { label: 'PPL: and, or, not, nor', href: `${DOCS}/internals/ppl` },
+  },
 } as const
 
 export type LessonId = keyof typeof LESSONS
@@ -76,6 +80,7 @@ export const LESSON_ORDER: readonly LessonId[] = [
   'defaultDeny',
   'jwt',
   'verify',
+  'allOf',
 ]
 
 export const link = (lesson: LessonId) => LESSONS[lesson].link
@@ -89,6 +94,7 @@ export const SIGN_TEXT: Partial<Record<ZoneId, string>> = {
   armory: 'Only knights. The gate reads the groups claim your identity provider put in your session.',
   library:
     'Two allow rules on one route. Citizens may read (GET); scribes may also write (POST). Pomerium lets a request in when any rule matches.',
+  keep: 'The Royal Keep. One rule, three checks: a citizen who is both a knight and a scholar. In an and rule, every check must pass.',
 }
 
 export const SIGN_DOCS: Partial<Record<ZoneId, readonly DocLink[]>> = {
@@ -97,6 +103,7 @@ export const SIGN_DOCS: Partial<Record<ZoneId, readonly DocLink[]>> = {
   guild: [link('route')],
   armory: [link('claims'), { label: 'Claim headers', href: `${DOCS}/reference/jwt-claim-headers` }],
   library: [link('request'), { label: 'Path matching', href: `${DOCS}/reference/routes/path-matching` }],
+  keep: [link('allOf'), link('claims')],
 }
 
 export const BOOKS: Page[] = [

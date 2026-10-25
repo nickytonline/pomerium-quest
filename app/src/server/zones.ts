@@ -58,6 +58,16 @@ export const handleZone = (request: Request, splat: string) =>
         return json(200, { granted: 'knights', refreshRequired: Boolean(player), verifiedBy })
       }
 
+      // The Librarian writes to the Oracle, like the Captain, once the player has read every book.
+      case 'POST oracle/scholar': {
+        if (player) {
+          const oracle = yield* OracleAdmin
+          yield* oracle.grant(player.email, 'scholars')
+        }
+
+        return json(200, { granted: 'scholars', refreshRequired: Boolean(player), verifiedBy })
+      }
+
       case 'POST library/ledger':
         return json(200, { written: true, verifiedBy })
       default:

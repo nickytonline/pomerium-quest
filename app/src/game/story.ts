@@ -42,6 +42,36 @@ const domainOf = (id: Identity) => id.email.split('@')[1] ?? ''
 
 const NOT_A_CITIZEN = `Every allow rule needs domain: ${KINGDOM_DOMAIN}, and your email's domain doesn't match. When no rule matches, Pomerium denies the request.`
 
+/** The Royal Keep checks three things at once; say which ones the player still lacks. */
+function keepRefusal(id: Identity): Refusal {
+  const vouched = vouchedGroups()
+  const missing: string[] = []
+
+  if (domainOf(id) !== KINGDOM_DOMAIN) missing.push(`a citizen of ${KINGDOM_DOMAIN}`)
+
+  if (!id.groups.includes('knights'))
+    missing.push(
+      vouched.includes('knights')
+        ? "carrying your knight's papers (the Oracle can sign you in again at his temple)"
+        : "a knight (the Captain in the Knights' Guild can vouch for you)",
+    )
+
+  if (!id.groups.includes('scholars'))
+    missing.push(
+      vouched.includes('scholars')
+        ? "carrying your scholar's papers (the Oracle can sign you in again at his temple)"
+        : 'a scholar (read every book in the library, then talk to the Librarian)',
+    )
+
+  return {
+    story: {
+      title: 'Knights who are scholars only',
+      text: `The Royal Keep admits only knights who are also scholars. You still need to be ${missing.join(', and ')}.`,
+    },
+    hint: `The keep's one rule needs domain: ${KINGDOM_DOMAIN}, claim/groups: knights and claim/groups: scholars. In an and rule every check must pass; the ✗ lines are the ones your session fails.`,
+  }
+}
+
 /** Why a gate refused, told twice: as the kingdom sees it, and as Pomerium decided it. */
 interface Refusal {
   readonly story: DenyView['story']
@@ -70,6 +100,8 @@ function refusal(zone: Zone, method: 'GET' | 'POST', id: Identity): Refusal {
         },
         hint: "The armory's only rule needs claim/groups: knights, and the groups claim in your session doesn't include knights.",
       }
+    case 'keep':
+      return keepRefusal(id)
     case 'library':
       return method === 'POST'
         ? {
@@ -113,7 +145,7 @@ function denyView(
       title: 'Sign in required',
       story: {
         title: "The gate doesn't know you",
-        text: "Gates here only open for people the Oracle has vouched for, and she hasn't met you yet. Her temple is to the west.",
+        text: "Gates here only open for people the Oracle has vouched for, and he hasn't met you yet. His temple is to the west.",
       },
       requestLine,
       who: 'anonymous',
@@ -130,7 +162,7 @@ function denyView(
     ? {
         story: {
           title: 'Old papers',
-          text: "The Oracle has named you a knight, but the gate reads the papers she gave you when you signed in, and those don't say so yet. Visit her and sign in again for new papers.",
+          text: "The Oracle has named you a knight, but the gate reads the papers he gave you when you signed in, and those don't say so yet. Visit his temple and sign in again for new papers.",
         },
         hint: 'Pomerium said no, yet by the game’s records you qualify. Your session still holds the claims from when you signed in: visit the Oracle to sign in again. If you just did, give Pomerium up to a minute to pick up the new claim.',
       }
@@ -165,6 +197,8 @@ async function attempt(zone: Zone, method: 'GET' | 'POST', action: string): Prom
     quest.showDeny(view, () => {
       learn('authz')
 
+      if (zone.id === 'keep') learn('allOf')
+
       if (view.links.includes(link('refresh'))) learn('refresh')
     })
   }
@@ -185,6 +219,11 @@ export async function enterGate(zoneId: ZoneId): Promise<boolean> {
 
   if (zone.id === 'armory' || zone.id === 'library') learn('jwt')
 
+  if (zone.id === 'keep') {
+    learn('allOf')
+    quest.openFinale()
+  }
+
   return true
 }
 
@@ -200,20 +239,24 @@ export function readSign(signId: ZoneId) {
 }
 
 /** Runs a Pomerium sign-in in a frame over the game, then reads the session it left behind. */
-function signInWithPomerium(url: string, onSignedIn: (next: Identity) => void) {
-  quest.openSignIn(url, () => {
-    void probe(quest.get().progress).then(({ identity: next }) => {
-      if (!next.authenticated) {
-        quest.toast('The Oracle did not sign you in', 'deny')
+function signInWithPomerium(url: string, onSignedIn: (next: Identity) => void, onCancel?: () => void) {
+  quest.openSignIn(
+    url,
+    () => {
+      void probe(quest.get().progress).then(({ identity: next }) => {
+        if (!next.authenticated) {
+          quest.toast('The Oracle did not sign you in', 'deny')
 
-        return
-      }
+          return
+        }
 
-      quest.setIdentity(next)
-      quest.send({ type: 'SIGNED_IN', groups: next.groups })
-      onSignedIn(next)
-    })
-  })
+        quest.setIdentity(next)
+        quest.send({ type: 'SIGNED_IN', groups: next.groups })
+        onSignedIn(next)
+      })
+    },
+    onCancel,
+  )
 }
 
 const welcome = (next: Identity) =>
@@ -221,8 +264,61 @@ const welcome = (next: Identity) =>
     { who: 'Oracle', text: `There. You are ${next.email}. Here are your claims.`, code: claimsCode(next) },
   ])
 
-const welcomeBack = (next: Identity) =>
-  quest.say([{ who: 'Oracle', text: 'Signed in again. Your new claims:', code: claimsCode(next) }])
+const welcomeBack = (next: Identity, onDone?: () => void) =>
+  quest.say([{ who: 'Oracle', text: 'Signed in again. Your new claims:', code: claimsCode(next) }], onDone)
+
+/** Groups the Captain or the Librarian asked the Oracle to add, whether or not the session has them yet. */
+function vouchedGroups() {
+  const vouched: string[] = []
+
+  if (isAtLeast('knighted')) vouched.push('knights')
+
+  if (quest.get().progress.scholar) vouched.push('scholars')
+
+  return vouched
+}
+
+/** Groups the Oracle lists for the player that their session doesn't carry yet. */
+const staleGroups = () => vouchedGroups().filter((group) => !identity().groups.includes(group))
+
+/** Signs the player in again so their session carries the groups the Oracle has added since. */
+function refreshClaims(onDone: () => void) {
+  if (quest.get().mode === 'pomerium') {
+    signInWithPomerium(
+      refreshClaimsUrl(),
+      (next) => welcomeBack(next, onDone),
+      () => {
+        onDone()
+        quest.toast("You can sign in again at the Oracle's temple", 'info')
+      },
+    )
+
+    return
+  }
+
+  const sim = quest.get().progress.sim
+  quest.progress({ sim: { ...sim, groups: [...sim.groups, ...sim.pendingGroups], pendingGroups: [] } })
+  const next = simulatedIdentity(quest.get().progress)
+  quest.setIdentity(next)
+  quest.send({ type: 'SIGNED_IN', groups: next.groups })
+  welcomeBack(next, onDone)
+}
+
+const refreshPage = (): Page => ({
+  who: 'Oracle',
+  text: 'Your session still holds the claims I gave you when you signed in, and Pomerium decides with those. Let me sign you in again so it carries the new one.',
+  code: claimsCode(identity()),
+  links: [link('refresh')],
+})
+
+/** Rather than send the player back to his temple, the Oracle appears beside them with their new claim. */
+function oracleArrives(letter: string) {
+  quest.summonOracle()
+  quest.say([{ who: 'Oracle', text: letter }, refreshPage()], () => {
+    learn('refresh')
+    refreshClaims(() => quest.dismissOracle())
+  })
+}
 
 function oracle() {
   const { mode, progress } = quest.get()
@@ -259,32 +355,14 @@ function oracle() {
     return
   }
 
-  if (stage() === 'knighted' && !id.groups.includes('knights')) {
+  const stale = staleGroups()
+
+  if (stale.length > 0) {
     quest.say(
-      [
-        { who: 'Oracle', text: "The Captain's letter arrived. I have added knights to your groups." },
-        {
-          who: 'Oracle',
-          text: 'Your session still holds the claims I gave you when you signed in, and Pomerium decides with those. Sign in again so your session carries the new claim.',
-          code: claimsCode(id),
-          links: [link('refresh')],
-        },
-      ],
+      [{ who: 'Oracle', text: `I have added ${stale.join(' and ')} to your groups.` }, refreshPage()],
       () => {
         learn('refresh')
-
-        if (mode === 'pomerium') {
-          signInWithPomerium(refreshClaimsUrl(), welcomeBack)
-
-          return
-        }
-
-        const sim = quest.get().progress.sim
-        quest.progress({ sim: { ...sim, groups: [...sim.groups, ...sim.pendingGroups], pendingGroups: [] } })
-        const next = simulatedIdentity(quest.get().progress)
-        quest.setIdentity(next)
-        quest.send({ type: 'SIGNED_IN', groups: next.groups })
-        welcomeBack(next)
+        refreshClaims(() => {})
       },
     )
 
@@ -303,7 +381,7 @@ async function captain() {
         who: 'Captain',
         text:
           stage() === 'knighted'
-            ? 'The Oracle has your new claim, but your session still carries the old one. Visit her in the temple and sign in again, then claim your steel in the armory east of the square.'
+            ? 'The Oracle has your new claim, but your session still carries the old one. Visit him in the temple and sign in again, then claim your steel in the armory east of the square.'
             : 'Go claim your steel. The armory is east of the square.',
       },
     ])
@@ -354,11 +432,13 @@ async function captain() {
       },
       {
         who: 'Captain',
-        text: 'One catch: your session still holds the claims from when you signed in, so your groups still read []. Return to the Oracle and sign in again to carry the new claim.',
-        links: [link('refresh')],
+        text: "One catch: your session still holds the claims from when you signed in, so your groups don't say knights yet. Ah, here comes the Oracle.",
       },
     ],
-    () => learn('claims'),
+    () => {
+      learn('claims')
+      oracleArrives("The Captain's letter arrived. I've added knights to your groups.")
+    },
   )
 }
 
@@ -487,25 +567,80 @@ const SCRIPTS: Record<NpcId, () => void> = {
 
     quest.say([hasSteel() ? { who: 'Armorer', text, links: [link('onroute')] } : { who: 'Armorer', text }])
   },
-  librarian: () =>
+  librarian: () => void librarian(),
+}
+
+const LIBRARIAN_INTRO: Page[] = [
+  {
+    who: 'Librarian',
+    text: "Read anything you like. There's no gate in here, but the one you came through still checks every request. Opening a book sends a GET to the library, and the gate checks it again, even though you're already inside.",
+  },
+  {
+    who: 'Librarian',
+    text: "The Royal Ledger on the lectern is different. Writing in it sends a POST, and the gate's rule only lets scribes do that. Go ahead and try: the denial will show you which rule failed.",
+    links: [link('request')],
+  },
+  {
+    who: 'Librarian',
+    text: "And no, I can't make you a scribe. No one in the kingdom can yet. The point is to watch the rule that fails.",
+  },
+]
+
+async function librarian() {
+  const { mode, progress } = quest.get()
+
+  if (progress.scholar) {
+    quest.say([
+      {
+        who: 'Librarian',
+        text: 'The Royal Keep lies at the end of the road south of here. Its gate wants citizens who are knights and scholars, and checks all three at once.',
+      },
+    ])
+
+    return
+  }
+
+  const left = BOOKS.length - progress.booksRead.length
+
+  if (left > 0) {
     quest.say(
       [
+        ...LIBRARIAN_INTRO,
         {
           who: 'Librarian',
-          text: "Read anything you like. There's no gate in here, but the one you came through still checks every request. Opening a book sends a GET to the library, and the gate checks it again, even though you're already inside.",
-        },
-        {
-          who: 'Librarian',
-          text: "The Royal Ledger on the lectern is different. Writing in it sends a POST, and the gate's rule only lets scribes do that. Go ahead and try: the denial will show you which rule failed.",
-          links: [link('request')],
-        },
-        {
-          who: 'Librarian',
-          text: "And no, I can't make you a scribe. No one in the kingdom can yet. The point is to watch the rule that fails.",
+          text: `I can make you a scholar, though. Scholars read; scribes write. Read every book on my shelves and come back: ${left} of ${BOOKS.length} to go.`,
         },
       ],
       () => learn('request'),
-    ),
+    )
+
+    return
+  }
+
+  const outcome = await attempt(zoneById('oracle'), 'POST', 'scholar')
+
+  if (outcome.kind !== 'allow') return
+  quest.progress({ scholar: true })
+
+  if (mode === 'simulated') {
+    const sim = quest.get().progress.sim
+    quest.progress({ sim: { ...sim, pendingGroups: [...sim.pendingGroups, 'scholars'] } })
+  }
+
+  quest.say(
+    [
+      {
+        who: 'Librarian',
+        text: "You've read every book on my shelves. I've written to the Oracle: from now on you are in the scholars group.",
+      },
+      {
+        who: 'Librarian',
+        text: "Scholars read and scribes write, so the ledger still won't take your pen. But the Royal Keep, south of here, wants knights who are scholars too.",
+        links: [link('claims')],
+      },
+    ],
+    () => oracleArrives("The Librarian's letter arrived. I've added scholars to your groups."),
+  )
 }
 
 export const talk = (npc: NpcId) => SCRIPTS[npc]()
@@ -536,8 +671,17 @@ export async function readBook(index: number) {
 
   if (outcome.kind !== 'allow') return
   const lesson = book.links?.[0]
+  const which = index % BOOKS.length
+  const { booksRead, scholar } = quest.get().progress
+  const firstRead = !booksRead.includes(which)
+
+  if (firstRead) quest.progress({ booksRead: [...booksRead, which] })
+
   quest.say([book], () => {
     for (const id of LESSON_ORDER) if (LESSONS[id].link === lesson) learn(id)
+
+    if (firstRead && !scholar && quest.get().progress.booksRead.length === BOOKS.length)
+      quest.toast("You've read every book. The Librarian would like a word.", 'info')
   })
 }
 

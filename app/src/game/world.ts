@@ -234,6 +234,8 @@ export function buildWorld(): World {
   // Library Quarter.
   fill(27, 18, 28, 19, TILE.cobble)
   fill(20, 19, 33, 19, TILE.cobble)
+  // The road south to the Royal Keep, the quest's last gate.
+  fill(21, 19, 21, 28, TILE.cobble)
   room(29, 20, 37, 27)
   fill(30, 22, 32, 22, TILE.shelf)
   fill(34, 22, 36, 22, TILE.shelf)
@@ -255,6 +257,7 @@ export function buildWorld(): World {
     { x: 21, y: 7, zoneId: 'guild' },
     { x: 33, y: 7, zoneId: 'armory' },
     { x: 33, y: 20, zoneId: 'library' },
+    { x: 21, y: 29, zoneId: 'keep' },
   ]
 
   for (const gate of gates) set(gate.x, gate.y, TILE.gateClosed)
@@ -265,6 +268,7 @@ export function buildWorld(): World {
     { x: 20, y: 8, signId: 'guild' },
     { x: 32, y: 8, signId: 'armory' },
     { x: 35, y: 19, signId: 'library' },
+    { x: 22, y: 28, signId: 'keep' },
   ]
 
   for (const sign of signs) set(sign.x, sign.y, TILE.sign)

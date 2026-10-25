@@ -26,6 +26,10 @@ export interface Progress {
   readonly fountainHealed: number
   /** Half hearts pond fish have restored this game (at most FISH_LIMIT). */
   readonly fishEaten: number
+  /** Which of the library's books the player has read (indexes into BOOKS). */
+  readonly booksRead: readonly number[]
+  /** The Librarian has vouched for the player, so the Oracle lists them as a scholar. */
+  readonly scholar: boolean
   /** True once a game has been started, so the title screen offers Continue. */
   readonly playedBefore: boolean
   /** Simulated-mode identity; in Pomerium mode the identity comes from the session. */
@@ -93,6 +97,10 @@ export interface QuestState {
   readonly menuOpen: boolean
   /** The Oracle's sign-in, running through Pomerium in a frame over the game. Pauses the game. */
   readonly signIn: { readonly url: string } | null
+  /** The Oracle has appeared beside the player to sign them in again with new claims. */
+  readonly oracleBeside: boolean
+  /** The Royal Keep let the player in: the quest is complete. */
+  readonly finale: boolean
   /** The Journal drawer, used when the panels can't sit beside the game. Pauses the game while open. */
   readonly journalOpen: boolean
   /** Something new reached the Journal (a log entry, lesson or identity change) since it was last open. */
@@ -120,6 +128,8 @@ const freshProgress = (): Progress => ({
   brokenRocks: [],
   fountainHealed: 0,
   fishEaten: 0,
+  booksRead: [],
+  scholar: false,
   playedBefore: false,
   sim: { signedIn: false, groups: [], pendingGroups: [] },
 })
@@ -160,6 +170,8 @@ let state: QuestState = {
   inputResumesAt: 0,
   menuOpen: false,
   signIn: null,
+  oracleBeside: false,
+  finale: false,
   journalOpen: false,
   journalUnread: false,
   savedAt: null,
@@ -169,6 +181,7 @@ const listeners = new Set<() => void>()
 let dialogDone: (() => void) | undefined
 let denyDone: (() => void) | undefined
 let signedIn: (() => void) | undefined
+let signInCancelled: (() => void) | undefined
 let nextId = 1
 
 /** A change the Journal shows; flags it unread unless the drawer is open. */
@@ -194,6 +207,7 @@ export const quest = {
     state.dialog !== null ||
     state.deny !== null ||
     state.signIn !== null ||
+    state.finale ||
     state.menuOpen ||
     state.journalOpen ||
     !state.started,
@@ -221,7 +235,15 @@ export const quest = {
   /** Back to the title screen. The scene is rebuilt from saved progress on Continue. */
   quit: () => {
     quest.save()
-    update({ started: false, menuOpen: false, journalOpen: false, dialog: null, deny: null })
+    update({
+      started: false,
+      menuOpen: false,
+      journalOpen: false,
+      dialog: null,
+      deny: null,
+      oracleBeside: false,
+      finale: false,
+    })
   },
   setMode: (mode: Mode, identity: Identity) => update({ mode, identity }),
   setIdentity: (identity: Identity) => update(noted({ identity })),
@@ -293,20 +315,29 @@ export const quest = {
     done?.()
   },
 
-  openSignIn: (url: string, onSignedIn: () => void) => {
+  openSignIn: (url: string, onSignedIn: () => void, onCancel?: () => void) => {
     signedIn = onSignedIn
+    signInCancelled = onCancel
     update({ signIn: { url }, menuOpen: false, journalOpen: false })
   },
   finishSignIn: () => {
     const done = signedIn
     signedIn = undefined
+    signInCancelled = undefined
     update({ signIn: null, inputResumesAt: performance.now() + 200 })
     done?.()
   },
   cancelSignIn: () => {
+    const cancelled = signInCancelled
     signedIn = undefined
+    signInCancelled = undefined
     update({ signIn: null, inputResumesAt: performance.now() + 200 })
+    cancelled?.()
   },
+  summonOracle: () => update({ oracleBeside: true }),
+  dismissOracle: () => update({ oracleBeside: false }),
+  openFinale: () => update({ finale: true, menuOpen: false, journalOpen: false }),
+  closeFinale: () => update({ finale: false, inputResumesAt: performance.now() + 200 }),
 
   toast: (text: string, tone: Toast['tone']) => update({ toast: { id: nextId++, text, tone } }),
   clearToast: (id: number) => {

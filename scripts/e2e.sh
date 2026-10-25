@@ -64,6 +64,18 @@ for _ in $(seq 1 45); do
 done
 check "armory opens once Pomerium sees the new claim" 200 "$armory"
 
+echo "The Royal Keep"
+check "keep refuses a knight who isn't a scholar" 403 "$(status "$citizen" /zones/keep/enter)"
+check "Librarian names the player a scholar" 200 "$(status "$citizen" /zones/oracle/scholar POST)"
+curl -s -L -c "$citizen" -b "$citizen" -o /dev/null "${GAME}/.pomerium/sign_out"
+keep=403
+for _ in $(seq 1 45); do
+  keep="$(status "$citizen" /zones/keep/enter)"
+  [ "$keep" = 200 ] && break
+  sleep 2
+done
+check "keep opens for a citizen who is a knight and a scholar" 200 "$keep"
+
 echo "Outsider"
 outsider="${JAR_DIR}/outsider"
 sign_in "$outsider" "wanderer-${RUN}@outlands.net" >/dev/null

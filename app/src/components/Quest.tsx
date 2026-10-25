@@ -11,7 +11,8 @@ import { probe } from '../game/access.ts'
 import { INTRO, LESSONS, LESSON_ORDER } from '../game/content.ts'
 import { KNIGHT_QUOTA, questMachine, type QuestStage } from '../game/quest-machine.ts'
 import { MAX_HP, quest, useQuest, type DenyView, type Dir } from '../game/store.ts'
-import { SIGNED_IN_MESSAGE } from '../game/zones.ts'
+import { decide } from '../game/ppl.ts'
+import { SIGNED_IN_MESSAGE, zoneById } from '../game/zones.ts'
 
 /** Wide enough for the panels beside the game. The game fits the height, so width alone decides. */
 const SIDE_BY_SIDE = '(min-width: 960px)'
@@ -122,7 +123,7 @@ function useDialogKeys() {
     const onKey = (event: KeyboardEvent) => {
       // A handled key (like the Enter that starts the game) must not also advance a dialog.
       if (event.repeat) return
-      const { deny, dialog, journalOpen, menuOpen, signIn } = quest.get()
+      const { deny, dialog, finale, journalOpen, menuOpen, signIn } = quest.get()
       const journalKey = event.key === 'i' || event.key === 'I'
       const confirm = event.key === 'Enter' || event.key === ' ' || event.key === 'e' || event.key === 'E'
 
@@ -133,6 +134,11 @@ function useDialogKeys() {
         if (event.key === 'Escape') {
           event.preventDefault()
           quest.cancelSignIn()
+        }
+      } else if (finale && !dialog) {
+        if (confirm || event.key === 'Escape') {
+          event.preventDefault()
+          quest.closeFinale()
         }
       } else if (deny && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
         event.preventDefault()
@@ -313,6 +319,7 @@ function Kingdom() {
             <Toast />
             <DialogBox />
             <DenyScreen />
+            <Finale />
             <PauseMenu />
           </div>
           {touch ? (
@@ -655,6 +662,93 @@ function DialogBox() {
       <p className="mt-2 text-right font-display text-[0.85rem] text-muted">
         {last ? 'Enter or tap to close' : 'Enter or tap to continue ▾'}
       </p>
+    </div>
+  )
+}
+
+/** The Royal Keep's doors open: the quest is done. Shows the rule that let the player in, every check passing. */
+function Finale() {
+  const open = useQuest((s) => s.finale)
+  const identity = useQuest((s) => s.identity)
+  const learned = useQuest((s) => s.progress.lessons)
+
+  if (!open) return null
+
+  const keep = zoneById('keep')
+  const lines = decide(keep, identity, { method: 'GET', path: `${keep.prefix}/enter` }).lines
+  const claims = JSON.stringify({ email: identity.email, groups: identity.groups }, null, 2)
+
+  return (
+    <div
+      className="absolute inset-0 grid items-start justify-items-center overflow-auto bg-[rgb(10_7_22/0.88)] p-3.5"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="finale-title"
+    >
+      <div className="grid w-[min(560px,100%)] gap-3 rounded-lg border-3 border-sun bg-night-deep px-5 py-[18px] shadow-[0_0_40px_rgb(255_216_107/0.25)]">
+        <h2 id="finale-title" className="sunset-text m-0 font-display text-[2rem] leading-tight">
+          Quest complete
+        </h2>
+        <p className="m-0">
+          The Royal Keep opens its doors. Citizen, knight, scholar: the gate checked all three, and your
+          session carried every one.
+        </p>
+        <div className="overflow-x-auto rounded border border-panel-edge bg-code-bg px-3 py-2">
+          <p className="mb-1 text-[0.72rem] tracking-[0.08em] text-muted uppercase">
+            The rule that let you in
+          </p>
+          {lines.map((line, i) => (
+            <div
+              key={i}
+              className="grid grid-cols-[1.2em_max-content_1fr] items-baseline gap-2 text-[0.8rem]"
+            >
+              <span className="text-allow">{line.ok === undefined ? '' : line.ok ? '✓' : '✗'}</span>
+              <code className="whitespace-pre text-lens">{line.text}</code>
+              {line.actual && <span className="text-[0.75rem] text-muted">{line.actual}</span>}
+            </div>
+          ))}
+        </div>
+        <div>
+          <p className="mb-1 text-[0.72rem] tracking-[0.08em] text-muted uppercase">Your claims</p>
+          <pre className={`m-0 ${codeBlock}`}>{claims}</pre>
+        </div>
+        <div>
+          <p className="mb-1 text-[0.72rem] tracking-[0.08em] text-muted uppercase">
+            Lessons learned · {LESSON_ORDER.filter((id) => learned.includes(id)).length} of{' '}
+            {LESSON_ORDER.length}
+          </p>
+          <ol className="m-0 grid list-decimal gap-[3px] pl-[1.4em] text-[0.88rem]">
+            {LESSON_ORDER.map((id) =>
+              learned.includes(id) ? (
+                <li key={id}>
+                  <a href={LESSONS[id].link.href} target="_blank" rel="noreferrer">
+                    {LESSONS[id].title} ↗
+                  </a>
+                </li>
+              ) : (
+                <li key={id} className="text-locked">
+                  Not learned yet
+                </li>
+              ),
+            )}
+          </ol>
+        </div>
+        <p className="m-0 text-[0.85rem] text-muted">
+          Every gate you passed was a real Pomerium route, and every rule on its sign was the policy Pomerium
+          enforced. More of the kingdom opens soon.
+        </p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <button
+            className="rounded border-2 border-ink bg-panel px-3.5 py-2 font-display text-ink hover:border-lens"
+            type="button"
+            onClick={() => quest.closeFinale()}
+            autoFocus
+          >
+            Back to the kingdom
+          </button>
+          <p className="m-0 font-display text-[0.85rem] text-muted">Enter to close</p>
+        </div>
+      </div>
     </div>
   )
 }

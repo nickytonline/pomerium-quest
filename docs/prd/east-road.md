@@ -1,6 +1,8 @@
 # PRD: The East Road and chapter two
 
-Status: not started. The East Road was removed from chapter one until there is something behind it.
+Status: not started. The East Road was removed from chapter one until there is something behind it. Its
+spot at the south end of the Library Quarter is now the Royal Keep, the gate that ends chapter one (a
+citizen who is both a knight and a scholar); the road to chapter two should start somewhere else.
 
 ## Why it was removed
 

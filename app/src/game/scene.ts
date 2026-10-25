@@ -142,6 +142,8 @@ export class KingdomScene extends Phaser.Scene {
   private seen = { interact: 0, attack: 0 }
   private pending = new Set<Action>()
   private lastRockHint = 0
+  /** The Oracle, appearing beside the player to sign them in again with new claims. */
+  private visitingOracle: Phaser.GameObjects.Sprite | undefined
 
   constructor() {
     super('kingdom')
@@ -259,6 +261,7 @@ export class KingdomScene extends Phaser.Scene {
     const attack = pending.has('attack') || controls.attack > this.seen.attack
     const tapped = DIRS.find((dir) => pending.has(dir))
     this.seen = { interact: controls.interact, attack: controls.attack }
+    this.syncOracle()
 
     if (quest.isPaused() || performance.now() < inputResumesAt) {
       this.idle()
@@ -555,6 +558,51 @@ export class KingdomScene extends Phaser.Scene {
     this.shatterRock(target)
     quest.progress({ brokenRocks: [...quest.get().progress.brokenRocks, keyOf(target)] })
     quest.toast('The steel sword splits the rock.', 'info')
+  }
+
+  /** Fades the Oracle in beside the player when the store asks for him, and out again after. */
+  private syncOracle() {
+    const wanted = quest.get().oracleBeside
+    const shown = this.visitingOracle
+
+    if (wanted && !shown) {
+      const spot = this.besidePlayer()
+
+      const oracle = this.add
+        .sprite(center(spot.x), center(spot.y) + 4, 'npcs', NPC_FRAME.oracle)
+        .setDepth(10)
+        .setAlpha(0)
+
+      this.visitingOracle = oracle
+      this.tweens.add({ targets: oracle, alpha: 1, y: center(spot.y), duration: 600, ease: 'Sine.easeOut' })
+
+      return
+    }
+
+    if (!wanted && shown) {
+      this.visitingOracle = undefined
+      this.tweens.add({
+        targets: shown,
+        alpha: 0,
+        y: shown.y - 6,
+        duration: 500,
+        onComplete: () => shown.destroy(),
+      })
+    }
+  }
+
+  /** A free tile next to the player, preferring their sides so the Oracle stands beside them. */
+  private besidePlayer(): Point {
+    const order: readonly Dir[] = ['right', 'left', 'down', 'up']
+
+    for (const dir of order) {
+      const spot = { x: this.pos.x + STEP[dir].x, y: this.pos.y + STEP[dir].y }
+      const taken = this.world.npcs.some((npc) => same(npc, spot))
+
+      if (!taken && PLAYER_TERRAIN.has(this.tileAt(spot)) && this.tileAt(spot) !== TILE.water) return spot
+    }
+
+    return { x: this.pos.x + 1, y: this.pos.y }
   }
 
   /** The "item get" moment: the item rises out of the chest and hovers there. */

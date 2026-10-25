@@ -25,7 +25,7 @@ export interface AllowRule {
 
 export type ClaimName = 'groups' | 'email'
 
-export type ZoneId = 'oracle' | 'fields' | 'town' | 'guild' | 'armory' | 'library'
+export type ZoneId = 'oracle' | 'fields' | 'town' | 'guild' | 'armory' | 'library' | 'keep'
 
 export interface Zone {
   readonly id: ZoneId
@@ -57,6 +57,13 @@ export const ZONES: readonly Zone[] = [
     prefix: '/zones/library',
     // Citizens may read (GET); scribes may also write (POST).
     policy: [all(citizen, { kind: 'http_method', is: 'GET' }), all(citizen, inGroup('scribes'))],
+  },
+  // The end of the quest: one rule, and every check in it must pass.
+  {
+    id: 'keep',
+    name: 'Royal Keep',
+    prefix: '/zones/keep',
+    policy: [all(citizen, inGroup('knights'), inGroup('scholars'))],
   },
 ]
 
