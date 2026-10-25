@@ -1,5 +1,6 @@
 {
   "name": "pomerium-quest-workspace",
+  "version": "0.1.0",
   "private": true,
   "license": "Apache-2.0",
   "author": "Nick Taylor <nick@nickyt.co>",
