@@ -432,7 +432,10 @@ export class KingdomScene extends Phaser.Scene {
 
   private arrive(target: Point) {
     this.mode.send({ type: 'ARRIVED' })
+    const leftWater = this.tileAt(this.pos) === TILE.water && this.tileAt(target) !== TILE.water
     this.pos = target
+
+    if (leftWater) this.shakeOff()
 
     if (this.openGate && !same(this.openGate, target)) {
       this.setTile(this.openGate, TILE.gateClosed)
@@ -582,6 +585,38 @@ export class KingdomScene extends Phaser.Scene {
       duration: 300,
       onComplete: () => item.destroy(),
     })
+  }
+
+  /** Out of the water, the dog shakes himself dry: a quick wiggle and a spray of droplets. */
+  private shakeOff() {
+    const player = this.player
+
+    if (!player) return
+    const x = player.x
+
+    this.tweens.add({
+      targets: player,
+      x: { from: x - 1.5, to: x + 1.5 },
+      duration: 45,
+      yoyo: true,
+      repeat: 3,
+      onComplete: () => player.setX(x),
+    })
+
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.3, 0.3)
+      const drop = this.add.rectangle(x, player.y - 3, 2, 2, i % 2 ? 0x5d9be0 : 0xbfe3ff).setDepth(11)
+      const reach = Phaser.Math.Between(9, 14)
+
+      this.tweens.add({
+        targets: drop,
+        x: x + Math.cos(angle) * reach,
+        y: { value: player.y - 3 + Math.sin(angle) * reach * 0.6 + 4, ease: 'Quad.easeIn' },
+        alpha: { value: 0, ease: 'Quad.easeIn' },
+        duration: Phaser.Math.Between(300, 420),
+        onComplete: () => drop.destroy(),
+      })
+    }
   }
 
   /** Bursts a broken rock into a handful of chunks that arc outward, tumble and fade. */
