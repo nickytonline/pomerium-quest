@@ -253,37 +253,200 @@ function png(w, h, rgba) {
 
 const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16))
 
-// NPCs share one body template; each gets its own colors for hair/hood (A),
-// skin (F), robe (B), robe shade (C) and beard or mouth (X).
-const PERSON = [
-  '................',
-  '.....KKKKKK.....',
-  '....KAAAAAAK....',
-  '....KAFFFFAK....',
-  '....KFKFFKFK....',
-  '....KFFFFFFK....',
-  '.....KFXXFK.....',
-  '....KBBBBBBK....',
-  '...KBBCBBCBBK...',
-  '...KBBBBBBBBK...',
-  '...KFBBBBBBFK...',
-  '...KBBBBBBBBK...',
-  '....KBBBBBBK....',
-  '....KCCKKCCK....',
-  '....KKK..KKK....',
-  '................',
-]
-
-const NPC_COLORS = {
-  sage: { A: '#e8e8ee', F: '#f1c27d', B: '#7d8091', C: '#5f6272', X: '#e8e8ee' },
-  oracle: { A: '#6d3fc4', F: '#f6d3b3', B: '#8b5cf6', C: '#6d3fc4', X: '#f6d3b3' },
-  traveler: { A: '#7a5126', F: '#d9a066', B: '#8a6a45', C: '#6b5034', X: '#d9a066' },
-  captain: { A: '#c9d2df', F: '#f1c27d', B: '#2e5fa8', C: '#24497f', X: '#f1c27d' },
-  armorer: { A: '#4a2c17', F: '#e0ac69', B: '#b03a2e', C: '#85291f', X: '#4a2c17' },
-  librarian: { A: '#2d2438', F: '#f1c27d', B: '#1f8a8a', C: '#166666', X: '#f1c27d' },
+// Each NPC is drawn once, facing down, with a silhouette of its own (hood, bun, hat brim, plume,
+// bald dome) so they read apart before their colors do. Keys are local to each palette.
+const NPCS = {
+  // Elder who wakes you: white bun, round glasses, plum shawl, leaning on a cane.
+  sage: {
+    palette: {
+      A: '#ececf2',
+      a: '#b9b9c8',
+      F: '#e8b98a',
+      E: '#9fb4d8',
+      B: '#9b4f6e',
+      C: '#6e3550',
+      D: '#5f7f6a',
+      d: '#465e4e',
+      c: '#8a5a2b',
+    },
+    rows: [
+      '......KKKK......',
+      '.....KAAAAK.....',
+      '....KKAaaAKK....',
+      '...KAAAAAAAAK...',
+      '...KAFFFFFFAK...',
+      '...KAEEFFEEAK...',
+      '...KAFFFFFFAK...',
+      '....KFFKKFFK....',
+      '...KBBKFFKBBKKK.',
+      '..KBBBBBBBBBKcK.',
+      '..KCBBBCCBBKFcK.',
+      '..KDDDDDDDDDKcK.',
+      '..KDDDDDDDDDKcK.',
+      '...KdddddddK.cK.',
+      '...KKKK.KKKK.KK.',
+      '................',
+    ],
+  },
+  // The identity provider: tall starred hood, long white beard, a glowing orb.
+  oracle: {
+    palette: {
+      A: '#5b2fb0',
+      a: '#8b5cf6',
+      F: '#f6d3b3',
+      W: '#f4f4f8',
+      w: '#c9c9d6',
+      G: '#e9b44c',
+      o: '#7ef0ff',
+    },
+    rows: [
+      '.......KK.......',
+      '......KaAK......',
+      '.....KaAGAK.....',
+      '....KaAAAAAK....',
+      '...KAFKFFKFAK...',
+      '...KAFFFFFFAK...',
+      '...KAWWFFWWAK...',
+      '..KAAWWWWWWAAK..',
+      '..KAaWWWWWWaAK..',
+      '..KAaWwWWwWaAK..',
+      '.KooKWWwWWWaAK..',
+      '.KooKAWWWWAaAK..',
+      '..KKKAAWWAAaK...',
+      '...KAAAAAAAAK...',
+      '...KKKKKKKKKK...',
+      '................',
+    ],
+  },
+  // wanderer@outlands.net: wide dusty hat, stubble, a patched cloak in outland greens.
+  traveler: {
+    palette: {
+      A: '#8a6a45',
+      a: '#5a4430',
+      F: '#c68642',
+      X: '#8f5a2c',
+      B: '#4f7a3a',
+      C: '#38582a',
+      s: '#6b4a2b',
+      P: '#c9a46a',
+    },
+    rows: [
+      '................',
+      '.....KKKKKK.....',
+      '....KAAAAAAK....',
+      '....KaaaaaaK....',
+      '.KAAAAAAAAAAAAK.',
+      '..KKKFFFFFFKKK..',
+      '....KFKFFKFK....',
+      '....KFFFFFFK....',
+      '....KXXFFXXK....',
+      '...KBsKXXKBBK...',
+      '..KBBBsBBBBBBK..',
+      '..KFBBBsBBPBFK..',
+      '...KBBBBsBBBK...',
+      '...KCCCKKCCCK...',
+      '...KKKK..KKKK...',
+      '................',
+    ],
+  },
+  // Knights' Guild: plumed steel helmet, big mustache, crested tabard, pauldrons.
+  captain: {
+    palette: {
+      I: '#c9d2df',
+      E: '#8d97a8',
+      R: '#e0413b',
+      r: '#a82c28',
+      F: '#f1c27d',
+      X: '#5a3a22',
+      B: '#2e5fa8',
+      C: '#24497f',
+      G: '#e9b44c',
+    },
+    rows: [
+      '.......KK.......',
+      '......KRrK......',
+      '......KRrK......',
+      '....KKIIIIKK....',
+      '...KIIIIIIIIK...',
+      '...KEEEEEEEEK...',
+      '...KEFKFFKFEK...',
+      '...KEFFFFFFEK...',
+      '...KEXXXXXXEK...',
+      '..KIIKFFFFKIIK..',
+      '.KIEIKBGGBKIEIK.',
+      '..KFKBBGGBBKFK..',
+      '...KBBBBBBBBK...',
+      '...KCCCKKCCCK...',
+      '...KKKK..KKKK...',
+      '................',
+    ],
+  },
+  // Forges the blades: bald, bushy dark beard, leather apron, bare forearms.
+  armorer: {
+    palette: {
+      F: '#8d5524',
+      f: '#b87a48',
+      X: '#2b1a10',
+      B: '#b03a2e',
+      A: '#6b4a2b',
+      a: '#4f3520',
+      C: '#3a2e2a',
+    },
+    rows: [
+      '................',
+      '.....KKKKKK.....',
+      '....KFFffFFK....',
+      '...KFFFFfFFFK...',
+      '...KFKKFFKKFK...',
+      '...KFFFFFFFFK...',
+      '...KXXFFFFXXK...',
+      '...KXXXKKXXXK...',
+      '..KBXXXXXXXXBK..',
+      '.KBBKXXXXXXKBBK.',
+      '.KFBKAXXXXAKBFK.',
+      '.KFKAAAAAAAAKFK.',
+      '..KAAaAAAAaAAK..',
+      '...KCCCKKCCCK...',
+      '...KKKK..KKKK...',
+      '................',
+    ],
+  },
+  // Keeper of the Royal Ledger: bun with a quill, half-moon glasses, an open book.
+  librarian: {
+    palette: {
+      A: '#2d2438',
+      F: '#f1c27d',
+      Q: '#f4f4f8',
+      G: '#e9b44c',
+      B: '#1f8a8a',
+      C: '#166666',
+      P: '#f4ead2',
+      R: '#8b2e3a',
+      S: '#4a3b6b',
+    },
+    rows: [
+      '.........KQ.....',
+      '......KKKQK.....',
+      '.....KAAAAK.....',
+      '....KKAAAAKK....',
+      '...KAAAAAAAAK...',
+      '...KAFKFFKFAK...',
+      '...KAGGFFGGAK...',
+      '....KFFKKFFK....',
+      '...KBBKFFKBBK...',
+      '..KBBBRPPRBBBK..',
+      '..KBBFRPPRFBBK..',
+      '..KBBBRRRRBBBK..',
+      '...KSSSSSSSSK...',
+      '...KSSSSSSSSK...',
+      '...KKKK..KKKK...',
+      '................',
+    ],
+  },
 }
 
-const npcs = Object.entries(NPC_COLORS).map(([name, colors]) => ({ name, rows: PERSON, palette: colors }))
+// Frame order is load-bearing: see NPC_FRAME in app/src/game/world.ts.
+const npcs = Object.entries(NPCS).map(([name, npc]) => ({ name, ...npc }))
 
 // A cell is a grid (array of 16 strings), { rows, palette } for recolored grids, a raw
 // 16x16 RGBA Buffer (tiles), or null.
@@ -335,7 +498,7 @@ const grids = {
   sword_wood: [SWORD_WOOD],
   sword_steel: [SWORD_STEEL],
   shield_wood: [SHIELD_WOOD],
-  person: [PERSON],
+  ...Object.fromEntries(npcs.map((npc) => [npc.name, [npc.rows]])),
 }
 
 for (const [label, frames] of Object.entries(grids))
