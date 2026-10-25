@@ -157,7 +157,16 @@ case "${1:-up}" in
     kc -n "$NAMESPACE" logs -f "deployment/${2:-pomerium}"
     ;;
   admin)
-    say "Keycloak admin console: http://localhost:8080/admin/master/console/#/kingdom (user admin, password $(node -p "require('./${STATE}/secrets.json').keycloakAdminPassword"))"
+    password="$(node -p "require('./${STATE}/secrets.json').keycloakAdminPassword")"
+    # The admin console signs in through the master realm, which Pomerium doesn't route. Point
+    # that realm at the forwarded port so admin sign-in never touches the public host.
+    kc -n "$NAMESPACE" exec deploy/keycloak -- sh -c '
+      kcadm=/opt/keycloak/bin/kcadm.sh
+      $kcadm config credentials --config /tmp/kcadm.config --server http://localhost:8080 \
+        --realm master --user admin --password "$1" >/dev/null 2>&1 &&
+      $kcadm update realms/master --config /tmp/kcadm.config -s attributes.frontendUrl=http://localhost:8080
+    ' sh "$password"
+    say "Keycloak admin console: http://localhost:8080/admin/master/console/#/kingdom (user admin, password ${password})"
     say "The game's realm is \"kingdom\". Ctrl-C to stop."
     kc -n "$NAMESPACE" port-forward service/keycloak 8080:8080
     ;;
