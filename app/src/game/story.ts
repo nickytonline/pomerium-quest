@@ -26,6 +26,12 @@ const TRAVELER: Identity = {
   groups: [],
 }
 
+const BAKER: Identity = {
+  authenticated: true,
+  email: `baker@${KINGDOM_DOMAIN}`,
+  groups: [],
+}
+
 const learn = (lesson: LessonId) => quest.learn(lesson, LESSONS[lesson].title)
 const identity = () => quest.get().identity
 const who = (id: Identity) => (id.authenticated ? id.email : 'anonymous')
@@ -402,6 +408,34 @@ function traveler() {
   )
 }
 
+/** The Traveler's counterpart: same gate, same rule, but this citizen gets in. */
+function baker() {
+  const town = zoneById('town')
+  const path = `${town.prefix}/enter`
+  quest.say(
+    [
+      {
+        who: 'Baker',
+        text: `Morning! I'm ${BAKER.email}. I bring bread in through the town gate every day.`,
+      },
+      {
+        who: 'Baker',
+        text: `The gate checks me every single time, same as everyone. My email domain is ${KINGDOM_DOMAIN}, so its rule matches and it lets me through.`,
+      },
+      {
+        who: 'Baker',
+        text: 'The Traveler outside faces the same gate and the same rule. The only difference is who we are.',
+        links: [link('authz')],
+      },
+    ],
+    () => {
+      quest.log({ decision: 'ALLOW', method: 'GET', path, who: BAKER.email })
+      quest.toast(`ALLOW · GET ${path} as ${BAKER.email}`, 'allow')
+      learn('authz')
+    },
+  )
+}
+
 const SCRIPTS: Record<NpcId, () => void> = {
   sage: () => {
     if (identity().authenticated) {
@@ -437,6 +471,7 @@ const SCRIPTS: Record<NpcId, () => void> = {
   },
   oracle,
   traveler,
+  baker,
   captain: () => void captain(),
   armorer: () => {
     const armorerIntro =

@@ -50,7 +50,7 @@ export const PLAYER_TERRAIN: ReadonlySet<number> = new Set([...WALKABLE, TILE.wa
 export const MAP_WIDTH = 40
 export const MAP_HEIGHT = 30
 
-export type NpcId = 'sage' | 'oracle' | 'traveler' | 'captain' | 'armorer' | 'librarian'
+export type NpcId = 'sage' | 'oracle' | 'traveler' | 'captain' | 'armorer' | 'librarian' | 'baker'
 
 /** Frame index of each NPC in npcs.png. */
 export const NPC_FRAME: Record<NpcId, number> = {
@@ -60,6 +60,7 @@ export const NPC_FRAME: Record<NpcId, number> = {
   captain: 3,
   armorer: 4,
   librarian: 5,
+  baker: 6,
 }
 
 export interface Point {
@@ -303,6 +304,7 @@ export function buildWorld(): World {
       { x: 21, y: 4, npcId: 'captain' },
       { x: 34, y: 9, npcId: 'armorer' },
       { x: 31, y: 25, npcId: 'librarian' },
+      { x: 30, y: 13, npcId: 'baker' },
     ],
     bots: [
       { x: 10, y: 2 },

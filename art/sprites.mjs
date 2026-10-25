@@ -490,6 +490,39 @@ const NPCS = {
       '................',
     ],
   },
+  // baker@kingdom.com, a citizen the town gate lets in: tall baker's hat, rosy cheeks, apron, a loaf.
+  baker: {
+    palette: {
+      W: '#f4f4f8',
+      w: '#c9c9d6',
+      H: '#7a4a2a',
+      F: '#e8b48a',
+      R: '#e07a6a',
+      B: '#3f6fb5',
+      C: '#2f548a',
+      P: '#f4ead2',
+      L: '#c98a3e',
+      l: '#9a6428',
+    },
+    rows: [
+      '.....KKKKKK.....',
+      '....KWWWWWWK....',
+      '...KWWWwWWWWK...',
+      '...KWWWWWwWWK...',
+      '....KwwwwwwK....',
+      '....KHHHHHHK....',
+      '...KHFKFFKFHK...',
+      '...KHRFFFFRHK...',
+      '....KFFKKFFK....',
+      '...KBBKFFKBBK...',
+      '..KBBPPPPPPBBK..',
+      '.KLLLKPPPPPBFK..',
+      '.KlLLKPPPPPBBK..',
+      '..KKKPPPPPPBK...',
+      '...KCCCKKCCCK...',
+      '...KKKK..KKKK...',
+    ],
+  },
 }
 
 // Frame order is load-bearing: see NPC_FRAME in app/src/game/world.ts.
@@ -574,7 +607,7 @@ sheet(
     ...dogCells.map((r) => [...r, null, null]),
     [SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, ...BOT_SLIME, ...PHISH, ...FISH],
     npcs.slice(0, 5),
-    [npcs[5], ...tiles.slice(0, 4)],
+    [npcs[5], npcs[6], ...tiles.slice(0, 3)],
   ],
   { scale: 10, checker: true },
 )
