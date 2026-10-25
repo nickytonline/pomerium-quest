@@ -28,7 +28,8 @@ brew install k3d kubectl mkcert node
 ./quest up
 ```
 
-Then open **https://game.localhost.pomerium.io**. `*.localhost.pomerium.io` resolves to `127.0.0.1`, so you
+Then open **https://game.localhost.pomerium.io**. Move with the arrow keys or WASD, talk with E or Enter,
+swing with Space or J, and press Esc for the menu (save, restart, quit to title). `*.localhost.pomerium.io` resolves to `127.0.0.1`, so you
 don't need to edit `/etc/hosts`. mkcert creates a locally trusted certificate, and may ask for your
 password the first time.
 
@@ -36,6 +37,7 @@ password the first time.
 | ----------------------- | --------------------------------------------------------------------------------------- |
 | `./quest up`            | Create the cluster if needed, build the images, deploy, and wait until the game answers |
 | `./quest deploy`        | Rebuild and redeploy into the existing cluster                                          |
+| `./quest test`          | Sign players in through Pomerium with curl and check every zone policy                  |
 | `./quest status`        | Show the pods                                                                           |
 | `./quest logs pomerium` | Follow logs (`pomerium`, `quest` or `oracle`)                                           |
 | `./quest down`          | Delete the cluster                                                                      |
