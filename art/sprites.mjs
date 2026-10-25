@@ -256,7 +256,7 @@ const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16))
 // Each NPC is drawn once, facing down, with a silhouette of its own (hood, bun, hat brim, plume,
 // bald dome) so they read apart before their colors do. Keys are local to each palette.
 const NPCS = {
-  // Elder who wakes you: white bun, round glasses, plum shawl, leaning on a cane.
+  // Elder who wakes you: white bun, round glasses, plum shawl.
   sage: {
     palette: {
       A: '#ececf2',
@@ -267,7 +267,6 @@ const NPCS = {
       C: '#6e3550',
       D: '#5f7f6a',
       d: '#465e4e',
-      c: '#5b3a1e',
     },
     rows: [
       '......KKKK......',
@@ -276,15 +275,15 @@ const NPCS = {
       '...KAAAAAAAAK...',
       '...KAFFFFFFAK...',
       '...KAEKFFKEAK...',
-      '...KAFFFFFFAKcc.',
-      '....KFFKKFFKc..c',
-      '...KBBKFFKBBK..c',
-      '..KBBBBBBBBBK..c',
-      '..KCBBBCCBBBKFFc',
-      '..KDDDDDDDDDK..c',
-      '..KDDDDDDDDDK..c',
-      '...KdddddddK...c',
-      '...KKKK.KKKK...K',
+      '...KAFFFFFFAK...',
+      '....KFFKKFFK....',
+      '...KBBKFFKBBK...',
+      '..KBBBBBBBBBK...',
+      '..KCBBBCCBBBK...',
+      '..KDDDDDDDDDK...',
+      '..KDDDDDDDDDK...',
+      '...KdddddddK....',
+      '...KKKK.KKKK....',
       '................',
     ],
   },
