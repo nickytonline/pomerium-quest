@@ -39,6 +39,8 @@ export interface Progress {
 export interface DenyView {
   readonly status: 401 | 403 | 404
   readonly title: string
+  /** The refusal as the kingdom tells it, shown first; the rest is how Pomerium decided. */
+  readonly story: { readonly title: string; readonly text: string }
   /** Set when the denial belongs to someone else (an NPC), so the screen doesn't read as the player's. */
   readonly onBehalfOf?: string
   readonly requestLine: string

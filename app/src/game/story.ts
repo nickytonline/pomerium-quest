@@ -33,12 +33,54 @@ const who = (id: Identity) => (id.authenticated ? id.email : 'anonymous')
 const claimsCode = (id: Identity) =>
   JSON.stringify({ email: id.email, email_verified: true, groups: id.groups }, null, 2)
 
-const DENY_HINTS: Partial<Record<ZoneId, string>> = {
-  town: `Only citizens of ${KINGDOM_DOMAIN} may enter.`,
-  guild: `Only citizens of ${KINGDOM_DOMAIN} may enter.`,
-  armory: "Only the knights group may enter. The Captain in the Knights' Guild can vouch for you.",
-  library:
-    'Reading is a GET and passes. Writing is a POST, so this request needs the scribes group. No one in this chapter can make you a scribe: this denial is the lesson.',
+const domainOf = (id: Identity) => id.email.split('@')[1] ?? ''
+
+const NOT_A_CITIZEN = `Every allow rule needs domain: ${KINGDOM_DOMAIN}, and your email's domain doesn't match. When no rule matches, Pomerium denies the request.`
+
+/** Why a gate refused, told twice: as the kingdom sees it, and as Pomerium decided it. */
+interface Refusal {
+  readonly story: DenyView['story']
+  readonly hint: string
+}
+
+function refusal(zone: Zone, method: 'GET' | 'POST', id: Identity): Refusal {
+  const citizensOnly = (place: string): Refusal => ({
+    story: {
+      title: 'Citizens only',
+      text: `${place} only opens to citizens of ${KINGDOM_DOMAIN}. You're ${id.email}, from ${domainOf(id)}.`,
+    },
+    hint: NOT_A_CITIZEN,
+  })
+
+  switch (zone.id) {
+    case 'town':
+      return citizensOnly('The town')
+    case 'guild':
+      return citizensOnly("The Knights' Guild")
+    case 'armory':
+      return {
+        story: {
+          title: 'Knights only',
+          text: "The armory is for knights, and you aren't one yet. The Captain in the Knights' Guild can vouch for you.",
+        },
+        hint: "The armory's only rule needs claim/groups: knights, and the groups claim in your session doesn't include knights.",
+      }
+    case 'library':
+      return method === 'POST'
+        ? {
+            story: {
+              title: 'Scribes only',
+              text: "Anyone may read the books here, but only scribes may write in the Royal Ledger, and you aren't one. No one in this chapter can make you a scribe.",
+            },
+            hint: "Writing in the ledger is a POST. The rule for readers only allows GET, so it doesn't match, and the other rule needs the scribes group, which you aren't in. This denial is the lesson.",
+          }
+        : citizensOnly('The library')
+    default:
+      return {
+        story: { title: 'The gate stays shut', text: "This gate won't open for you." },
+        hint: 'No allow rule matched this request, so Pomerium denied it.',
+      }
+  }
 }
 
 const LOG_DECISION: Record<Outcome['kind'], LogEntry['decision']> = {
@@ -64,6 +106,10 @@ function denyView(
     return {
       status: 401,
       title: 'Sign in required',
+      story: {
+        title: "The gate doesn't know you",
+        text: "Gates here only open for people the Oracle has vouched for, and she hasn't met you yet. Her temple is to the west.",
+      },
       requestLine,
       who: 'anonymous',
       lines: decision.lines,
@@ -75,15 +121,24 @@ function denyView(
 
   const stale = decision.allow
 
+  const { story, hint } = stale
+    ? {
+        story: {
+          title: 'Old papers',
+          text: "The Oracle has named you a knight, but the gate reads the papers she gave you when you signed in, and those don't say so yet. Visit her and sign in again for new papers.",
+        },
+        hint: 'Pomerium said no, yet by the game’s records you qualify. Your session still holds the claims from when you signed in: visit the Oracle to sign in again. If you just did, give Pomerium up to a minute to pick up the new claim.',
+      }
+    : refusal(zone, method, id)
+
   return {
     status: 403,
     title: 'Access denied',
+    story,
     requestLine,
     who: who(id),
     lines: decision.lines,
-    hint: stale
-      ? 'Pomerium said no, yet by the game’s records you qualify. Your session still holds the claims from when you signed in: visit the Oracle to sign in again. If you just did, give Pomerium up to a minute to pick up the new claim.'
-      : (DENY_HINTS[zone.id] ?? 'No allow rule matched this request.'),
+    hint,
     links: stale ? [link('refresh'), link('claims')] : [link('authz'), link('defaultDeny')],
     ...fromPomerium,
   }
@@ -331,6 +386,10 @@ function traveler() {
           status: 403,
           title: 'Access denied',
           onBehalfOf: 'the Traveler',
+          story: {
+            title: 'Not a citizen',
+            text: `The town gate turns the Traveler away. The Oracle knows them as ${TRAVELER.email}, but the town only opens to citizens of ${KINGDOM_DOMAIN}.`,
+          },
           requestLine: `GET ${location.origin}${path}`,
           who: TRAVELER.email,
           lines: decide(town, TRAVELER, { method: 'GET', path }, 'their').lines,
@@ -560,6 +619,10 @@ export function nightGate() {
     {
       status: 404,
       title: 'No route',
+      story: {
+        title: 'Nothing here yet',
+        text: "The gate to the Night Market is barred, and no road lies beyond it yet. You've reached the end of chapter one: the market opens in chapter two.",
+      },
       requestLine: `GET https://night-market.${siblingDomain()}/`,
       who: who(identity()),
       lines: [],
