@@ -82,6 +82,9 @@ const ITEM = { swordWood: 0, swordSteel: 1 }
 /** Rows of the dog's frame left above the waterline while swimming: head and collar. */
 const SWIM_DEPTH = 11
 
+/** Shaking dry after a swim: a pause, then this many swings, each shifting the dog up to `reach` pixels. */
+const SHAKE = { delayMs: 250, swings: 9, swingMs: 55, reach: 2 }
+
 /** A monster's bite takes a full heart (health counts half hearts). */
 const HIT_DAMAGE = 2
 
@@ -136,6 +139,7 @@ export class KingdomScene extends Phaser.Scene {
   private shownItem: Phaser.GameObjects.Image | undefined
   private monsters: Monster[] = []
   private fish: Fish[] = []
+  private shake: Phaser.Time.TimerEvent | undefined
   private seen = { interact: 0, attack: 0 }
   private pending = new Set<Action>()
   private lastRockHint = 0
@@ -587,34 +591,71 @@ export class KingdomScene extends Phaser.Scene {
     })
   }
 
-  /** Out of the water, the dog shakes himself dry: a quick wiggle and a spray of droplets. */
+  /**
+   * A wet dog's shake: a beat after climbing out, a fast side-to-side twist that builds and fades,
+   * each swing flinging droplets the way he twists. The twist shifts the sprite's origin by whole
+   * pixels, so it stays crisp and never fights a step that starts mid-shake.
+   */
   private shakeOff() {
+    this.shake?.remove()
+    this.shake = this.time.delayedCall(SHAKE.delayMs, () => {
+      const player = this.player
+
+      if (!player || this.tileAt(this.pos) === TILE.water) return
+      let swing = 0
+
+      const next = () => {
+        if (swing >= SHAKE.swings || this.tileAt(this.pos) === TILE.water) {
+          player.setOrigin(0.5, 0.5).setScale(1)
+
+          return
+        }
+
+        const side = swing % 2 === 0 ? 1 : -1
+        // Strongest in the middle of the shake, gentle at the start and end.
+        const strength = Math.sin(((swing + 1) / (SHAKE.swings + 1)) * Math.PI)
+        swing++
+        player.setOrigin(0.5 - (side * Math.round(SHAKE.reach * strength)) / T, 0.5)
+        player.setScale(1 - 0.12 * strength, 1)
+        this.flingDroplets(side, strength)
+        this.time.delayedCall(SHAKE.swingMs, next)
+      }
+
+      next()
+    })
+  }
+
+  /** Droplets thrown off one swing of a shake: up and out to that side, then down to a tiny splash. */
+  private flingDroplets(side: number, strength: number) {
     const player = this.player
 
     if (!player) return
-    const x = player.x
 
-    this.tweens.add({
-      targets: player,
-      x: { from: x - 1.5, to: x + 1.5 },
-      duration: 45,
-      yoyo: true,
-      repeat: 3,
-      onComplete: () => player.setX(x),
-    })
-
-    for (let i = 0; i < 8; i++) {
-      const angle = (i / 8) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.3, 0.3)
-      const drop = this.add.rectangle(x, player.y - 3, 2, 2, i % 2 ? 0x5d9be0 : 0xbfe3ff).setDepth(11)
-      const reach = Phaser.Math.Between(9, 14)
+    for (let i = 0; i < 2 + Math.round(strength * 3); i++) {
+      const x = player.x + side * Phaser.Math.Between(2, 5)
+      const y = player.y + Phaser.Math.Between(-5, 3)
+      const color = Math.random() < 0.3 ? 0xffffff : Math.random() < 0.5 ? 0xbfe3ff : 0x5d9be0
+      const drop = this.add.rectangle(x, y, 1, 1, color).setDepth(11)
+      const dx = side * Phaser.Math.FloatBetween(6, 16) * (0.5 + strength)
+      const fall = Phaser.Math.Between(4, 8)
+      // y(t) = (1 + lift)t² − lift·t: flies up first, then gravity brings it down `fall` pixels below.
+      const lift = Phaser.Math.FloatBetween(0.6, 1.4)
 
       this.tweens.add({
         targets: drop,
-        x: x + Math.cos(angle) * reach,
-        y: { value: player.y - 3 + Math.sin(angle) * reach * 0.6 + 4, ease: 'Quad.easeIn' },
-        alpha: { value: 0, ease: 'Quad.easeIn' },
-        duration: Phaser.Math.Between(300, 420),
-        onComplete: () => drop.destroy(),
+        x: { value: x + dx, ease: 'Quad.easeOut' },
+        y: { value: y + fall, ease: (t: number) => (1 + lift) * t * t - lift * t },
+        duration: Phaser.Math.Between(260, 380),
+        onComplete: () => {
+          drop.destroy()
+
+          const splash = this.add
+            .rectangle(x + dx, y + fall, 2, 1, 0x5d9be0)
+            .setDepth(1)
+            .setAlpha(0.8)
+
+          this.tweens.add({ targets: splash, alpha: 0, duration: 250, onComplete: () => splash.destroy() })
+        },
       })
     }
   }
