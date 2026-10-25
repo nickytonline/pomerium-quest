@@ -242,9 +242,7 @@ function Splash() {
       <h1 className="sunset-text m-0 font-display text-[clamp(2.2rem,7vw,3.6rem)] font-bold tracking-[0.02em] text-balance">
         Pomerium Quest
       </h1>
-      <p className="m-0 max-w-[36ch] text-muted">
-        Every gate checks you, every time.
-      </p>
+      <p className="m-0 max-w-[36ch] text-muted">Every gate checks you, every time.</p>
       <button
         className="mt-2 animate-blink rounded border-3 border-night-deep bg-lime px-[22px] py-3 font-display text-[1.15rem] text-night-deep shadow-[4px_4px_0_var(--color-night-deep)]"
         type="button"
