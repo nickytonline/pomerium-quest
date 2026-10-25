@@ -1,0 +1,15 @@
+{
+  "name": "quest-oracle",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/main.ts"
+  },
+  "dependencies": {
+    "oidc-provider": "9.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "@types/oidc-provider": "9.12.1"
+  }
+}

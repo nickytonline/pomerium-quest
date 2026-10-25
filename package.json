@@ -1,0 +1,33 @@
+{
+  "name": "pomerium-quest-workspace",
+  "private": true,
+  "license": "Apache-2.0",
+  "author": "Nick Taylor <nick@nickyt.co>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nickytonline/pomerium-quest.git"
+  },
+  "type": "module",
+  "scripts": {
+    "check": "vp check",
+    "fmt": "vp fmt",
+    "lint": "vp lint"
+  },
+  "devDependencies": {
+    "@oxlint/plugins": "1.89.0",
+    "typescript": "5.9.3",
+    "vite-plus": "1.4.0"
+  },
+  "packageManager": "npm@12.2.0",
+  "workspaces": [
+    "app",
+    "oracle"
+  ],
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.4.0",
+    "vitest": "5.0.5"
+  },
+  "engines": {
+    "node": ">=24.22.1"
+  }
+}
