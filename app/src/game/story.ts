@@ -13,7 +13,7 @@ import {
   type Page,
 } from './content.ts'
 import { decide, routeYaml, type Identity } from './ppl.ts'
-import { KNIGHT_QUOTA, hasSteel, isAtLeast, stage } from './quest-machine.ts'
+import { KNIGHT_QUOTA, hasSteel, isAtLeast, stage, type QuestStage } from './quest-machine.ts'
 import { quest, type DenyView, type LogEntry } from './store.ts'
 import type { NpcId } from './world.ts'
 import { KINGDOM_DOMAIN, zoneById, type Zone, type ZoneId } from './zones.ts'
@@ -374,24 +374,25 @@ const SCRIPTS: Record<NpcId, () => void> = {
   traveler,
   captain: () => void captain(),
   armorer: () => {
-    if (hasSteel()) {
-      quest.say([
-        {
-          who: 'Armorer',
-          text: "You didn't unlock a policy. The policy was always there. You gained the claim it was waiting for.",
-          links: [link('onroute')],
-        },
-      ])
+    const armorerIntro =
+      "I forge the blades. I don't decide who gets in: the gate does. It's the guard here, and it checks your claims on every visit. Its rule is on the sign: only the knights group."
 
-      return
+    // The Armorer keeps the forge; the gate is the guard. Each stage gets a line about what the gate sees.
+    const lines: Record<QuestStage, string> = {
+      anonymous: armorerIntro,
+      citizen: armorerIntro,
+      proven: `${armorerIntro} The Captain can vouch for you.`,
+      knighted:
+        "The Oracle lists you as a knight? Then your session hasn't caught up. The gate reads the claims in your session, and those were set when you signed in: groups: []. Sign in with the Oracle again.",
+      knight:
+        'Your session says groups: [knights] now, so the gate will let you through. The steel sword is in the chest inside.',
+      armed:
+        "Same gate, same rule as before you were a knight. You didn't unlock a policy. You gained the claim it was waiting for.",
     }
 
-    quest.say([
-      {
-        who: 'Armorer',
-        text: "Knights only, I'm afraid. Nothing personal: the guard doesn't know you. He knows the policy and your claims.",
-      },
-    ])
+    const text = lines[stage()]
+
+    quest.say([hasSteel() ? { who: 'Armorer', text, links: [link('onroute')] } : { who: 'Armorer', text }])
   },
   librarian: () =>
     quest.say(
