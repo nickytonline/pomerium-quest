@@ -84,6 +84,8 @@ export class KingdomScene extends Phaser.Scene {
   private dir: Dir = 'down'
   private readonly mode = startPlayer()
   private openGate: Point | undefined
+  /** An item shown rising out of a chest until the player closes its dialog. */
+  private shownItem: Phaser.GameObjects.Image | undefined
   private slimes: Slime[] = []
   private seen = { interact: 0, attack: 0 }
   private pending = new Set<Action>()
@@ -197,6 +199,7 @@ export class KingdomScene extends Phaser.Scene {
     }
 
     this.updateSlimes(time)
+    this.dismissItem()
 
     if (!this.mode.idle()) {
       // Keep a tap made mid-step so it happens when the step ends.
@@ -368,7 +371,10 @@ export class KingdomScene extends Phaser.Scene {
 
     const tile = this.tileAt(target)
 
-    if (tile === TILE.chest && openChest()) this.setTile(target, TILE.chestOpen)
+    if (tile === TILE.chest && openChest()) {
+      this.setTile(target, TILE.chestOpen)
+      this.raiseItem(target, ITEM.swordSteel)
+    }
 
     if (tile === TILE.shelf) void readBook(target.x)
 
@@ -409,6 +415,31 @@ export class KingdomScene extends Phaser.Scene {
     this.setTile(target, TILE.cobble)
     quest.progress({ brokenRocks: [...quest.get().progress.brokenRocks, keyOf(target)] })
     quest.toast('The steel sword splits the rock.', 'info')
+  }
+
+  /** The "item get" moment: the item rises out of the chest and hovers there. */
+  private raiseItem(chest: Point, frame: number) {
+    this.shownItem?.destroy()
+    const item = this.add.image(center(chest.x), center(chest.y) - 2, 'items', frame).setDepth(11)
+
+    this.shownItem = item
+    this.tweens.add({ targets: item, y: center(chest.y) - 14, duration: 420, ease: 'Back.easeOut' })
+    this.tweens.add({ targets: item, alpha: { from: 0, to: 1 }, duration: 200 })
+  }
+
+  /** Once the chest's dialog has been read, the item fades away. */
+  private dismissItem() {
+    const item = this.shownItem
+
+    if (!item) return
+    this.shownItem = undefined
+    this.tweens.add({
+      targets: item,
+      alpha: 0,
+      y: item.y - 6,
+      duration: 300,
+      onComplete: () => item.destroy(),
+    })
   }
 
   private rockHint() {
