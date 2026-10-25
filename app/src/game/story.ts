@@ -70,7 +70,7 @@ function refusal(zone: Zone, method: 'GET' | 'POST', id: Identity): Refusal {
         ? {
             story: {
               title: 'Scribes only',
-              text: "Anyone may read the books here, but only scribes may write in the Royal Ledger, and you aren't one. No one in this chapter can make you a scribe.",
+              text: "Anyone may read the books here, but only scribes may write in the Royal Ledger, and you aren't one.",
             },
             hint: "Writing in the ledger is a POST. The rule for readers only allows GET, so it doesn't match, and the other rule needs the scribes group, which you aren't in. This denial is the lesson.",
           }
