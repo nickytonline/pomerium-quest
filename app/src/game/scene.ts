@@ -2,6 +2,7 @@
 // delegated to story.ts; this file only moves things around and draws them.
 import * as Phaser from 'phaser'
 import { startPlayer } from './player-machine.ts'
+import { SHEETS } from './sheets.ts'
 import { KNIGHT_QUOTA, defeated, hasSteel, type MonsterKind } from './quest-machine.ts'
 import { MAX_HP, buzz, quest, type Dir } from './store.ts'
 import { enterGate, nightGate, openChest, readBook, readSign, talk, writeLedger } from './story.ts'
@@ -109,10 +110,10 @@ export class KingdomScene extends Phaser.Scene {
 
   preload() {
     const frames = { frameWidth: T, frameHeight: T }
-    this.load.spritesheet('dog', '/assets/dog.png', frames)
-    this.load.spritesheet('items', '/assets/items.png', frames)
-    this.load.spritesheet('npcs', '/assets/npcs.png', frames)
-    this.load.image('tiles', '/assets/tiles.png')
+    this.load.spritesheet('dog', SHEETS.dog, frames)
+    this.load.spritesheet('items', SHEETS.items, frames)
+    this.load.spritesheet('npcs', SHEETS.npcs, frames)
+    this.load.image('tiles', SHEETS.tiles)
   }
 
   create() {
