@@ -536,6 +536,14 @@ const SCRIPTS: Record<NpcId, () => void> = {
         },
         {
           who: 'Sage',
+          text: "Bot slimes and phish roam the fields, and both mean harm. The bots hammer the town gate day and night, but they'll never get in. They can't prove they're citizens, and the gate checks every one of them, every time.",
+        },
+        {
+          who: 'Sage',
+          text: "The phish are craftier. They don't storm the gate. They try to trick you into handing over your sign-in, because a gate can't tell a stolen sign-in from yours. Only ever sign in with the Oracle.",
+        },
+        {
+          who: 'Sage',
           text: 'Gates only let in people they can identify. Visit the Oracle in the temple to the west.',
         },
       ],
