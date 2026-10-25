@@ -1,6 +1,7 @@
 // The overworld: tile map, grid movement, sword, slimes. Talking, reading and gates are
 // delegated to story.ts; this file only moves things around and draws them.
 import * as Phaser from 'phaser'
+import { startPlayer } from './player-machine.ts'
 import { hasSteel, xp } from './quest-machine.ts'
 import { MAX_HP, quest, type Dir } from './store.ts'
 import { enterGate, nightGate, openChest, readBook, readSign, talk, writeLedger } from './story.ts'
@@ -81,10 +82,7 @@ export class KingdomScene extends Phaser.Scene {
   private keys: Record<string, Phaser.Input.Keyboard.Key> = {}
   private pos: Point = { x: 0, y: 0 }
   private dir: Dir = 'down'
-  private moving = false
-  private busy = false
-  private attackUntil = 0
-  private invulnerableUntil = 0
+  private readonly mode = startPlayer()
   private openGate: Point | undefined
   private slimes: Slime[] = []
   private seen = { interact: 0, attack: 0 }
@@ -168,6 +166,9 @@ export class KingdomScene extends Phaser.Scene {
         string,
         Phaser.Input.Keyboard.Key
       >
+      // Phaser handles these keys first, then stops the browser from scrolling the page.
+      // (A page-level preventDefault would hide them from Phaser altogether.)
+      keyboard.addCapture('UP,DOWN,LEFT,RIGHT,SPACE')
       // Queue presses as events so a tap shorter than a frame still counts.
       keyboard.on('keydown', (event: KeyboardEvent) => {
         const action = KEY_ACTIONS.get(event.code)
@@ -177,6 +178,7 @@ export class KingdomScene extends Phaser.Scene {
     }
 
     quest.setRegion(regionAt(this.pos))
+    this.events.once('destroy', () => this.mode.stop())
   }
 
   override update(time: number) {
@@ -196,7 +198,7 @@ export class KingdomScene extends Phaser.Scene {
 
     this.updateSlimes(time)
 
-    if (this.busy || this.moving || time < this.attackUntil) {
+    if (!this.mode.idle()) {
       // Keep a tap made mid-step so it happens when the step ends.
       for (const action of pending) this.pending.add(action)
 
@@ -204,7 +206,7 @@ export class KingdomScene extends Phaser.Scene {
     }
 
     if (attack) {
-      this.swing(time)
+      this.swing()
 
       return
     }
@@ -228,7 +230,7 @@ export class KingdomScene extends Phaser.Scene {
   }
 
   private idle() {
-    if (this.moving) return
+    if (this.mode.walking()) return
     this.player?.anims.stop()
     this.player?.setFrame(DOG_FRAME[this.dir])
   }
@@ -258,7 +260,7 @@ export class KingdomScene extends Phaser.Scene {
   private face(dir: Dir) {
     this.dir = dir
 
-    if (!this.moving) this.player?.setFrame(DOG_FRAME[dir])
+    if (!this.mode.walking()) this.player?.setFrame(DOG_FRAME[dir])
   }
 
   private tryMove(dir: Dir) {
@@ -279,11 +281,14 @@ export class KingdomScene extends Phaser.Scene {
       const gate = this.world.gates.find((candidate) => same(candidate, target))
 
       if (!gate) return
-      this.busy = true
+      this.mode.send({ type: 'GATE' })
       void enterGate(gate.zoneId).then((allowed) => {
-        this.busy = false
+        if (!allowed) {
+          this.mode.send({ type: 'GATE_DENIED' })
 
-        if (!allowed) return
+          return
+        }
+
         this.setTile(target, TILE.gateOpen)
         this.openGate = target
         this.walk(target)
@@ -311,7 +316,7 @@ export class KingdomScene extends Phaser.Scene {
     const player = this.player
 
     if (!player) return
-    this.moving = true
+    this.mode.send({ type: 'WALK' })
     player.anims.play(`walk-${this.dir}`, true)
     this.tweens.add({
       targets: player,
@@ -323,7 +328,7 @@ export class KingdomScene extends Phaser.Scene {
   }
 
   private arrive(target: Point) {
-    this.moving = false
+    this.mode.send({ type: 'ARRIVED' })
     this.pos = target
 
     if (this.openGate && !same(this.openGate, target)) {
@@ -372,11 +377,11 @@ export class KingdomScene extends Phaser.Scene {
     if (tile === TILE.nightGate) nightGate()
   }
 
-  private swing(time: number) {
+  private swing() {
     const sword = this.sword
 
     if (!sword) return
-    this.attackUntil = time + 200
+    this.mode.send({ type: 'SWING' })
     const target = this.front()
     sword
       .setFrame(hasSteel() ? ITEM.swordSteel : ITEM.swordWood)
@@ -473,7 +478,7 @@ export class KingdomScene extends Phaser.Scene {
 
       const target = { x: slime.x + STEP[dir].x, y: slime.y + STEP[dir].y }
 
-      if (same(target, this.pos) && !this.moving) {
+      if (same(target, this.pos) && !this.mode.walking()) {
         this.hurt(dir)
         continue
       }
@@ -484,10 +489,8 @@ export class KingdomScene extends Phaser.Scene {
 
   /** Takes a hit coming from `dir` (the direction the attacker was moving). */
   private hurt(dir: Dir) {
-    const now = performance.now()
-
-    if (now < this.invulnerableUntil || !this.player) return
-    this.invulnerableUntil = now + 1000
+    if (this.mode.invulnerable() || !this.player) return
+    this.mode.send({ type: 'HIT' })
     const hp = quest.get().hp - 1
     this.tweens.add({ targets: this.player, alpha: 0.2, duration: 90, yoyo: true, repeat: 4 })
 
@@ -500,7 +503,7 @@ export class KingdomScene extends Phaser.Scene {
     quest.setHp(hp)
     const back = { x: this.pos.x + STEP[dir].x, y: this.pos.y + STEP[dir].y }
 
-    if (!this.moving && WALKABLE.has(this.tileAt(back)) && !this.occupied(back)) {
+    if (this.mode.idle() && WALKABLE.has(this.tileAt(back)) && !this.occupied(back)) {
       const facing = this.dir
       this.walk(back)
       this.dir = facing

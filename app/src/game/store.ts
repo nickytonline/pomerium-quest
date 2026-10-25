@@ -73,6 +73,9 @@ export interface QuestState {
   readonly controls: Controls
   /** Timestamp until which the scene ignores input, so the key that closed a dialog does not reopen it. */
   readonly inputResumesAt: number
+  readonly menuOpen: boolean
+  /** When the player last saved explicitly (progress also saves on every step). */
+  readonly savedAt: string | null
 }
 
 export const MAX_HP = 5
@@ -122,6 +125,8 @@ let state: QuestState = {
   xp: questActor.getSnapshot().context.xp,
   controls: { dir: null, interact: 0, attack: 0 },
   inputResumesAt: 0,
+  menuOpen: false,
+  savedAt: null,
 }
 
 const listeners = new Set<() => void>()
@@ -142,9 +147,26 @@ export const quest = {
 
     return () => listeners.delete(listener)
   },
-  isPaused: () => state.dialog !== null || state.deny !== null || !state.started,
+  isPaused: () => state.dialog !== null || state.deny !== null || state.menuOpen || !state.started,
 
   start: () => update({ started: true }),
+  openMenu: () => {
+    if (state.started && !state.dialog && !state.deny) update({ menuOpen: true })
+  },
+  closeMenu: () => update({ menuOpen: false, inputResumesAt: performance.now() + 200 }),
+  save: () => {
+    saveProgress(state.progress)
+    persist()
+    const savedAt = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+
+    update({ savedAt })
+    quest.toast('Game saved', 'info')
+  },
+  /** Back to the title screen. The scene is rebuilt from saved progress on Continue. */
+  quit: () => {
+    quest.save()
+    update({ started: false, menuOpen: false, dialog: null, deny: null })
+  },
   setMode: (mode: Mode, identity: Identity) => update({ mode, identity }),
   setIdentity: (identity: Identity) => update({ identity }),
   setRegion: (region: string) => {
