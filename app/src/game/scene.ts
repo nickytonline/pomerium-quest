@@ -57,6 +57,10 @@ const KEY_ACTIONS = new Map<string, Action>([
 const DIRS: readonly Dir[] = ['down', 'up', 'right', 'left']
 
 const SWORD_ANGLE: Record<Dir, number> = { up: 0, right: 90, down: 180, left: 270 }
+
+/** Facing up or down, the sword pivots at its grip (row 14 of 16) and sweeps from the dog's side across the front. */
+const SWORD_GRIP = 14 / 16
+const SWING = { from: 100, to: -50, ms: 160 }
 const ITEM = { swordWood: 0, swordSteel: 1, slime: 3 }
 const SLIME_HP = 2
 const SLIME_RANGE = { x0: 1, y0: 1, x1: 15, y1: 16 }
@@ -389,12 +393,39 @@ export class KingdomScene extends Phaser.Scene {
     if (!sword) return
     this.mode.send({ type: 'SWING' })
     const target = this.front()
-    sword
-      .setFrame(hasSteel() ? ITEM.swordSteel : ITEM.swordWood)
-      .setAngle(SWORD_ANGLE[this.dir])
-      .setPosition(center(this.pos.x) + STEP[this.dir].x * 11, center(this.pos.y) + STEP[this.dir].y * 11)
-      .setVisible(true)
-    this.time.delayedCall(180, () => sword.setVisible(false))
+    const step = STEP[this.dir]
+    const base = SWORD_ANGLE[this.dir]
+    const frame = hasSteel() ? ITEM.swordSteel : ITEM.swordWood
+    this.tweens.killTweensOf(sword)
+
+    if (step.x !== 0) {
+      // Facing sideways, a straight thrust in front of the dog reads well.
+      sword
+        .setFrame(frame)
+        .setOrigin(0.5, 0.5)
+        .setAngle(base)
+        .setPosition(center(this.pos.x) + step.x * 11, center(this.pos.y))
+        .setDepth(9)
+        .setVisible(true)
+      this.time.delayedCall(180, () => sword.setVisible(false))
+    } else {
+      // Facing up or down, the hand sits off to the side and the blade sweeps across the front,
+      // so it never points out of the dog's middle.
+      sword
+        .setFrame(frame)
+        .setOrigin(0.5, SWORD_GRIP)
+        .setAngle(base + SWING.from)
+        .setPosition(center(this.pos.x) - step.y * 6, center(this.pos.y) + step.y * 3)
+        .setDepth(this.dir === 'up' ? 9 : 11)
+        .setVisible(true)
+      this.tweens.add({
+        targets: sword,
+        angle: { from: base + SWING.from, to: base + SWING.to },
+        duration: SWING.ms,
+        ease: 'Quad.easeOut',
+        onComplete: () => this.time.delayedCall(40, () => sword.setVisible(false)),
+      })
+    }
 
     const slime = this.slimes.find((candidate) => same(candidate, target))
 
