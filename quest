@@ -157,7 +157,7 @@ case "${1:-up}" in
     kc -n "$NAMESPACE" logs -f "deployment/${2:-pomerium}"
     ;;
   admin)
-    say "Keycloak admin console: http://localhost:8080/admin (user admin, password $(node -p "require('./${STATE}/secrets.json').keycloakAdminPassword"))"
+    say "Keycloak admin console: http://localhost:8080/admin/master/console/#/kingdom (user admin, password $(node -p "require('./${STATE}/secrets.json').keycloakAdminPassword"))"
     say "The game's realm is \"kingdom\". Ctrl-C to stop."
     kc -n "$NAMESPACE" port-forward service/keycloak 8080:8080
     ;;

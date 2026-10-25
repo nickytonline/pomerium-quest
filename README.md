@@ -41,7 +41,7 @@ password the first time.
 | `./quest test`          | Sign players in through Pomerium with curl and check every zone policy                  |
 | `./quest status`        | Show the pods                                                                           |
 | `./quest logs pomerium` | Follow logs (`pomerium`, `quest` or `keycloak`)                                         |
-| `./quest admin`         | Open Keycloak's admin console at http://localhost:8080 and print its password           |
+| `./quest admin`         | Open Keycloak's admin console on http://localhost:8080 and print its password           |
 | `./quest reset-oracle`  | Forget every player and re-import the Keycloak realm                                    |
 | `./quest down`          | Delete the cluster                                                                      |
 
