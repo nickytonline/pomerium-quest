@@ -340,7 +340,7 @@ function oracle() {
           ...intro,
           {
             who: 'Oracle',
-            text: `Step into the light and tell me who you are. New here? Introduce yourself with any email and a password. Citizens of ${KINGDOM_DOMAIN} may enter the town; any other address will watch its gate refuse you.`,
+            text: `Step into the light and tell me who you are. New here? Introduce yourself with your ${KINGDOM_DOMAIN} email and a password. I only know citizens of ${KINGDOM_DOMAIN}.`,
           },
         ],
         () => {

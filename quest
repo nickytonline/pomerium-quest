@@ -9,7 +9,8 @@
 #   ./quest admin     open Keycloak's admin console (the Oracle) on http://localhost:8080
 #   ./quest reset-oracle  forget every player: re-import the Keycloak realm from scratch
 #
-# Environment: QUEST_PORT (default 443), QUEST_DOMAIN (default localhost.pomerium.io).
+# Environment: QUEST_PORT (default 443), QUEST_DOMAIN (default localhost.pomerium.io),
+# QUEST_KINGDOM_DOMAIN (citizens' email domain, default kingdom.com).
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -21,7 +22,8 @@ PORT="${QUEST_PORT:-443}"
 DOMAIN="${QUEST_DOMAIN:-localhost.pomerium.io}"
 STATE=.quest
 CERTS="${STATE}/certs"
-export QUEST_PORT="$PORT" QUEST_DOMAIN="$DOMAIN"
+KINGDOM_DOMAIN="${QUEST_KINGDOM_DOMAIN:-kingdom.com}"
+export QUEST_PORT="$PORT" QUEST_DOMAIN="$DOMAIN" QUEST_KINGDOM_DOMAIN="$KINGDOM_DOMAIN"
 
 say() { printf '\033[1;35m▸\033[0m %s\n' "$*"; }
 fail() { printf '\033[1;31m✗\033[0m %s\n' "$*" >&2; exit 1; }
@@ -75,7 +77,7 @@ cluster() {
 
 images() {
   say "Building images"
-  docker build --target app -t pomerium-quest/app:dev .
+  docker build --target app --build-arg QUEST_KINGDOM_DOMAIN -t pomerium-quest/app:dev .
   say "Loading images into the cluster"
   k3d image import -c "$CLUSTER" pomerium-quest/app:dev
 }

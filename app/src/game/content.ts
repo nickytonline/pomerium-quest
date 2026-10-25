@@ -1,5 +1,5 @@
 // Everything the characters say, what the signs show and what each lesson links to.
-import type { ZoneId } from './zones.ts'
+import { KINGDOM_DOMAIN, type ZoneId } from './zones.ts'
 
 const DOCS = 'https://www.pomerium.com/docs'
 
@@ -97,7 +97,7 @@ export const link = (lesson: LessonId) => LESSONS[lesson].link
 export const SIGN_TEXT: Partial<Record<ZoneId, string>> = {
   fields:
     'This gate is a route. Pomerium checks every request for this path against the policy below, and forwards the ones it allows to the app behind the route.',
-  town: 'The town only lets in citizens: people whose email domain is kingdom.com.',
+  town: `The town only lets in citizens: people whose email domain is ${KINGDOM_DOMAIN}.`,
   guild: "The Knights' Guild hall. Any citizen may enter.",
   armory: 'Only knights. The gate reads the groups claim your identity provider put in your session.',
   library:

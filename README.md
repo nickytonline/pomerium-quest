@@ -91,12 +91,13 @@ browser ──► Pomerium ──┬─ /zones/oracle/*   authenticated_user    
 
 ### Things worth knowing
 
-- **Anyone can sign up as anyone.** The realm takes any email without verifying it, because the
-  address is what the game's gates check. That's fine for a learning game. Never reuse the realm, or
+- **Anyone can sign up as any citizen.** The realm takes any `kingdom.com` email without verifying
+  it, because the address is what the game's gates check. Set `QUEST_KINGDOM_DOMAIN` to use another
+  domain in the sign-up form, the policies, and the game's text. That's fine for a learning game. Never reuse the realm, or
   this Pomerium, for anything real.
 - **Keycloak runs in dev mode** (`start-dev`) with its H2 database on a volume, so players survive a
   redeploy. It imports the realm on first start only: after changing the realm in `render.ts`, or
-  `QUEST_DOMAIN`/`QUEST_PORT`, run `./quest reset-oracle`. A public deployment should run
+  `QUEST_DOMAIN`/`QUEST_PORT`/`QUEST_KINGDOM_DOMAIN`, run `./quest reset-oracle`. A public deployment should run
   `start` with a real database.
 - **Signing in again signs you out of Keycloak too.** Pomerium's sign-out calls Keycloak's
   end-session endpoint, so refreshing your claims asks for your password again.

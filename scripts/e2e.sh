@@ -5,6 +5,7 @@ set -uo pipefail
 
 PORT="${QUEST_PORT:-443}"
 DOMAIN="${QUEST_DOMAIN:-localhost.pomerium.io}"
+KINGDOM="${QUEST_KINGDOM_DOMAIN:-kingdom.com}"
 SUFFIX=""
 [ "$PORT" = 443 ] || SUFFIX=":${PORT}"
 GAME="https://game.${DOMAIN}${SUFFIX}"
@@ -68,12 +69,12 @@ check "fields needs a session" 401 "$(status "$anon" /zones/fields/enter)"
 
 echo "Citizen"
 citizen="${JAR_DIR}/citizen"
-email="e2e-${RUN}@kingdom.com"
+email="e2e-${RUN}@${KINGDOM}"
 check "sign-up lands back in the game" "${GAME}/?signedin=1" "$(sign_up "$citizen" "$email")"
 check "app verified Pomerium's JWT" "$email" \
   "$(curl -s -b "$citizen" -H "$JSON" "${GAME}/zones/oracle/" | grep -o "\"email\":\"[^\"]*\"" | head -1 | cut -d'"' -f4)"
 check "fields" 200 "$(status "$citizen" /zones/fields/enter)"
-check "town (domain is kingdom.com)" 200 "$(status "$citizen" /zones/town/enter)"
+check "town (domain is ${KINGDOM})" 200 "$(status "$citizen" /zones/town/enter)"
 check "armory without knights" 403 "$(status "$citizen" /zones/armory/enter)"
 check "library read (GET)" 200 "$(status "$citizen" /zones/library/books/0)"
 check "library write (POST)" 403 "$(status "$citizen" /zones/library/ledger POST)"
@@ -111,8 +112,7 @@ check "and the session is gone" 401 "$(status "$citizen" /zones/fields/enter)"
 echo "Outsider"
 outsider="${JAR_DIR}/outsider"
 sign_up "$outsider" "wanderer-${RUN}@outlands.net" >/dev/null
-check "fields (any signed-in user)" 200 "$(status "$outsider" /zones/fields/enter)"
-check "town (wrong domain)" 403 "$(status "$outsider" /zones/town/enter)"
+check "sign-up refused outside ${KINGDOM}" 401 "$(status "$outsider" /zones/fields/enter)"
 
 echo
 if [ "$failures" -eq 0 ]; then echo "All checks passed."; else echo "${failures} check(s) failed."; fi
