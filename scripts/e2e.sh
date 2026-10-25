@@ -36,7 +36,7 @@ sign_in() {
 
 echo "Anonymous"
 anon="${JAR_DIR}/anon"
-check "game shell is public" 200 "$(status "$anon" /)"
+check "game shell is public" 200 "$(curl -s -o /dev/null -w '%{http_code}' "${GAME}/")"
 check "fields needs a session" 401 "$(status "$anon" /zones/fields/enter)"
 
 echo "Citizen"
