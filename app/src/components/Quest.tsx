@@ -686,9 +686,11 @@ function DenyScreen() {
             {deny.lines.map((line, i) => (
               <div
                 key={i}
-                className={`grid grid-cols-[1.2em_max-content_1fr] items-baseline gap-2 text-[0.8rem] ${line.ok ? '' : 'text-[#c2183a]'}`}
+                className={`grid grid-cols-[1.2em_max-content_1fr] items-baseline gap-2 text-[0.8rem] ${line.ok === false ? 'text-[#c2183a]' : ''}`}
               >
-                <span className={line.ok ? 'text-[#15803d]' : ''}>{line.ok ? '✓' : '✗'}</span>
+                <span className={line.ok ? 'text-[#15803d]' : ''}>
+                  {line.ok === undefined ? '' : line.ok ? '✓' : '✗'}
+                </span>
                 <code className="whitespace-pre">{line.text}</code>
                 {line.actual && <span className="text-[0.75rem] text-paper-muted">{line.actual}</span>}
               </div>

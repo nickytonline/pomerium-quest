@@ -17,7 +17,8 @@ export interface RequestInfo {
 
 export interface EvalLine {
   readonly text: string
-  readonly ok: boolean
+  /** Set on criteria only; the allow and and/or lines around them are structure, not checks. */
+  readonly ok?: boolean
   readonly actual?: string
 }
 
@@ -107,8 +108,8 @@ function evaluateRule(rule: AllowRule, id: Identity, req: RequestInfo, whose: Vi
   return {
     allow: ok,
     lines: [
-      { text: '- allow:', ok },
-      { text: `    ${rule.match}:`, ok },
+      { text: '- allow:' },
+      { text: `    ${rule.match}:` },
       ...checks.map((c) => ({ text: `      - ${criterionLabel(c.criterion)}`, ok: c.ok, actual: c.actual })),
     ],
   }
