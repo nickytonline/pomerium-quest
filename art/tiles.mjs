@@ -173,16 +173,21 @@ const painters = [
   // 10 chest closed
   (rect) => {
     floor(rect)
-    rect(2, 5, 12, 9, '#8a4f22')
-    rect(2, 5, 12, 4, '#a3622d')
+    // A dark outline and shadow, like every other object, and red lacquer so it doesn't sink into the floor.
+    rect(2, 14, 14, 1, '#4a2f18')
+    rect(1, 4, 14, 11, '#241a2e')
+    rect(2, 5, 12, 9, '#7a2a1c')
+    rect(2, 5, 12, 4, '#a8432b')
     rect(2, 9, 12, 1, '#e3b341')
     rect(7, 8, 2, 3, '#e3b341')
   },
   // 11 chest open
   (rect) => {
     floor(rect)
-    rect(2, 2, 12, 4, '#a3622d')
-    rect(2, 7, 12, 7, '#8a4f22')
+    rect(2, 14, 14, 1, '#4a2f18')
+    rect(1, 1, 14, 14, '#241a2e')
+    rect(2, 2, 12, 4, '#a8432b')
+    rect(2, 7, 12, 7, '#7a2a1c')
     rect(3, 7, 10, 2, '#2a1a0e')
     rect(2, 10, 12, 1, '#e3b341')
   },
