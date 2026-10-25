@@ -37,7 +37,8 @@ const DENY_HINTS: Partial<Record<ZoneId, string>> = {
   town: `Only citizens of ${KINGDOM_DOMAIN} may enter.`,
   guild: `Only citizens of ${KINGDOM_DOMAIN} may enter.`,
   armory: "Only the knights group may enter. The Captain in the Knights' Guild can vouch for you.",
-  library: 'Reading is a GET and passes. Writing is a POST, so this request needs the scribes group.',
+  library:
+    'Reading is a GET and passes. Writing is a POST, so this request needs the scribes group. No one in this chapter can make you a scribe: this denial is the lesson.',
 }
 
 const LOG_DECISION: Record<Outcome['kind'], LogEntry['decision']> = {
@@ -386,6 +387,10 @@ const SCRIPTS: Record<NpcId, () => void> = {
           who: 'Librarian',
           text: 'The Royal Ledger is different. Writing in it is a POST, and only scribes may do that. Go ahead and try: the denial will show you which rule failed.',
           links: [link('request')],
+        },
+        {
+          who: 'Librarian',
+          text: "And no, I can't make you a scribe. No one in the kingdom can yet. The point is to watch the rule that fails.",
         },
       ],
       () => learn('request'),
