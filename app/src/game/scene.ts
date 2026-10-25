@@ -136,8 +136,6 @@ export class KingdomScene extends Phaser.Scene {
   private shownItem: Phaser.GameObjects.Image | undefined
   private monsters: Monster[] = []
   private fish: Fish[] = []
-  /** After a full dog turns down a fish, bumping it again stays quiet for a moment. */
-  private fishRefusedUntil = 0
   private seen = { interact: 0, attack: 0 }
   private pending = new Set<Action>()
   private lastRockHint = 0
@@ -726,14 +724,7 @@ export class KingdomScene extends Phaser.Scene {
   }
 
   private catchFish(fish: Fish) {
-    if (performance.now() < this.fishRefusedUntil) return
-
-    if (!eatFish()) {
-      this.fishRefusedUntil = performance.now() + 2000
-
-      return
-    }
-
+    if (!eatFish()) return
     fish.sprite.destroy()
     this.fish = this.fish.filter((candidate) => candidate !== fish)
     this.time.delayedCall(FISH_RESPAWN_MS, () => this.spawnFish())

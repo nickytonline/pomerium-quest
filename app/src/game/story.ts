@@ -523,26 +523,26 @@ export const FISH_LIMIT = 4
 export function eatFish(): boolean {
   const { hp, progress } = quest.get()
   const left = FISH_LIMIT - progress.fishEaten
+  const say = (text: string) => quest.say([{ who: 'Village Pond', text }])
 
   if (hp >= MAX_HP) {
-    quest.toast("You're full. The fish can stay in the pond for now.", 'info')
+    say("A fish darts past. You're already at full health, so you let it be.")
 
     return false
   }
 
   if (left <= 0) {
-    quest.toast("You've eaten all the fish you can this game.", 'info')
+    say("The fish are wise to you now. You can't catch any more this game.")
 
     return false
   }
 
   quest.setHp(hp + 1)
   quest.progress({ fishEaten: progress.fishEaten + 1 })
-  quest.toast(
+  say(
     left > 1
-      ? `You catch a fish and eat it: half a heart restored. Fish can give ${hearts(left - 1)} more this game.`
-      : "You catch a fish and eat it: half a heart restored. That's the last the pond can give this game.",
-    'info',
+      ? `You catch a fish and gulp it down: half a heart restored. The pond has ${hearts(left - 1)} left to give this game.`
+      : "You catch a fish and gulp it down: half a heart restored. That's all the pond can give this game.",
   )
 
   return true
