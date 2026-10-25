@@ -36,30 +36,30 @@ const PALETTE = {
 }
 
 const HEAD_DOWN = [
-  '..K....KK....K..',
-  '.KSK..KUUK..KSK.',
-  '.KOSKKUUUUKKSOK.',
-  '.KOOOUUUUUUOOOK.',
-  'KUOOOOOOOOOOOOUK',
+  '.K............K.',
+  '.KK..........KK.',
+  '.KSK........KSK.',
+  '.KSOKKKKKKKKOSK.',
+  'KOOOOUUUUUUOOOOK',
   'KOOGGGGGGGGGGOOK',
   'KOKCCWCOOCWCCKOK',
   'KOKPPPPOOPPPPKOK',
   'KOOKMMKLLKMMKOOK',
-  'KSOOLLLNNLLLOOSK',
-  '.KSOLLLYYLLLOSK.',
-  '.KJKLLLLLLLLKJK.',
-  'KJHJKLLYLLLKJHJK',
-  'KJHGJKLLLLKJGHJK',
+  'KSOLLLNNNNLLLOSK',
+  '.KSOLLLNNLLLOSK.',
+  '.KJKSLLKKLLSKJK.',
+  'KJHJKLKMMKLKJHJK',
+  'KJHGJKLMMLKJGHJK',
   '.KJJJJKLLKJJJJK.',
 ]
 
 const HEAD_UP = [
-  '..K....KK....K..',
-  '.KSK..KOOK..KSK.',
-  '.KOSKKOOOOKKSOK.',
+  '.K............K.',
+  '.KK..........KK.',
+  '.KSK........KSK.',
+  '.KSOKKKKKKKKOSK.',
   'KOOOOOOOOOOOOOOK',
   'KOOUOOOOOOOOUOOK',
-  'KOOOOOOOOOOOOOOK',
   'KGOOOOOOOOOOOOGK',
   'KSOOOOOOOOOOOOSK',
   'KSSOOOOOOOOOOSSK',
@@ -72,25 +72,25 @@ const HEAD_UP = [
 ]
 
 const HEAD_RIGHT = [
-  '....K...........',
-  '...KSK..KK......',
-  '..KOSKKKUUK.....',
-  '.KOOOOOUUUUK....',
-  'KOOOOOOOOOOOK...',
-  'KOOOOOOOGGGGOK..',
-  'KOOOOOOOKCWCKOK.',
-  'KSOOOOOOKPPKLLLK',
-  'KSOOOOOOOKMKLLNK',
-  '.KSOOLLLLLLLLLK.',
-  '..KSLLLLLYLKK...',
-  'KUKKJJLLLLJK....',
-  'KOOKJHJLLJJK....',
-  '.KSKJJGJJJJK....',
-  '..KJJJJJJJJK....',
+  '...K............',
+  '...KK...........',
+  '..KSOK..........',
+  '..KSOOKKKK......',
+  '.KOOOOUUUUK.....',
+  '.KOOOOOOGGGGGK..',
+  'KOOOOOOOKCWCKKKK',
+  'KOOOOOOOKPPKOOON',
+  'KSOOOOOOOKMKLLLN',
+  'KSOOOOOLLLLLKKKK',
+  '.KSOOLLLLLLLLK..',
+  'KKKSKLLLLLLKK...',
+  'KUOKJJLLLLJJK...',
+  'KOUKJHGJJJJJK...',
+  '.KKKJJJJJJJJK...',
 ]
 
 const FRONT_FEET = { idle: '..KSOK....KOSK..', a: '..KSOK.....KK...', b: '...KK.....KOSK..' }
-const SIDE_FEET = { idle: '...KOK..KOK.....', a: '....KOKKOK......', b: '..KOK....KOK....' }
+const SIDE_FEET = { idle: '....KOK..KOK....', a: '.....KOKKOK.....', b: '...KOK....KOK...' }
 
 const withFeet = (body, feet) => [...body, feet]
 const mirror = (rows) => rows.map((r) => [...r].reverse().join(''))
