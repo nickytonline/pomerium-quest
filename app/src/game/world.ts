@@ -1,7 +1,7 @@
 import type { ZoneId } from './zones.ts'
 
 // The kingdom map: a 40x30 tile grid built from a few drawing helpers, plus where every
-// gate, sign, NPC, slime and prop sits. Tile ids match the order in art/tiles.mjs.
+// gate, sign, NPC, monster and prop sits. Tile ids match the order in art/tiles.mjs.
 
 export const TILE = {
   grass: 0,
@@ -71,7 +71,10 @@ export interface World {
   readonly gates: readonly Gate[]
   readonly signs: readonly Sign[]
   readonly npcs: readonly Npc[]
-  readonly slimes: readonly Point[]
+  /** Bot slimes roam the fields on foot. */
+  readonly bots: readonly Point[]
+  /** Phish swim only in the fields' pond. */
+  readonly phish: readonly Point[]
   readonly rocks: readonly Point[]
   readonly chest: Point
   readonly ledger: Point
@@ -142,7 +145,8 @@ export function buildWorld(): World {
     TILE.tree,
   )
 
-  // Slime Fields.
+  // Slime Fields, with the pond the phish lurk in.
+  fill(2, 5, 5, 7, TILE.water)
   fill(8, 12, 8, 16, TILE.path)
   fill(8, 12, 15, 12, TILE.path)
   each(
@@ -277,13 +281,17 @@ export function buildWorld(): World {
       { x: 34, y: 9, npcId: 'armorer' },
       { x: 31, y: 25, npcId: 'librarian' },
     ],
-    slimes: [
-      { x: 4, y: 4 },
+    bots: [
       { x: 10, y: 2 },
       { x: 6, y: 10 },
       { x: 12, y: 14 },
       { x: 3, y: 15 },
       { x: 13, y: 6 },
+    ],
+    phish: [
+      { x: 2, y: 5 },
+      { x: 5, y: 6 },
+      { x: 3, y: 7 },
     ],
     spawn: { x: 9, y: 25 },
   }

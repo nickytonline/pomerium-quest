@@ -13,7 +13,7 @@ import {
   type Page,
 } from './content.ts'
 import { decide, routeYaml, type Identity } from './ppl.ts'
-import { KNIGHT_XP, hasSteel, isAtLeast, stage } from './quest-machine.ts'
+import { KNIGHT_QUOTA, hasSteel, isAtLeast, stage } from './quest-machine.ts'
 import { quest, type DenyView, type LogEntry } from './store.ts'
 import type { NpcId } from './world.ts'
 import { KINGDOM_DOMAIN, zoneById, type Zone, type ZoneId } from './zones.ts'
@@ -235,7 +235,7 @@ function oracle() {
 }
 
 async function captain() {
-  const { xp, mode } = quest.get()
+  const { defeated, mode } = quest.get()
 
   if (isAtLeast('knighted')) {
     quest.say([
@@ -256,7 +256,11 @@ async function captain() {
       { who: 'Captain', text: 'The armory is for knights only.' },
       {
         who: 'Captain',
-        text: `Prove yourself first: clear ${KNIGHT_XP} slimes from the fields, then come back. Slimes defeated: ${Math.min(xp, KNIGHT_XP)} of ${KNIGHT_XP}.`,
+        text: 'Two pests plague the fields. Bot slimes hammer every gate at once, never tiring. Phish lurk in the pond, dangling a friendly light to lure folk into handing over their sign-in.',
+      },
+      {
+        who: 'Captain',
+        text: `Prove yourself: defeat ${KNIGHT_QUOTA} of each, then come back. Bot slimes: ${Math.min(defeated.bot, KNIGHT_QUOTA)} of ${KNIGHT_QUOTA}. Phish: ${Math.min(defeated.phish, KNIGHT_QUOTA)} of ${KNIGHT_QUOTA}.`,
       },
     ])
 

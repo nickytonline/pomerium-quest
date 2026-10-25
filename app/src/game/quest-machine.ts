@@ -8,17 +8,26 @@
 // so the armory still says no until they sign in again.
 import { assign, createActor, setup, type SnapshotFrom } from 'xstate'
 
-export const KNIGHT_XP = 3
+/** The Captain vouches for anyone who has cleared this many of each monster kind. */
+export const KNIGHT_QUOTA = 2
+
+export type MonsterKind = 'bot' | 'phish'
+
+export type Defeated = Readonly<Record<MonsterKind, number>>
+
+export const MONSTER_KINDS: readonly MonsterKind[] = ['bot', 'phish']
+
+export const isProven = (defeated: Defeated) => MONSTER_KINDS.every((kind) => defeated[kind] >= KNIGHT_QUOTA)
 
 export type QuestEvent =
   | { readonly type: 'SIGNED_IN'; readonly groups: readonly string[] }
   | { readonly type: 'SIGNED_OUT' }
-  | { readonly type: 'SLIME_DEFEATED' }
+  | { readonly type: 'MONSTER_DEFEATED'; readonly kind: MonsterKind }
   | { readonly type: 'KNIGHTED' }
   | { readonly type: 'STEEL_TAKEN' }
 
 export interface QuestContext {
-  readonly xp: number
+  readonly defeated: Defeated
 }
 
 export const questMachine = setup({
@@ -29,15 +38,22 @@ export const questMachine = setup({
     events: {} as QuestEvent,
   },
   guards: {
-    proven: ({ context }) => context.xp >= KNIGHT_XP,
+    proven: ({ context }) => isProven(context.defeated),
     hasKnightsClaim: ({ event }) => event.type === 'SIGNED_IN' && event.groups.includes('knights'),
   },
 }).createMachine({
   id: 'quest',
   initial: 'anonymous',
-  context: { xp: 0 },
+  context: { defeated: { bot: 0, phish: 0 } },
   on: {
-    SLIME_DEFEATED: { actions: assign({ xp: ({ context }) => context.xp + 1 }) },
+    MONSTER_DEFEATED: {
+      actions: assign({
+        defeated: ({ context, event }) => ({
+          ...context.defeated,
+          [event.kind]: context.defeated[event.kind] + 1,
+        }),
+      }),
+    },
   },
   states: {
     anonymous: {
@@ -50,7 +66,7 @@ export const questMachine = setup({
       on: { SIGNED_OUT: 'anonymous' },
     },
     proven: {
-      description: 'Has defeated enough slimes for the Captain to vouch for them.',
+      description: 'Has defeated enough bot slimes and phish for the Captain to vouch for them.',
       on: { KNIGHTED: 'knighted', SIGNED_OUT: 'anonymous' },
     },
     knighted: {
@@ -75,8 +91,15 @@ function restore() {
   try {
     const raw = globalThis.localStorage?.getItem(STORAGE_KEY)
 
+    if (!raw) return undefined
     // SAFETY: written by persist() below from actor.getPersistedSnapshot().
-    return raw ? (JSON.parse(raw) as SnapshotFrom<typeof questMachine>) : undefined
+    const snapshot = JSON.parse(raw) as SnapshotFrom<typeof questMachine>
+    // SAFETY: saves from before bot slimes and phish counted one `xp` total of slimes.
+    const legacy = snapshot.context as Partial<QuestContext> & { readonly xp?: number }
+
+    return legacy.defeated
+      ? snapshot
+      : { ...snapshot, context: { defeated: { bot: legacy.xp ?? 0, phish: 0 } } }
   } catch {
     return undefined
   }
@@ -114,7 +137,7 @@ export function resetQuest() {
 }
 
 export const stage = (): QuestStage => questActor.getSnapshot().value
-export const xp = () => questActor.getSnapshot().context.xp
+export const defeated = () => questActor.getSnapshot().context.defeated
 export const hasSteel = () => stage() === 'armed'
 
 export const isAtLeast = (target: QuestStage) => {

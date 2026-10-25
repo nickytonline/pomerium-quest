@@ -1,9 +1,9 @@
-// The overworld: tile map, grid movement, sword, slimes. Talking, reading and gates are
+// The overworld: tile map, grid movement, sword, monsters. Talking, reading and gates are
 // delegated to story.ts; this file only moves things around and draws them.
 import * as Phaser from 'phaser'
 import { startPlayer } from './player-machine.ts'
-import { hasSteel, xp } from './quest-machine.ts'
-import { MAX_HP, quest, type Dir } from './store.ts'
+import { KNIGHT_QUOTA, defeated, hasSteel, type MonsterKind } from './quest-machine.ts'
+import { MAX_HP, buzz, quest, type Dir } from './store.ts'
 import { enterGate, nightGate, openChest, readBook, readSign, talk, writeLedger } from './story.ts'
 import {
   MAP_HEIGHT,
@@ -61,11 +61,19 @@ const SWORD_ANGLE: Record<Dir, number> = { up: 0, right: 90, down: 180, left: 27
 /** Facing up or down, the sword pivots at its grip (row 14 of 16) and sweeps from the dog's side across the front. */
 const SWORD_GRIP = 14 / 16
 const SWING = { from: 100, to: -50, ms: 160 }
-const ITEM = { swordWood: 0, swordSteel: 1, slime: 3 }
-const SLIME_HP = 2
-const SLIME_RANGE = { x0: 1, y0: 1, x1: 15, y1: 16 }
+const ITEM = { swordWood: 0, swordSteel: 1 }
 
-interface Slime {
+/** Monsters never leave the fields. */
+const FIELDS = { x0: 1, y0: 1, x1: 15, y1: 16 }
+
+/** Each kind's first frame in items.png (two frames each), hit points and name. */
+const MONSTER: Record<MonsterKind, { readonly frame: number; readonly hp: number; readonly name: string }> = {
+  bot: { frame: 3, hp: 2, name: 'Bot slime' },
+  phish: { frame: 5, hp: 2, name: 'Phish' },
+}
+
+interface Monster {
+  readonly kind: MonsterKind
   readonly sprite: Phaser.GameObjects.Sprite
   x: number
   y: number
@@ -90,7 +98,7 @@ export class KingdomScene extends Phaser.Scene {
   private openGate: Point | undefined
   /** An item shown rising out of a chest until the player closes its dialog. */
   private shownItem: Phaser.GameObjects.Image | undefined
-  private slimes: Slime[] = []
+  private monsters: Monster[] = []
   private seen = { interact: 0, attack: 0 }
   private pending = new Set<Action>()
   private lastRockHint = 0
@@ -130,20 +138,25 @@ export class KingdomScene extends Phaser.Scene {
     for (const npc of this.world.npcs)
       this.add.sprite(center(npc.x), center(npc.y), 'npcs', NPC_FRAME[npc.npcId])
 
-    this.anims.create({
-      key: 'slime',
-      frames: this.anims.generateFrameNumbers('items', { frames: [ITEM.slime, ITEM.slime + 1] }),
-      frameRate: 3,
-      repeat: -1,
-    })
-    this.slimes = this.world.slimes.map((spot) => ({
-      sprite: this.add.sprite(center(spot.x), center(spot.y), 'items', ITEM.slime).play('slime'),
+    for (const [kind, { frame }] of Object.entries(MONSTER))
+      this.anims.create({
+        key: kind,
+        frames: this.anims.generateFrameNumbers('items', { frames: [frame, frame + 1] }),
+        frameRate: 3,
+        repeat: -1,
+      })
+
+    const spawn = (kind: MonsterKind) => (spot: Point) => ({
+      kind,
+      sprite: this.add.sprite(center(spot.x), center(spot.y), 'items', MONSTER[kind].frame).play(kind),
       x: spot.x,
       y: spot.y,
-      hp: SLIME_HP,
+      hp: MONSTER[kind].hp,
       nextMoveAt: 0,
       moving: false,
-    }))
+    })
+
+    this.monsters = [...this.world.bots.map(spawn('bot')), ...this.world.phish.map(spawn('phish'))]
 
     for (const dir of DIRS) {
       const base = DOG_FRAME[dir]
@@ -202,7 +215,7 @@ export class KingdomScene extends Phaser.Scene {
       return
     }
 
-    this.updateSlimes(time)
+    this.updateMonsters(time)
     this.dismissItem()
 
     if (!this.mode.idle()) {
@@ -261,7 +274,7 @@ export class KingdomScene extends Phaser.Scene {
   }
 
   private occupied(p: Point) {
-    return this.world.npcs.some((npc) => same(npc, p)) || this.slimes.some((slime) => same(slime, p))
+    return this.world.npcs.some((npc) => same(npc, p)) || this.monsters.some((monster) => same(monster, p))
   }
 
   private face(dir: Dir) {
@@ -276,7 +289,7 @@ export class KingdomScene extends Phaser.Scene {
 
     if (this.world.npcs.some((npc) => same(npc, target))) return
 
-    if (this.slimes.some((slime) => same(slime, target))) {
+    if (this.monsters.some((monster) => same(monster, target))) {
       this.hurt(OPPOSITE[dir])
 
       return
@@ -427,10 +440,10 @@ export class KingdomScene extends Phaser.Scene {
       })
     }
 
-    const slime = this.slimes.find((candidate) => same(candidate, target))
+    const monster = this.monsters.find((candidate) => same(candidate, target))
 
-    if (slime) {
-      this.hitSlime(slime, hasSteel() ? 2 : 1)
+    if (monster) {
+      this.hitMonster(monster, hasSteel() ? 2 : 1)
 
       return
     }
@@ -510,53 +523,61 @@ export class KingdomScene extends Phaser.Scene {
     quest.toast('A cracked rock blocks the way. A stronger sword might break it.', 'info')
   }
 
-  private hitSlime(slime: Slime, damage: number) {
-    slime.hp -= damage
-    slime.sprite.setTint(0xffffff)
-    this.time.delayedCall(120, () => slime.sprite.clearTint())
+  private hitMonster(monster: Monster, damage: number) {
+    monster.hp -= damage
+    buzz(15)
+    monster.sprite.setTint(0xffffff)
+    this.time.delayedCall(120, () => monster.sprite.clearTint())
 
-    if (slime.hp > 0) {
-      const back = { x: slime.x + STEP[this.dir].x, y: slime.y + STEP[this.dir].y }
+    if (monster.hp > 0) {
+      const back = { x: monster.x + STEP[this.dir].x, y: monster.y + STEP[this.dir].y }
 
-      if (this.slimeCanEnter(back)) this.moveSlime(slime, back)
+      if (this.monsterCanEnter(monster, back)) this.moveMonster(monster, back)
 
       return
     }
 
-    slime.sprite.destroy()
-    this.slimes = this.slimes.filter((candidate) => candidate !== slime)
-    quest.send({ type: 'SLIME_DEFEATED' })
-    quest.toast(`Slime defeated (${Math.min(xp(), 3)} of 3 for the Captain)`, 'info')
+    monster.sprite.destroy()
+    this.monsters = this.monsters.filter((candidate) => candidate !== monster)
+    quest.send({ type: 'MONSTER_DEFEATED', kind: monster.kind })
+    const count = Math.min(defeated()[monster.kind], KNIGHT_QUOTA)
+    quest.toast(
+      `${MONSTER[monster.kind].name} defeated (${count} of ${KNIGHT_QUOTA} for the Captain)`,
+      'info',
+    )
   }
 
-  private slimeCanEnter(p: Point) {
-    const inRange =
-      p.x >= SLIME_RANGE.x0 && p.x <= SLIME_RANGE.x1 && p.y >= SLIME_RANGE.y0 && p.y <= SLIME_RANGE.y1
+  /** Bot slimes walk the fields; phish stay in the pond. */
+  private monsterCanEnter(monster: Monster, p: Point) {
+    const inFields = p.x >= FIELDS.x0 && p.x <= FIELDS.x1 && p.y >= FIELDS.y0 && p.y <= FIELDS.y1
+    const tile = this.tileAt(p)
+    const terrain = monster.kind === 'phish' ? tile === TILE.water : WALKABLE.has(tile)
 
-    return inRange && WALKABLE.has(this.tileAt(p)) && !this.occupied(p) && !same(p, this.pos)
+    return inFields && terrain && !this.occupied(p) && !same(p, this.pos)
   }
 
-  private moveSlime(slime: Slime, target: Point) {
-    slime.moving = true
-    slime.x = target.x
-    slime.y = target.y
+  private moveMonster(monster: Monster, target: Point) {
+    monster.moving = true
+    monster.x = target.x
+    monster.y = target.y
     this.tweens.add({
-      targets: slime.sprite,
+      targets: monster.sprite,
       x: center(target.x),
       y: center(target.y),
       duration: 220,
       onComplete: () => {
-        slime.moving = false
+        monster.moving = false
       },
     })
   }
 
-  private updateSlimes(time: number) {
-    for (const slime of this.slimes) {
-      if (slime.moving || time < slime.nextMoveAt) continue
-      slime.nextMoveAt = time + 600 + Math.random() * 700
-      const dx = this.pos.x - slime.x
-      const dy = this.pos.y - slime.y
+  /** Each monster drifts at random, or heads for the player when near; stepping into the player bites. */
+  private updateMonsters(time: number) {
+    for (const monster of this.monsters) {
+      if (monster.moving || time < monster.nextMoveAt) continue
+      monster.nextMoveAt = time + 600 + Math.random() * 700
+      const dx = this.pos.x - monster.x
+      const dy = this.pos.y - monster.y
       const chase = Math.abs(dx) + Math.abs(dy) <= 5 && Math.random() < 0.6
 
       const dir: Dir = chase
@@ -569,14 +590,14 @@ export class KingdomScene extends Phaser.Scene {
             : 'up'
         : (DIRS[Math.floor(Math.random() * DIRS.length)] ?? 'down')
 
-      const target = { x: slime.x + STEP[dir].x, y: slime.y + STEP[dir].y }
+      const target = { x: monster.x + STEP[dir].x, y: monster.y + STEP[dir].y }
 
       if (same(target, this.pos) && !this.mode.walking()) {
         this.hurt(dir)
         continue
       }
 
-      if (this.slimeCanEnter(target)) this.moveSlime(slime, target)
+      if (this.monsterCanEnter(monster, target)) this.moveMonster(monster, target)
     }
   }
 

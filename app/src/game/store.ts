@@ -3,7 +3,14 @@
 import { useSyncExternalStore } from 'react'
 import type { DocLink, LessonId, Page } from './content.ts'
 import type { EvalLine, Identity } from './ppl.ts'
-import { persist, questActor, resetQuest, type QuestEvent, type QuestStage } from './quest-machine.ts'
+import {
+  persist,
+  questActor,
+  resetQuest,
+  type Defeated,
+  type QuestEvent,
+  type QuestStage,
+} from './quest-machine.ts'
 
 export type Dir = 'down' | 'up' | 'right' | 'left'
 
@@ -73,16 +80,26 @@ export interface QuestState {
   readonly progress: Progress
   /** Mirrors the quest machine so React can render it. */
   readonly stage: QuestStage
-  readonly xp: number
+  readonly defeated: Defeated
   readonly controls: Controls
   /** Timestamp until which the scene ignores input, so the key that closed a dialog does not reopen it. */
   readonly inputResumesAt: number
   readonly menuOpen: boolean
+  /** The Journal drawer, used when the panels can't sit beside the game. Pauses the game while open. */
+  readonly journalOpen: boolean
+  /** Something new reached the Journal (a log entry, lesson or identity change) since it was last open. */
+  readonly journalUnread: boolean
   /** When the player last saved explicitly (progress also saves on every step). */
   readonly savedAt: string | null
 }
 
 export const MAX_HP = 5
+
+/** A short buzz on phones that support it (not iPhones); nothing depends on it. */
+export const buzz = (pattern: number | number[]) => {
+  if ('vibrate' in navigator) navigator.vibrate(pattern)
+}
+
 export const ANONYMOUS: Identity = { authenticated: false, email: '', groups: [] }
 const STORAGE_KEY = 'pomerium-quest/progress/v1'
 
@@ -127,10 +144,12 @@ let state: QuestState = {
   log: [],
   progress: loadProgress(),
   stage: questActor.getSnapshot().value,
-  xp: questActor.getSnapshot().context.xp,
+  defeated: questActor.getSnapshot().context.defeated,
   controls: { dir: null, interact: 0, attack: 0 },
   inputResumesAt: 0,
   menuOpen: false,
+  journalOpen: false,
+  journalUnread: false,
   savedAt: null,
 }
 
@@ -138,6 +157,12 @@ const listeners = new Set<() => void>()
 let dialogDone: (() => void) | undefined
 let denyDone: (() => void) | undefined
 let nextId = 1
+
+/** A change the Journal shows; flags it unread unless the drawer is open. */
+const noted = (patch: Partial<QuestState>) => ({
+  ...patch,
+  journalUnread: state.journalUnread || !state.journalOpen,
+})
 
 function update(patch: Partial<QuestState>) {
   state = { ...state, ...patch }
@@ -152,13 +177,21 @@ export const quest = {
 
     return () => listeners.delete(listener)
   },
-  isPaused: () => state.dialog !== null || state.deny !== null || state.menuOpen || !state.started,
+  isPaused: () =>
+    state.dialog !== null || state.deny !== null || state.menuOpen || state.journalOpen || !state.started,
 
   start: () => update({ started: true }),
   openMenu: () => {
-    if (state.started && !state.dialog && !state.deny) update({ menuOpen: true })
+    if (state.started && !state.dialog && !state.deny) update({ menuOpen: true, journalOpen: false })
   },
   closeMenu: () => update({ menuOpen: false, inputResumesAt: performance.now() + 200 }),
+  openJournal: () => {
+    if (state.started && !state.dialog && !state.deny)
+      update({ journalOpen: true, journalUnread: false, menuOpen: false })
+  },
+  closeJournal: () => {
+    if (state.journalOpen) update({ journalOpen: false, inputResumesAt: performance.now() + 200 })
+  },
   save: () => {
     saveProgress(state.progress)
     persist()
@@ -170,10 +203,10 @@ export const quest = {
   /** Back to the title screen. The scene is rebuilt from saved progress on Continue. */
   quit: () => {
     quest.save()
-    update({ started: false, menuOpen: false, dialog: null, deny: null })
+    update({ started: false, menuOpen: false, journalOpen: false, dialog: null, deny: null })
   },
   setMode: (mode: Mode, identity: Identity) => update({ mode, identity }),
-  setIdentity: (identity: Identity) => update({ identity }),
+  setIdentity: (identity: Identity) => update(noted({ identity })),
   setRegion: (region: string) => {
     if (region !== state.region) update({ region })
   },
@@ -188,18 +221,25 @@ export const quest = {
     questActor.send(event)
     persist()
     const snapshot = questActor.getSnapshot()
-    update({ stage: snapshot.value, xp: snapshot.context.xp })
+    update({ stage: snapshot.value, defeated: snapshot.context.defeated })
   },
   learn: (lesson: LessonId, title: string) => {
     if (state.progress.lessons.includes(lesson)) return
     quest.progress({ lessons: [...state.progress.lessons, lesson] })
+    update(noted({}))
     quest.toast(`Lesson learned: ${title}`, 'info')
   },
   resetProgress: () => {
     const progress = freshProgress()
     saveProgress(progress)
     resetQuest()
-    update({ progress, hp: MAX_HP, log: [], stage: questActor.getSnapshot().value, xp: 0 })
+    update({
+      progress,
+      hp: MAX_HP,
+      log: [],
+      stage: questActor.getSnapshot().value,
+      defeated: questActor.getSnapshot().context.defeated,
+    })
   },
 
   say: (pages: readonly Page[], onDone?: () => void) => {
@@ -225,6 +265,7 @@ export const quest = {
 
   showDeny: (deny: DenyView, onDone?: () => void) => {
     denyDone = onDone
+    buzz([40, 30, 40])
     update({ deny })
   },
   closeDeny: () => {
@@ -241,7 +282,7 @@ export const quest = {
 
   log: (entry: Omit<LogEntry, 'id' | 'at'>) => {
     const at = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-    update({ log: [{ ...entry, id: nextId++, at }, ...state.log].slice(0, 40) })
+    update(noted({ log: [{ ...entry, id: nextId++, at }, ...state.log].slice(0, 40) }))
   },
 
   press: (control: 'interact' | 'attack') =>

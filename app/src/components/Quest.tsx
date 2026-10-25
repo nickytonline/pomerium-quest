@@ -1,8 +1,20 @@
-import { useEffect, useRef, useState } from 'react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react'
 import { probe } from '../game/access.ts'
 import { INTRO, LESSONS, LESSON_ORDER } from '../game/content.ts'
-import { KNIGHT_XP, questMachine, type QuestStage } from '../game/quest-machine.ts'
+import { KNIGHT_QUOTA, questMachine, type QuestStage } from '../game/quest-machine.ts'
 import { MAX_HP, quest, useQuest, type Dir, type Mode } from '../game/store.ts'
+
+/** Wide enough for the panels beside the game. The game fits the height, so width alone decides. */
+const SIDE_BY_SIDE = '(min-width: 960px)'
+const ANY_TOUCH = '(any-pointer: coarse)'
 
 const MODE_LABEL: Record<Mode, string> = {
   loading: 'Detecting…',
@@ -43,15 +55,56 @@ const panelTitle =
   'mb-2 flex justify-between gap-2 font-display text-base font-bold tracking-[0.04em] text-sun'
 
 const panelMuted = 'font-body text-[0.85rem] text-muted'
-const padButton = 'rounded-lg border-2 border-panel-edge bg-panel text-ink'
 
 const actionButton =
   'grid size-16 place-items-center rounded-full border-2 bg-panel font-display text-[1.3rem] leading-none text-ink'
+
+const headerButton =
+  'relative rounded border-2 border-panel-edge bg-panel px-3 py-1 font-display text-ink hover:border-lens'
 
 const linkButton = 'mt-2.5 border-0 bg-transparent p-0 text-[0.8rem] text-muted underline'
 
 const stageDescription = (stage: QuestStage) =>
   questMachine.getStateNodeById(`quest.${stage}`).description ?? ''
+
+function useMedia(query: string) {
+  return useSyncExternalStore(
+    (onChange) => {
+      const list = matchMedia(query)
+      list.addEventListener('change', onChange)
+
+      return () => list.removeEventListener('change', onChange)
+    },
+    () => matchMedia(query).matches,
+    () => false,
+  )
+}
+
+const sideBySide = () => matchMedia(SIDE_BY_SIDE).matches
+
+/** Touch controls show on any touch screen, until the player picks up a keyboard; a touch brings them back. */
+function useTouchControls() {
+  const touch = useMedia(ANY_TOUCH)
+  const [usingKeys, setUsingKeys] = useState(false)
+
+  useEffect(() => {
+    const onKey = () => setUsingKeys(true)
+
+    const onPointer = (event: PointerEvent) => {
+      if (event.pointerType === 'touch') setUsingKeys(false)
+    }
+
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('pointerdown', onPointer)
+
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('pointerdown', onPointer)
+    }
+  }, [])
+
+  return touch && !usingKeys
+}
 
 /** Detects Pomerium, restores the player's identity, and handles the sign-in round trip. */
 function useBoot() {
@@ -80,7 +133,8 @@ function useDialogKeys() {
     const onKey = (event: KeyboardEvent) => {
       // A handled key (like the Enter that starts the game) must not also advance a dialog.
       if (event.repeat) return
-      const { deny, dialog } = quest.get()
+      const { deny, dialog, journalOpen, menuOpen } = quest.get()
+      const journalKey = event.key === 'i' || event.key === 'I'
       const confirm = event.key === 'Enter' || event.key === ' ' || event.key === 'e' || event.key === 'E'
 
       if (deny && (confirm || event.key === 'Escape')) {
@@ -89,6 +143,12 @@ function useDialogKeys() {
       } else if (dialog && confirm) {
         event.preventDefault()
         quest.advance()
+      } else if (journalOpen && (journalKey || event.key === 'Escape')) {
+        event.preventDefault()
+        quest.closeJournal()
+      } else if (!dialog && !deny && !menuOpen && journalKey && !sideBySide()) {
+        event.preventDefault()
+        quest.openJournal()
       } else if (!dialog && !deny && event.key === 'Escape') {
         event.preventDefault()
 
@@ -202,44 +262,140 @@ function Splash() {
 }
 
 function Kingdom() {
+  const wide = useMedia(SIDE_BY_SIDE)
+  const touch = useTouchControls()
+
+  useEffect(() => {
+    if (wide) quest.closeJournal()
+  }, [wide])
+
   return (
-    <div className={`mx-auto max-w-[1240px] pt-[18px] pb-10 ${gutter}`}>
-      <header className="mb-3.5 flex flex-wrap items-baseline gap-x-4 gap-y-1">
-        <h1 className="m-0 font-display text-[1.7rem] font-bold text-sun">Pomerium Quest</h1>
-        <p className="m-0 text-xs tracking-[0.04em] text-muted uppercase">
+    <div
+      className={`kingdom mx-auto max-w-[1240px] pt-[18px] pb-4 ${gutter}`}
+      data-touch={touch || undefined}
+    >
+      <header className="mb-3.5 flex flex-wrap items-center gap-x-4 gap-y-1">
+        <h1 className="m-0 font-display text-[1.7rem] leading-tight font-bold text-sun max-sm:text-[1.3rem]">
+          Pomerium Quest
+        </h1>
+        <p className="m-0 text-xs tracking-[0.04em] text-muted uppercase max-sm:hidden">
           Chapter one · Identity and access
         </p>
-        <button
-          className="ml-auto rounded border-2 border-panel-edge bg-panel px-3 py-1 font-display text-ink hover:border-lens"
-          type="button"
-          onClick={() => quest.openMenu()}
-        >
-          Menu <span className="text-muted">(Esc)</span>
-        </button>
+        <div className="ml-auto flex gap-2">
+          {!wide && <JournalButton />}
+          <button className={headerButton} type="button" onClick={() => quest.openMenu()}>
+            Menu {!touch && <span className="text-muted">(Esc)</span>}
+          </button>
+        </div>
       </header>
-      <div className="grid grid-cols-1 items-start gap-5 min-[921px]:grid-cols-[minmax(0,1fr)_340px]">
-        <section className="grid min-w-0 gap-2" aria-label="Game">
-          <Hud />
-          <div className="relative aspect-[4/3] w-full max-w-full overflow-hidden rounded-md border-4 border-night-deep bg-night-deep shadow-[0_0_0_2px_var(--color-panel-edge),0_18px_50px_rgb(0_0_0/0.45)]">
+      <div className="kingdom-layout">
+        <section className="play" aria-label="Game" onContextMenu={(event) => event.preventDefault()}>
+          <div className="[grid-area:hud]">
+            <Hud />
+          </div>
+          <div className="relative aspect-[4/3] w-full overflow-hidden rounded-md border-4 border-night-deep bg-night-deep shadow-[0_0_0_2px_var(--color-panel-edge),0_18px_50px_rgb(0_0_0/0.45)] [grid-area:game]">
             <GameCanvas />
             <Toast />
             <DialogBox />
             <DenyScreen />
             <PauseMenu />
           </div>
-          <p className="m-0 text-[0.85rem] text-muted">
-            Move: arrows or WASD · Talk and read: E or Enter · Sword: Space or J · Menu: Esc
-          </p>
-          <TouchPad />
+          {touch ? (
+            <TouchControls />
+          ) : (
+            <p className="m-0 text-[0.85rem] text-muted [grid-area:hint]">
+              Move: arrows or WASD · Talk and read: E or Enter · Sword: Space or J · Menu: Esc
+              {!wide && ' · Journal: I'}
+            </p>
+          )}
         </section>
-        <aside className="grid min-w-0 gap-3.5">
-          <IdentityPanel />
-          <GearPanel />
-          <AccessLog />
-          <Lessons />
-        </aside>
+        <Journal drawer={!wide} />
       </div>
     </div>
+  )
+}
+
+function JournalButton() {
+  const unread = useQuest((s) => s.journalUnread)
+
+  return (
+    <button id="journal-button" className={headerButton} type="button" onClick={() => quest.openJournal()}>
+      Journal
+      {unread && (
+        <span
+          className="absolute -top-1 -right-1 size-2.5 rounded-full bg-neon shadow-[0_0_0_2px_var(--color-night)]"
+          aria-label="new entries"
+        />
+      )}
+    </button>
+  )
+}
+
+/** The panels: beside the game when there is room, otherwise in a drawer that pauses the game. */
+function Journal({ drawer }: { readonly drawer: boolean }) {
+  const open = useQuest((s) => s.journalOpen)
+
+  const panels = (
+    <>
+      <IdentityPanel />
+      <GearPanel />
+      <AccessLog />
+      <Lessons />
+    </>
+  )
+
+  if (!drawer) return <aside className="grid min-w-0 gap-3.5">{panels}</aside>
+
+  return open ? <JournalDrawer>{panels}</JournalDrawer> : null
+}
+
+function JournalDrawer({ children }: { readonly children: ReactNode }) {
+  const drawer = useRef<HTMLElement>(null)
+
+  // Hand focus back to the button that opened the drawer.
+  useEffect(() => () => document.getElementById('journal-button')?.focus(), [])
+
+  const trapFocus = (event: ReactKeyboardEvent) => {
+    if (event.key !== 'Tab' || !drawer.current) return
+    const focusable = drawer.current.querySelectorAll<HTMLElement>('button, a[href]')
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last?.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first?.focus()
+    }
+  }
+
+  return (
+    <>
+      <div
+        className="fixed inset-0 z-40 bg-night-deep/70"
+        aria-hidden="true"
+        onClick={() => quest.closeJournal()}
+      />
+      <aside
+        ref={drawer}
+        className="journal-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="journal-title"
+        onKeyDown={trapFocus}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <h2 id="journal-title" className="m-0 font-display text-[1.4rem] text-sun">
+            Journal
+          </h2>
+          <button className={headerButton} type="button" onClick={() => quest.closeJournal()} autoFocus>
+            Close
+          </button>
+        </div>
+        {children}
+      </aside>
+    </>
   )
 }
 
@@ -269,6 +425,11 @@ function PauseMenu() {
         <button className={menuButton} type="button" onClick={() => quest.closeMenu()} autoFocus>
           Resume
         </button>
+        {!sideBySide() && (
+          <button className={menuButton} type="button" onClick={() => quest.openJournal()}>
+            Journal
+          </button>
+        )}
         <button className={menuButton} type="button" onClick={() => quest.save()}>
           Save game
         </button>
@@ -319,13 +480,14 @@ function GameCanvas() {
     }
   }, [])
 
-  return <div className="pixelated" ref={host} />
+  // Tapping the scene above an open dialog advances it, as A does.
+  return <div className="pixelated" ref={host} onClick={() => quest.get().dialog && quest.advance()} />
 }
 
 function Hud() {
   const hp = useQuest((s) => s.hp)
   const region = useQuest((s) => s.region)
-  const xp = useQuest((s) => s.xp)
+  const defeated = useQuest((s) => s.defeated)
 
   return (
     <div className="flex items-center justify-between gap-3 font-display text-[1.05rem]">
@@ -337,7 +499,9 @@ function Hud() {
         ))}
       </span>
       <span className="text-sun">{region}</span>
-      <span className="text-muted tabular-nums">Slimes {xp}</span>
+      <span className="text-muted tabular-nums">
+        Bots {defeated.bot} · Phish {defeated.phish}
+      </span>
     </div>
   )
 }
@@ -399,7 +563,7 @@ function DialogBox() {
         </ul>
       )}
       <p className="mt-2 text-right font-display text-[0.85rem] text-muted">
-        {last ? 'Enter to close' : 'Enter to continue ▾'}
+        {last ? 'Enter or tap to close' : 'Enter or tap to continue ▾'}
       </p>
     </div>
   )
@@ -474,62 +638,98 @@ function DenyScreen() {
   )
 }
 
-function TouchPad() {
-  const hold = (dir: Dir) => ({
-    onPointerDown: () => quest.hold(dir),
-    onPointerUp: () => quest.hold(null),
-    onPointerLeave: () => quest.hold(null),
-    onPointerCancel: () => quest.hold(null),
-  })
+/** A touch on A or B first dismisses a deny screen or advances a dialog. */
+const tap = (action: () => void) => () => {
+  const { deny, dialog } = quest.get()
 
-  const tap = (action: () => void) => () => {
-    const { deny, dialog } = quest.get()
+  if (deny) quest.closeDeny()
+  else if (dialog) quest.advance()
+  else action()
+}
 
-    if (deny) quest.closeDeny()
-    else if (dialog) quest.advance()
-    else action()
-  }
-
+function TouchControls() {
   return (
-    <div
-      className="touch-pad touch-none items-center justify-between gap-4 px-1 py-2 select-none"
-      aria-label="Touch controls"
-    >
-      <div className="dpad grid grid-cols-[repeat(3,52px)] grid-rows-[repeat(3,52px)]">
-        <button type="button" className={`${padButton} [grid-area:up]`} aria-label="Up" {...hold('up')}>
-          ▲
-        </button>
-        <button type="button" className={`${padButton} [grid-area:left]`} aria-label="Left" {...hold('left')}>
-          ◀
-        </button>
-        <button
-          type="button"
-          className={`${padButton} [grid-area:right]`}
-          aria-label="Right"
-          {...hold('right')}
-        >
-          ▶
-        </button>
-        <button type="button" className={`${padButton} [grid-area:down]`} aria-label="Down" {...hold('down')}>
-          ▼
-        </button>
-      </div>
-      <div className="flex gap-3.5">
+    <>
+      <DPad />
+      <div
+        className="flex items-center justify-end gap-3.5 self-center [grid-area:actions]"
+        aria-label="Actions"
+      >
         <button
           type="button"
           className={`${actionButton} border-neon`}
-          onClick={tap(() => quest.press('attack'))}
+          onPointerDown={tap(() => quest.press('attack'))}
         >
           B<small className="font-body text-[0.6rem]">Sword</small>
         </button>
         <button
           type="button"
           className={`${actionButton} border-lime`}
-          onClick={tap(() => quest.press('interact'))}
+          onPointerDown={tap(() => quest.press('interact'))}
         >
           A<small className="font-body text-[0.6rem]">Talk</small>
         </button>
       </div>
+    </>
+  )
+}
+
+const ARROWS: Record<Dir, { readonly glyph: string; readonly place: string }> = {
+  up: { glyph: '▲', place: 'top-1.5 left-1/2 -translate-x-1/2' },
+  down: { glyph: '▼', place: 'bottom-1.5 left-1/2 -translate-x-1/2' },
+  left: { glyph: '◀', place: 'top-1/2 left-2 -translate-y-1/2' },
+  right: { glyph: '▶', place: 'top-1/2 right-2 -translate-y-1/2' },
+}
+
+/**
+ * One round pad rather than four buttons, so a thumb can slide from one direction to the next.
+ * The direction is the touch's angle from the center, in four 90° sectors; the middle means stop.
+ */
+function DPad() {
+  const [active, setActive] = useState<Dir | null>(null)
+  const held = useRef<Dir | null>(null)
+
+  const hold = (dir: Dir | null) => {
+    if (dir === held.current) return
+    held.current = dir
+    setActive(dir)
+    quest.hold(dir)
+  }
+
+  const steer = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const box = event.currentTarget.getBoundingClientRect()
+    const dx = event.clientX - (box.left + box.width / 2)
+    const dy = event.clientY - (box.top + box.height / 2)
+
+    if (Math.hypot(dx, dy) < box.width * 0.1) hold(null)
+    else if (Math.abs(dx) > Math.abs(dy)) hold(dx > 0 ? 'right' : 'left')
+    else hold(dy > 0 ? 'down' : 'up')
+  }
+
+  return (
+    <div
+      className="relative size-[156px] touch-none self-center rounded-full border-2 border-panel-edge bg-panel [grid-area:dpad]"
+      role="group"
+      aria-label="Direction pad"
+      onPointerDown={(event) => {
+        event.currentTarget.setPointerCapture(event.pointerId)
+        steer(event)
+      }}
+      onPointerMove={(event) => {
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) steer(event)
+      }}
+      onPointerUp={() => hold(null)}
+      onPointerCancel={() => hold(null)}
+      onLostPointerCapture={() => hold(null)}
+    >
+      {Object.entries(ARROWS).map(([dir, { glyph, place }]) => (
+        <span
+          key={dir}
+          className={`pointer-events-none absolute grid size-11 place-items-center rounded-lg text-[1.1rem] ${place} ${active === dir ? 'bg-lens text-night-deep' : 'text-muted'}`}
+        >
+          {glyph}
+        </span>
+      ))}
     </div>
   )
 }
@@ -566,7 +766,7 @@ function IdentityPanel() {
 
 function GearPanel() {
   const stage = useQuest((s) => s.stage)
-  const xp = useQuest((s) => s.xp)
+  const defeated = useQuest((s) => s.defeated)
   const steel = stage === 'armed'
 
   return (
@@ -582,10 +782,17 @@ function GearPanel() {
           <span className={panelMuted}>starter</span>
         </li>
         <li>
-          <span>Slimes defeated</span>
+          <span>Bot slimes defeated</span>
           <span className="tabular-nums">
-            {xp}
-            {xp < KNIGHT_XP && ` / ${KNIGHT_XP}`}
+            {defeated.bot}
+            {defeated.bot < KNIGHT_QUOTA && ` / ${KNIGHT_QUOTA}`}
+          </span>
+        </li>
+        <li>
+          <span>Phish defeated</span>
+          <span className="tabular-nums">
+            {defeated.phish}
+            {defeated.phish < KNIGHT_QUOTA && ` / ${KNIGHT_QUOTA}`}
           </span>
         </li>
       </ul>

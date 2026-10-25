@@ -93,27 +93,129 @@
     image-rendering: pixelated;
   }
 
-  /* Touch controls only where there is no keyboard. */
-  .touch-pad {
-    display: none;
+  /* The game fits the screen height: its width is what the height leaves after the header,
+     stats bar and controls (--chrome), at 4:3. Wide screens put the panels beside it. */
+  .kingdom {
+    --chrome: 150px;
+    --game-w: max(256px, calc((100dvh - var(--chrome)) * 4 / 3));
   }
 
-  @media (pointer: coarse) {
-    .touch-pad {
-      display: flex;
+  .kingdom[data-touch] {
+    --chrome: 330px;
+  }
+
+  .kingdom-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+    align-items: start;
+  }
+
+  @media (min-width: 960px) {
+    .kingdom-layout {
+      grid-template-columns: minmax(0, var(--game-w)) 340px;
+      justify-content: center;
     }
   }
 
-  .dpad {
-    grid-template-areas:
-      '. up .'
-      'left . right'
-      '. down .';
+  .play {
+    display: grid;
+    gap: 8px;
+    width: 100%;
+    max-width: var(--game-w);
+    margin-inline: auto;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'hud' 'game' 'hint';
+    -webkit-touch-callout: none;
+    user-select: none;
+    touch-action: manipulation;
+  }
+
+  /* Portrait touch: the pad under the game, the A and B buttons beside it. */
+  .kingdom[data-touch] .play {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: 'hud hud' 'game game' 'dpad actions';
+  }
+
+  /* A phone on its side: the game takes the height, with the pad and buttons either side. */
+  @media (orientation: landscape) and (max-height: 600px) {
+    .kingdom[data-touch] {
+      --chrome: 96px;
+    }
+
+    .kingdom[data-touch] .play {
+      max-width: none;
+      grid-template-columns: auto minmax(0, var(--game-w)) auto;
+      grid-template-areas: 'dpad hud actions' 'dpad game actions';
+      justify-content: center;
+      column-gap: 16px;
+    }
+  }
+
+  /* The Journal: a side panel in landscape, a bottom sheet in portrait. */
+  .journal-drawer {
+    position: fixed;
+    z-index: 50;
+    display: grid;
+    align-content: start;
+    gap: 14px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 16px max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) 16px;
+    background: var(--color-night);
+    border-left: 2px solid var(--color-panel-edge);
+    inset: 0 0 0 auto;
+    width: min(360px, 100%);
+    animation: journal-from-right 160ms ease-out;
+  }
+
+  @media (orientation: portrait) {
+    .journal-drawer {
+      inset: auto 0 0 0;
+      width: auto;
+      max-height: 85dvh;
+      border-left: 0;
+      border-top: 2px solid var(--color-panel-edge);
+      border-radius: 12px 12px 0 0;
+      animation-name: journal-from-bottom;
+    }
+  }
+
+  @keyframes journal-from-right {
+    from {
+      transform: translateX(100%);
+    }
+  }
+
+  @keyframes journal-from-bottom {
+    from {
+      transform: translateY(100%);
+    }
+  }
+}
+
+/* Unlayered so it wins over the header's utilities: a phone on its side needs every pixel of height. */
+@media (orientation: landscape) and (max-height: 600px) {
+  .kingdom[data-touch] {
+    padding-top: 8px;
+  }
+
+  .kingdom[data-touch] header {
+    margin-bottom: 4px;
+  }
+
+  .kingdom[data-touch] header p {
+    display: none;
+  }
+
+  .kingdom[data-touch] h1 {
+    font-size: 1.2rem;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-blink {
+  .animate-blink,
+  .journal-drawer {
     animation: none;
   }
 }

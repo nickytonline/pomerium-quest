@@ -22,9 +22,13 @@ const PALETTE = {
   D: '#7a5126', // dark wood
   I: '#dfe7f1', // steel
   E: '#8d97a8', // steel shadow
-  Q: '#4fbf8f', // slime
-  R: '#a6f0cf', // slime highlight
-  Z: '#0e2a1f', // slime eyes
+  b: '#8fa3c7', // bot slime steel
+  h: '#d6e2f5', // bot slime highlight
+  z: '#1b1530', // bot slime visor
+  r: '#ff5d73', // bot slime LEDs
+  f: '#6a4fd8', // phish
+  p: '#ff7ac8', // phish fins
+  y: '#ffd86b', // phish lure
   U: '#ffb27a', // fur highlight
   Y: '#e3b48a', // cream shadow
   P: '#a46bff', // lens violet (cyan → violet → magenta)
@@ -140,22 +144,23 @@ const SHIELD_WOOD = [
   '................',
 ]
 
-const SLIME = [
+// A slime with a steel shell, an antenna and an LED visor: mindless, and at every gate at once.
+const BOT_SLIME = [
   [
     '................',
-    '................',
-    '................',
-    '................',
-    '................',
+    '.......KK.......',
+    '......KrrK......',
+    '.......KK.......',
+    '.......KK.......',
     '......KKKK......',
-    '....KKQQQQKK....',
-    '...KQRRQQQQQK...',
-    '..KQRRQQQQQQQK..',
-    '..KQQQZQQZQQQK..',
-    '.KQQQQZQQZQQQQK.',
-    '.KQQQQQQQQQQQQK.',
-    '.KQQQQQQQQQQQQK.',
-    '..KKQQQQQQQQKK..',
+    '....KKbbbbKK....',
+    '...KbhhbbbbbK...',
+    '..KbhhbbbbbbbK..',
+    '..KbzzzzzzzzbK..',
+    '.KbbzrzzzzrzbbK.',
+    '.KbbzzzzzzzzbbK.',
+    '.KbbbbbbbbbbbbK.',
+    '..KKbbbbbbbbKK..',
     '....KKKKKKKK....',
     '................',
   ],
@@ -163,21 +168,43 @@ const SLIME = [
     '................',
     '................',
     '................',
-    '................',
-    '................',
-    '................',
-    '................',
+    '.......KK.......',
+    '......KzzK......',
+    '.......KK.......',
+    '.......KK.......',
     '.....KKKKKK.....',
-    '...KKQRRQQQKK...',
-    '..KQRRQQQQQQQK..',
-    '.KQQQQZQQZQQQQK.',
-    'KQQQQQZQQZQQQQQK',
-    'KQQQQQQQQQQQQQQK',
-    '.KKQQQQQQQQQQKK.',
+    '...KKbhhbbbKK...',
+    '..KbhhbbbbbbbK..',
+    '.KbbzzzzzzzzbbK.',
+    'KbbbzrzzzzrzbbbK',
+    'KbbbbbbbbbbbbbbK',
+    '.KKbbbbbbbbbbKK.',
     '...KKKKKKKKKK...',
     '................',
   ],
 ]
+
+// An anglerfish dangling a friendly-looking light: bait for anyone who trusts it.
+const PHISH_LIT = [
+  '................',
+  '.....KKK........',
+  '....K...K.......',
+  '..KK....K.......',
+  '.KyyK...K.......',
+  '.KyyK..KKKKK..KK',
+  '..KK.KffffffKKpK',
+  '....KfWKffffKppK',
+  '...KfffffffffppK',
+  '...KWKWKffffffpK',
+  '...KfWfWfffffKpK',
+  '....KfffffffK.KK',
+  '.....KKKKKKK....',
+  '................',
+  '................',
+  '................',
+]
+
+const PHISH = [PHISH_LIT, PHISH_LIT.map((r, i) => (i === 4 || i === 5 ? r.replace(/y/g, 'W') : r))]
 
 // ---- tiny PNG encoder ----
 const CRC = new Int32Array(256).map((_, n) => {
@@ -302,7 +329,8 @@ function sheet(file, cells, { scale = 1, checker = false } = {}) {
 
 const grids = {
   ...dog,
-  slime: SLIME,
+  bot_slime: BOT_SLIME,
+  phish: PHISH,
   sword_wood: [SWORD_WOOD],
   sword_steel: [SWORD_STEEL],
   shield_wood: [SHIELD_WOOD],
@@ -321,7 +349,7 @@ const dogCells = [dog.down, dog.up, dog.right, dog.left]
 // Game sheets. Frame order is load-bearing: see app/src/game/sprites.ts.
 sheet(join(assets, 'dog.png'), [dogCells.flat()])
 
-sheet(join(assets, 'items.png'), [[SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, ...SLIME]])
+sheet(join(assets, 'items.png'), [[SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, ...BOT_SLIME, ...PHISH]])
 
 sheet(join(assets, 'npcs.png'), [npcs])
 
@@ -332,7 +360,7 @@ sheet(
   join(out, 'preview.png'),
   [
     ...dogCells.map((r) => [...r, null, null]),
-    [SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, SLIME[0], SLIME[1]],
+    [SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, ...BOT_SLIME, ...PHISH],
     npcs.slice(0, 5),
     [npcs[5], ...tiles.slice(0, 4)],
   ],
