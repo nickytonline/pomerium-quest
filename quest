@@ -2,6 +2,7 @@
 # Pomerium Quest: run the game behind a real Pomerium on a local k3d (k3s-in-Docker) cluster.
 #
 #   ./quest up        create the cluster (if needed), build, deploy, print the URL
+#   ./quest dev       same, but the game runs its Vite dev server and hot-reloads app/src
 #   ./quest down      delete the cluster
 #   ./quest status    show pods
 #   ./quest logs X    follow logs for pomerium | quest | oracle
@@ -66,6 +67,7 @@ cluster() {
   k3d cluster create "$CLUSTER" \
     --port "${PORT}:${PORT}@loadbalancer" \
     --k3s-arg "--disable=traefik@server:0" \
+    --volume "$(pwd):/quest-src@server:0" \
     --wait
 }
 
@@ -77,9 +79,23 @@ images() {
   k3d image import -c "$CLUSTER" pomerium-quest/app:dev pomerium-quest/oracle:dev
 }
 
+dev_image() {
+  say "Building the dev image"
+  docker build --target app-dev -t pomerium-quest/app-dev:dev .
+  docker build --target oracle -t pomerium-quest/oracle:dev .
+  say "Loading images into the cluster"
+  k3d image import -c "$CLUSTER" pomerium-quest/app-dev:dev pomerium-quest/oracle:dev
+}
+
+# Clusters made before `./quest dev` existed don't have the repo mounted into the node.
+require_source_mount() {
+  docker inspect -f '{{range .Mounts}}{{.Destination}} {{end}}' "k3d-${CLUSTER}-server-0" | grep -q /quest-src ||
+    fail "This cluster was created without the source mount dev mode needs. Recreate it: ./quest down && ./quest dev"
+}
+
 deploy() {
   say "Rendering Pomerium config and manifests from app/src/game/zones.ts"
-  node scripts/render.ts
+  QUEST_DEV="${QUEST_DEV:-0}" node scripts/render.ts
   kc apply -f deploy/.generated/manifests.yaml
   kc -n "$NAMESPACE" create secret generic quest-tls \
     --from-file=tls.crt="${CERTS}/tls.crt" \
@@ -109,6 +125,15 @@ case "${1:-up}" in
     deploy
     say "Ready: $(url)"
     ;;
+  dev)
+    require
+    certs
+    cluster
+    require_source_mount
+    dev_image
+    QUEST_DEV=1 deploy
+    say "Ready: $(url) (hot-reloading app/src; ./quest deploy goes back to the production build)"
+    ;;
   deploy)
     require
     certs
@@ -129,7 +154,7 @@ case "${1:-up}" in
     kc -n "$NAMESPACE" logs -f "deployment/${2:-pomerium}"
     ;;
   *)
-    echo "usage: ./quest [up|deploy|down|status|logs pomerium|quest|oracle]"
+    echo "usage: ./quest [up|dev|deploy|down|status|test|logs pomerium|quest|oracle]"
     exit 1
     ;;
 esac

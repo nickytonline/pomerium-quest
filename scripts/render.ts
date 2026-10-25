@@ -3,7 +3,8 @@
 //
 //   node scripts/render.ts            → deploy/.generated/*.yaml
 //
-// Environment: QUEST_DOMAIN (default localhost.pomerium.io), QUEST_PORT (default 443).
+// Environment: QUEST_DOMAIN (default localhost.pomerium.io), QUEST_PORT (default 443), and
+// QUEST_DEV=1 to run the game's Vite dev server from the source mounted into the cluster.
 import { generateKeyPairSync, randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -18,10 +19,15 @@ const STATE = join(ROOT, '.quest')
 const NAMESPACE = 'quest'
 const POMERIUM_IMAGE = 'pomerium/pomerium:v0.33.4'
 const APP_IMAGE = 'pomerium-quest/app:dev'
+const APP_DEV_IMAGE = 'pomerium-quest/app-dev:dev'
+
+/** Where `./quest up` mounts this repo inside the k3d node. */
+const NODE_SOURCE = '/quest-src'
 const ORACLE_IMAGE = 'pomerium-quest/oracle:dev'
 
 const DOMAIN = process.env['QUEST_DOMAIN'] ?? 'localhost.pomerium.io'
 const PORT = Number(process.env['QUEST_PORT'] ?? '443')
+const DEV = process.env['QUEST_DEV'] === '1'
 const hostPort = PORT === 443 ? '' : `:${PORT}`
 const publicUrl = (subdomain: string) => `https://${subdomain}.${DOMAIN}${hostPort}`
 const svc = (name: string, port: number) => `http://${name}.${NAMESPACE}.svc.cluster.local:${port}`
@@ -123,12 +129,23 @@ function pomeriumConfig(secrets: Secrets): Yaml {
         policy: policy(zone.policy),
       })),
       // Everything else (the game shell and its assets) is public.
-      { from: game, to: app, allow_public_unauthenticated_access: true, pass_identity_headers: true },
+      // In dev it also carries Vite's hot-reload websocket.
+      {
+        from: game,
+        to: app,
+        allow_public_unauthenticated_access: true,
+        pass_identity_headers: true,
+        allow_websockets: DEV,
+      },
     ],
   }
 }
 
 const labels = (name: string) => ({ app: name })
+
+/** The game's source folders the dev server serves straight from the host. */
+const DEV_SOURCES = ['src', 'public']
+const devVolume = (dir: string) => `dev-${dir}`
 
 const caVolume: Yaml = {
   name: 'certs',
@@ -225,7 +242,7 @@ function manifests(secrets: Secrets): Yaml[] {
     service('pomerium', PORT, 8443, 'LoadBalancer'),
     deployment(
       'quest',
-      APP_IMAGE,
+      DEV ? APP_DEV_IMAGE : APP_IMAGE,
       3000,
       {
         env: [
@@ -234,11 +251,25 @@ function manifests(secrets: Secrets): Yaml[] {
           { name: 'ORACLE_ADMIN_URL', value: svc('oracle', 4000) },
           secretEnv('ORACLE_ADMIN_KEY', 'oracle-admin-key'),
           { name: 'NODE_EXTRA_CA_CERTS', value: '/certs/ca.crt' },
+          ...(DEV ? [{ name: 'QUEST_HMR_PORT', value: String(PORT) }] : []),
         ],
-        volumeMounts: [{ name: 'certs', mountPath: '/certs', readOnly: true }],
+        volumeMounts: [
+          { name: 'certs', mountPath: '/certs', readOnly: true },
+          ...(DEV ? DEV_SOURCES.map((dir) => ({ name: devVolume(dir), mountPath: `/repo/app/${dir}` })) : []),
+        ],
         readinessProbe: { httpGet: { path: '/', port: 3000 }, periodSeconds: 3 },
       },
-      { volumes: [caVolume] },
+      {
+        volumes: [
+          caVolume,
+          ...(DEV
+            ? DEV_SOURCES.map((dir) => ({
+                name: devVolume(dir),
+                hostPath: { path: `${NODE_SOURCE}/app/${dir}`, type: 'Directory' },
+              }))
+            : []),
+        ],
+      },
     ),
     service('quest', 3000, 3000),
     deployment(

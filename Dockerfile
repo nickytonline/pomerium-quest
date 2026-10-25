@@ -22,6 +22,15 @@ USER node
 EXPOSE 3000
 CMD ["node", ".output/server/index.mjs"]
 
+# `./quest dev`: the Vite dev server in the cluster. app/src and app/public are mounted over the
+# copies here, so edits on the host hot-reload behind the real Pomerium.
+FROM deps AS app-dev
+COPY tsconfig.base.json ./
+COPY app app
+ENV PORT=3000
+EXPOSE 3000
+CMD ["npm", "run", "dev", "-w", "app", "--", "--host", "0.0.0.0"]
+
 FROM ${NODE_IMAGE} AS oracle-deps
 WORKDIR /repo
 COPY package.json package-lock.json ./

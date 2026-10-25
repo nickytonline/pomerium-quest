@@ -20,8 +20,16 @@ const reloadOnGameChange = (): Plugin => ({
   },
 })
 
+const hmrPort = process.env['QUEST_HMR_PORT'] ? Number(process.env['QUEST_HMR_PORT']) : undefined
+
 export default defineConfig({
-  server: { port: 3000 },
+  server: {
+    port: 3000,
+    // Under `./quest dev` the dev server runs in the cluster: Pomerium forwards the in-cluster host,
+    // and the browser reaches the HMR socket through Pomerium's public port.
+    allowedHosts: ['.svc.cluster.local'],
+    hmr: hmrPort ? { clientPort: hmrPort } : true,
+  },
   plugins: [
     tailwindcss(),
     tanstackStart({ spa: { enabled: true } }),
