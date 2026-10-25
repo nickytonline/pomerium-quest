@@ -10,3 +10,5 @@ certs/
 .nitro/
 .tanstack/
 app/src/routeTree.gen.ts
+.quest/
+deploy/.generated/

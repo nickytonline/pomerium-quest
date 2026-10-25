@@ -1,0 +1,9 @@
+**/node_modules
+**/.output
+**/.nitro
+**/.tanstack
+.git
+.quest
+deploy/.generated
+art
+tools

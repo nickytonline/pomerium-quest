@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+# Pomerium Quest: run the game behind a real Pomerium on a local k3d (k3s-in-Docker) cluster.
+#
+#   ./quest up        create the cluster (if needed), build, deploy, print the URL
+#   ./quest down      delete the cluster
+#   ./quest status    show pods
+#   ./quest logs X    follow logs for pomerium | quest | oracle
+#
+# Environment: QUEST_PORT (default 443), QUEST_DOMAIN (default localhost.pomerium.io).
+set -euo pipefail
+
+cd "$(dirname "$0")"
+
+CLUSTER=quest
+CONTEXT="k3d-${CLUSTER}"
+NAMESPACE=quest
+PORT="${QUEST_PORT:-443}"
+DOMAIN="${QUEST_DOMAIN:-localhost.pomerium.io}"
+STATE=.quest
+CERTS="${STATE}/certs"
+export QUEST_PORT="$PORT" QUEST_DOMAIN="$DOMAIN"
+
+say() { printf '\033[1;35m▸\033[0m %s\n' "$*"; }
+fail() { printf '\033[1;31m✗\033[0m %s\n' "$*" >&2; exit 1; }
+kc() { kubectl --context "$CONTEXT" "$@"; }
+
+url() {
+  if [ "$PORT" = 443 ]; then echo "https://game.${DOMAIN}"; else echo "https://game.${DOMAIN}:${PORT}"; fi
+}
+
+require() {
+  local missing=()
+  for tool in docker k3d kubectl mkcert node; do
+    command -v "$tool" >/dev/null 2>&1 || missing+=("$tool")
+  done
+  if [ ${#missing[@]} -gt 0 ]; then
+    echo "Missing: ${missing[*]}"
+    echo "macOS:  brew install ${missing[*]/node/node}"
+    echo "Linux:  see https://k3d.io, https://kubernetes.io/docs/tasks/tools, https://github.com/FiloSottile/mkcert"
+    exit 1
+  fi
+  docker info >/dev/null 2>&1 || fail "Docker isn't running. Start Docker Desktop (or OrbStack/Colima) and try again."
+}
+
+cluster_exists() { k3d cluster list "$CLUSTER" >/dev/null 2>&1; }
+
+certs() {
+  mkdir -p "$CERTS"
+  if [ ! -f "${CERTS}/tls.crt" ]; then
+    say "Creating a locally trusted certificate for *.${DOMAIN} (mkcert may ask for your password once)"
+    mkcert -install
+    mkcert -cert-file "${CERTS}/tls.crt" -key-file "${CERTS}/tls.key" "*.${DOMAIN}" "${DOMAIN}"
+  fi
+  cp "$(mkcert -CAROOT)/rootCA.pem" "${CERTS}/ca.crt"
+}
+
+cluster() {
+  if cluster_exists; then
+    say "Cluster ${CLUSTER} already exists"
+    return
+  fi
+  if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+    fail "Port ${PORT} is in use. Free it, or run with another port: QUEST_PORT=8443 ./quest up"
+  fi
+  say "Creating k3d cluster ${CLUSTER} on port ${PORT}"
+  k3d cluster create "$CLUSTER" \
+    --port "${PORT}:${PORT}@loadbalancer" \
+    --k3s-arg "--disable=traefik@server:0" \
+    --wait
+}
+
+images() {
+  say "Building images"
+  docker build --target app -t pomerium-quest/app:dev .
+  docker build --target oracle -t pomerium-quest/oracle:dev .
+  say "Loading images into the cluster"
+  k3d image import -c "$CLUSTER" pomerium-quest/app:dev pomerium-quest/oracle:dev
+}
+
+deploy() {
+  say "Rendering Pomerium config and manifests from app/src/game/zones.ts"
+  node scripts/render.ts
+  kc apply -f deploy/.generated/manifests.yaml
+  kc -n "$NAMESPACE" create secret generic quest-tls \
+    --from-file=tls.crt="${CERTS}/tls.crt" \
+    --from-file=tls.key="${CERTS}/tls.key" \
+    --from-file=ca.crt="${CERTS}/ca.crt" \
+    --dry-run=client -o yaml | kc apply -f -
+  # Pick up the DNS rewrite, new images and new config.
+  kc -n kube-system rollout restart deployment/coredns
+  kc -n "$NAMESPACE" rollout restart deployment
+  say "Waiting for Pomerium, the Oracle and the game"
+  kc -n kube-system rollout status deployment/coredns --timeout=120s
+  for d in oracle quest pomerium; do kc -n "$NAMESPACE" rollout status "deployment/${d}" --timeout=180s; done
+}
+
+case "${1:-up}" in
+  up)
+    require
+    certs
+    cluster
+    images
+    deploy
+    say "Ready: $(url)"
+    ;;
+  deploy)
+    require
+    certs
+    images
+    deploy
+    say "Ready: $(url)"
+    ;;
+  down)
+    k3d cluster delete "$CLUSTER"
+    ;;
+  status)
+    kc -n "$NAMESPACE" get pods,svc
+    ;;
+  logs)
+    kc -n "$NAMESPACE" logs -f "deployment/${2:-pomerium}"
+    ;;
+  *)
+    echo "usage: ./quest [up|deploy|down|status|logs pomerium|quest|oracle]"
+    exit 1
+    ;;
+esac
