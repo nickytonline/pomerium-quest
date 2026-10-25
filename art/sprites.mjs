@@ -12,9 +12,8 @@ const PALETTE = {
   O: '#ef8f55', // fur
   L: '#fbd3a6', // cream fur
   S: '#c8643c', // fur shadow
-  G: '#e9b44c', // gold (glasses frame, studs)
-  C: '#3fe3f2', // lens cyan
-  M: '#ff4fb8', // lens magenta
+  G: '#e9b44c', // gold (studs)
+  M: '#ff4fb8', // tongue
   W: '#ffffff', // glint
   N: '#3a2630', // nose
   J: '#2a2950', // jacket
@@ -32,19 +31,20 @@ const PALETTE = {
   y: '#ffd86b', // phish lure
   U: '#ffb27a', // fur highlight
   Y: '#e3b48a', // cream shadow
-  P: '#a46bff', // lens violet (cyan → violet → magenta)
+  Q: '#0b0910', // sunglasses black
+  q: '#4d4866', // sunglasses lens sheen
 }
 
 const HEAD_DOWN = [
-  '.K............K.',
-  '.KK..........KK.',
-  '.KSK........KSK.',
-  '.KSOKKKKKKKKOSK.',
+  '...K........K...',
+  '..KSK......KSK..',
+  '..KSOK....KOSK..',
+  '.KOSOOKKKKOOSOK.',
   'KOOOOUUUUUUOOOOK',
-  'KOOGGGGGGGGGGOOK',
-  'KOKCCWCOOCWCCKOK',
-  'KOKPPPPOOPPPPKOK',
-  'KOOKMMKLLKMMKOOK',
+  'KOOQQQQQQQQQQOOK',
+  'KOQQQWQOOQWQQQOK',
+  'KOQqqQQOOQQqqQOK',
+  'KOOKQQKLLKQQKOOK',
   'KSOLLLNNNNLLLOSK',
   '.KSOLLLNNLLLOSK.',
   '.KJKSLLKKLLSKJK.',
@@ -54,13 +54,13 @@ const HEAD_DOWN = [
 ]
 
 const HEAD_UP = [
-  '.K............K.',
-  '.KK..........KK.',
-  '.KSK........KSK.',
-  '.KSOKKKKKKKKOSK.',
+  '...K........K...',
+  '..KOK......KOK..',
+  '..KOOK....KOOK..',
+  '.KOOOOKKKKOOOOK.',
   'KOOOOOOOOOOOOOOK',
   'KOOUOOOOOOOOUOOK',
-  'KGOOOOOOOOOOOOGK',
+  'KQOOOOOOOOOOOOQK',
   'KSOOOOOOOOOOOOSK',
   'KSSOOOOOOOOOOSSK',
   '.KSOOOOOOOOOOSK.',
@@ -72,15 +72,15 @@ const HEAD_UP = [
 ]
 
 const HEAD_RIGHT = [
+  '................',
   '...K............',
-  '...KK...........',
-  '..KSOK..........',
-  '..KSOOKKKK......',
-  '.KOOOOUUUUK.....',
-  '.KOOOOOOGGGGGK..',
-  'KOOOOOOOKCWCKKKK',
-  'KOOOOOOOKPPKOOON',
-  'KSOOOOOOOKMKLLLN',
+  '..KSK.KKK.......',
+  '..KSOKUUUKK.....',
+  '.KOOOOUUUUUK....',
+  '.KOOOOOOQQQQQK..',
+  'KOOOOQQQQQWQKKKK',
+  'KOOOOOOOQqqQOOON',
+  'KSOOOOOOOQQKLLLN',
   'KSOOOOOLLLLLKKKK',
   '.KSOOLLLLLLLLK..',
   'KKKSKLLLLLLKK...',
