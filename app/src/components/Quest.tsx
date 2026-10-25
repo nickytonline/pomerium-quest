@@ -89,6 +89,11 @@ function useDialogKeys() {
       } else if (dialog && confirm) {
         event.preventDefault()
         quest.advance()
+      } else if (!dialog && !deny && event.key === 'Escape') {
+        event.preventDefault()
+
+        if (quest.get().menuOpen) quest.closeMenu()
+        else quest.openMenu()
       }
     }
 
@@ -106,15 +111,35 @@ export function Quest() {
   return started ? <Kingdom /> : <Splash />
 }
 
+/** A save exists once a game has been started (progress saves as you play). */
+const hasSave = () => quest.get().progress.playedBefore
+
+const begin = () => {
+  const firstTime = !quest.get().progress.playedBefore
+
+  quest.progress({ playedBefore: true })
+  quest.start()
+
+  // Open the intro after this keypress finishes, so the same Enter doesn't also advance it.
+  if (firstTime) setTimeout(() => quest.say(INTRO), 0)
+}
+
+/** Clears progress and starts from the village. Your sign-in (and its claims) is kept. */
+const newGame = () => {
+  quest.resetProgress()
+  const { identity } = quest.get()
+
+  if (identity.authenticated) quest.send({ type: 'SIGNED_IN', groups: identity.groups })
+  begin()
+}
+
+const menuButton =
+  'w-full rounded border-2 border-panel-edge bg-panel px-4 py-2.5 text-left font-display text-[1.05rem] text-ink hover:border-lens focus-visible:border-lens'
+
 function Splash() {
   const mode = useQuest((s) => s.mode)
-
-  const begin = () => {
-    quest.start()
-
-    // Open the intro after this keypress finishes, so the same Enter doesn't also advance it.
-    if (quest.get().progress.lessons.length === 0) setTimeout(() => quest.say(INTRO), 0)
-  }
+  const saved = useQuest(hasSave)
+  const [confirmingNew, setConfirmingNew] = useState(false)
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -149,8 +174,24 @@ function Splash() {
         onClick={begin}
         autoFocus
       >
-        Press Enter to start
+        {saved ? 'Press Enter to continue' : 'Press Enter to start'}
       </button>
+      {saved &&
+        (confirmingNew ? (
+          <p className="m-0 text-[0.9rem]">
+            Start a new game? Your lessons and progress are cleared.{' '}
+            <button className={linkButton} type="button" onClick={newGame}>
+              Yes, start over
+            </button>{' '}
+            <button className={linkButton} type="button" onClick={() => setConfirmingNew(false)}>
+              Keep my save
+            </button>
+          </p>
+        ) : (
+          <button className={linkButton} type="button" onClick={() => setConfirmingNew(true)}>
+            New game
+          </button>
+        ))}
       <p className="m-0 text-[0.85rem] text-muted">
         {mode === 'loading' && 'Looking for Pomerium…'}
         {mode === 'pomerium' && 'Connected to a real Pomerium. Every gate is a live route.'}
@@ -168,6 +209,13 @@ function Kingdom() {
         <p className="m-0 text-xs tracking-[0.04em] text-muted uppercase">
           Chapter one · Identity and access
         </p>
+        <button
+          className="ml-auto rounded border-2 border-panel-edge bg-panel px-3 py-1 font-display text-ink hover:border-lens"
+          type="button"
+          onClick={() => quest.openMenu()}
+        >
+          Menu <span className="text-muted">(Esc)</span>
+        </button>
       </header>
       <div className="grid grid-cols-1 items-start gap-5 min-[921px]:grid-cols-[minmax(0,1fr)_340px]">
         <section className="grid min-w-0 gap-2" aria-label="Game">
@@ -177,9 +225,10 @@ function Kingdom() {
             <Toast />
             <DialogBox />
             <DenyScreen />
+            <PauseMenu />
           </div>
           <p className="m-0 text-[0.85rem] text-muted">
-            Move: arrows or WASD · Talk and read: E or Enter · Sword: Space or J
+            Move: arrows or WASD · Talk and read: E or Enter · Sword: Space or J · Menu: Esc
           </p>
           <TouchPad />
         </section>
@@ -189,6 +238,64 @@ function Kingdom() {
           <AccessLog />
           <Lessons />
         </aside>
+      </div>
+    </div>
+  )
+}
+
+function PauseMenu() {
+  const open = useQuest((s) => s.menuOpen)
+  const savedAt = useQuest((s) => s.savedAt)
+  const [confirmingRestart, setConfirmingRestart] = useState(false)
+
+  if (!open) return null
+
+  const restart = () => {
+    quest.resetProgress()
+    location.reload()
+  }
+
+  return (
+    <div
+      className="absolute inset-0 grid place-items-center bg-night-deep/85 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="menu-title"
+    >
+      <div className="grid w-[min(320px,100%)] gap-2.5 rounded-md border-2 border-ink bg-night-deep p-5">
+        <h2 id="menu-title" className="m-0 font-display text-[1.4rem] text-sun">
+          Paused
+        </h2>
+        <button className={menuButton} type="button" onClick={() => quest.closeMenu()} autoFocus>
+          Resume
+        </button>
+        <button className={menuButton} type="button" onClick={() => quest.save()}>
+          Save game
+        </button>
+        {confirmingRestart ? (
+          <div className="grid gap-2 rounded border-2 border-deny p-3 text-[0.9rem]">
+            <span>Restart from the village? Your lessons and progress are cleared.</span>
+            <div className="flex gap-2">
+              <button className={menuButton} type="button" onClick={restart}>
+                Restart
+              </button>
+              <button className={menuButton} type="button" onClick={() => setConfirmingRestart(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button className={menuButton} type="button" onClick={() => setConfirmingRestart(true)}>
+            Restart
+          </button>
+        )}
+        <button className={menuButton} type="button" onClick={() => quest.quit()}>
+          Quit to title
+        </button>
+        <p className="m-0 text-[0.8rem] text-muted">
+          Progress saves automatically as you play{savedAt ? `; last saved at ${savedAt}` : ''}. Your sign-in
+          stays with Pomerium.
+        </p>
       </div>
     </div>
   )
@@ -516,7 +623,6 @@ function AccessLog() {
 
 function Lessons() {
   const learned = useQuest((s) => s.progress.lessons)
-  const [confirming, setConfirming] = useState(false)
 
   return (
     <section className={panel}>
@@ -541,28 +647,6 @@ function Lessons() {
           ),
         )}
       </ol>
-      {confirming ? (
-        <p className="mt-2.5 text-[0.85rem]">
-          Start over from the beginning?{' '}
-          <button
-            className={linkButton}
-            type="button"
-            onClick={() => {
-              quest.resetProgress()
-              location.reload()
-            }}
-          >
-            Yes, reset
-          </button>{' '}
-          <button className={linkButton} type="button" onClick={() => setConfirming(false)}>
-            Keep playing
-          </button>
-        </p>
-      ) : (
-        <button className={linkButton} type="button" onClick={() => setConfirming(true)}>
-          Reset progress
-        </button>
-      )}
     </section>
   )
 }

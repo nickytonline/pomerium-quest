@@ -15,6 +15,8 @@ export interface Progress {
   readonly dir: Dir
   readonly lessons: readonly LessonId[]
   readonly brokenRocks: readonly string[]
+  /** True once a game has been started, so the title screen offers Continue. */
+  readonly playedBefore: boolean
   /** Simulated-mode identity; in Pomerium mode the identity comes from the session. */
   readonly sim: {
     readonly signedIn: boolean
@@ -88,6 +90,7 @@ const freshProgress = (): Progress => ({
   dir: 'right',
   lessons: [],
   brokenRocks: [],
+  playedBefore: false,
   sim: { signedIn: false, groups: [], pendingGroups: [] },
 })
 
