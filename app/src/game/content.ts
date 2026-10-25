@@ -141,6 +141,6 @@ export const INTRO: Page[] = [
   },
   {
     who: 'Pomerium Quest',
-    text: 'The old woman in the house to your right has been waiting for you. Go say hello.',
+    text: 'The sage in the house to your right has been waiting for you. Go say hello.',
   },
 ]
