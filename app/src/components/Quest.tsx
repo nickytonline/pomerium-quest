@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { probe } from '../game/access.ts'
 import { INTRO, LESSONS, LESSON_ORDER } from '../game/content.ts'
-import type { Identity } from '../game/ppl.ts'
 import { KNIGHT_XP, questMachine, type QuestStage } from '../game/quest-machine.ts'
-import { MAX_HP, quest, useQuest, type Dir } from '../game/store.ts'
+import { MAX_HP, quest, useQuest, type Dir, type Mode } from '../game/store.ts'
 
-const groupsOf = (identity: Identity) => {
-  const groups = identity.claims['groups']
-  return Array.isArray(groups) ? groups.map(String) : []
+const MODE_LABEL: Record<Mode, string> = {
+  loading: 'Detecting…',
+  pomerium: 'Live Pomerium',
+  simulated: 'Simulated',
 }
 
 const STAGE_LABEL: Record<QuestStage, string> = {
@@ -19,20 +19,25 @@ const STAGE_LABEL: Record<QuestStage, string> = {
   armed: 'Armed knight',
 }
 
-const stageDescription = (stage: QuestStage) => questMachine.getStateNodeById(`quest.${stage}`).description ?? ''
+const stageDescription = (stage: QuestStage) =>
+  questMachine.getStateNodeById(`quest.${stage}`).description ?? ''
 
 /** Detects Pomerium, restores the player's identity, and handles the sign-in round trip. */
 function useBoot() {
   useEffect(() => {
     const url = new URL(location.href)
     const returning = url.searchParams.has('signedin')
+
     if (returning) history.replaceState(null, '', url.pathname)
     void probe(quest.get().progress).then(({ mode, identity }) => {
       quest.setMode(mode, identity)
-      if (identity.authenticated) quest.send({ type: 'SIGNED_IN', groups: groupsOf(identity) })
+
+      if (identity.authenticated) quest.send({ type: 'SIGNED_IN', groups: identity.groups })
       else quest.send({ type: 'SIGNED_OUT' })
+
       if (returning) {
         quest.start()
+
         if (identity.authenticated) quest.toast(`Signed in as ${identity.email}`, 'allow')
       }
     })
@@ -46,6 +51,7 @@ function useDialogKeys() {
       if (event.repeat || event.defaultPrevented) return
       const { deny, dialog } = quest.get()
       const confirm = event.key === 'Enter' || event.key === ' ' || event.key === 'e' || event.key === 'E'
+
       if (deny && (confirm || event.key === 'Escape')) {
         event.preventDefault()
         quest.closeDeny()
@@ -54,7 +60,9 @@ function useDialogKeys() {
         quest.advance()
       }
     }
+
     window.addEventListener('keydown', onKey)
+
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 }
@@ -62,28 +70,39 @@ function useDialogKeys() {
 export function Quest() {
   useBoot()
   useDialogKeys()
-  const started = useQuest(s => s.started)
+  const started = useQuest((s) => s.started)
+
   return started ? <Kingdom /> : <Splash />
 }
 
 function Splash() {
-  const mode = useQuest(s => s.mode)
+  const mode = useQuest((s) => s.mode)
+
   const begin = () => {
     quest.start()
+
     if (quest.get().progress.lessons.length === 0) quest.say(INTRO)
   }
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Enter') return
       event.preventDefault()
       begin()
     }
+
     window.addEventListener('keydown', onKey)
+
     return () => window.removeEventListener('keydown', onKey)
   }, [])
+
   return (
     <main className="splash">
-      <img className="splash-art" src="/assets/splash.png" alt="The Pomerium Pomeranian in aviators and a leather jacket" />
+      <img
+        className="splash-art"
+        src="/assets/splash.png"
+        alt="The Pomerium Pomeranian in aviators and a leather jacket"
+      />
       <h1 className="splash-title">Pomerium Quest</h1>
       <p className="splash-tagline">Every gate has a guard. Every guard checks you, every time.</p>
       <button className="splash-start" type="button" onClick={begin} autoFocus>
@@ -133,23 +152,27 @@ function GameCanvas() {
   useEffect(() => {
     let destroyed = false
     let destroy = () => {}
+
     void import('../game/scene.ts').then(({ startGame }) => {
       if (destroyed || !host.current) return
       const game = startGame(host.current)
       destroy = () => game.destroy(true)
     })
+
     return () => {
       destroyed = true
       destroy()
     }
   }, [])
+
   return <div className="canvas-host" ref={host} />
 }
 
 function Hud() {
-  const hp = useQuest(s => s.hp)
-  const region = useQuest(s => s.region)
-  const xp = useQuest(s => s.xp)
+  const hp = useQuest((s) => s.hp)
+  const region = useQuest((s) => s.region)
+  const xp = useQuest((s) => s.xp)
+
   return (
     <div className="hud">
       <span className="hearts" aria-label={`${hp} of ${MAX_HP} hearts`}>
@@ -166,13 +189,16 @@ function Hud() {
 }
 
 function Toast() {
-  const toast = useQuest(s => s.toast)
+  const toast = useQuest((s) => s.toast)
   useEffect(() => {
     if (!toast) return
     const timer = setTimeout(() => quest.clearToast(toast.id), 2600)
+
     return () => clearTimeout(timer)
   }, [toast])
+
   if (!toast) return null
+
   return (
     <div className={`toast toast-${toast.tone}`} role="status">
       {toast.text}
@@ -181,11 +207,14 @@ function Toast() {
 }
 
 function DialogBox() {
-  const dialog = useQuest(s => s.dialog)
+  const dialog = useQuest((s) => s.dialog)
+
   if (!dialog) return null
   const page = dialog.pages[dialog.index]
+
   if (!page) return null
   const last = dialog.index === dialog.pages.length - 1
+
   return (
     <div className="dialog" role="dialog" aria-live="polite" onClick={() => quest.advance()}>
       <p className="dialog-who">{page.who}</p>
@@ -193,9 +222,14 @@ function DialogBox() {
       {page.code && <pre className="dialog-code">{page.code}</pre>}
       {page.links && page.links.length > 0 && (
         <ul className="doc-links">
-          {page.links.map(doc => (
+          {page.links.map((doc) => (
             <li key={doc.href + doc.label}>
-              <a href={doc.href} target="_blank" rel="noreferrer" onClick={event => event.stopPropagation()}>
+              <a
+                href={doc.href}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(event) => event.stopPropagation()}
+              >
                 Docs: {doc.label} ↗
               </a>
             </li>
@@ -208,8 +242,10 @@ function DialogBox() {
 }
 
 function DenyScreen() {
-  const deny = useQuest(s => s.deny)
+  const deny = useQuest((s) => s.deny)
+
   if (!deny) return null
+
   return (
     <div className="deny" role="alertdialog" aria-labelledby="deny-title">
       <div className="deny-card">
@@ -233,7 +269,7 @@ function DenyScreen() {
         )}
         <p className="deny-hint">{deny.hint}</p>
         <ul className="doc-links">
-          {deny.links.map(doc => (
+          {deny.links.map((doc) => (
             <li key={doc.href + doc.label}>
               <a href={doc.href} target="_blank" rel="noreferrer">
                 Docs: {doc.label} ↗
@@ -256,12 +292,15 @@ function TouchPad() {
     onPointerLeave: () => quest.hold(null),
     onPointerCancel: () => quest.hold(null),
   })
+
   const tap = (action: () => void) => () => {
     const { deny, dialog } = quest.get()
+
     if (deny) quest.closeDeny()
     else if (dialog) quest.advance()
     else action()
   }
+
   return (
     <div className="pad" aria-label="Touch controls">
       <div className="dpad">
@@ -291,18 +330,18 @@ function TouchPad() {
 }
 
 function IdentityPanel() {
-  const identity = useQuest(s => s.identity)
-  const mode = useQuest(s => s.mode)
-  const stage = useQuest(s => s.stage)
+  const identity = useQuest((s) => s.identity)
+  const mode = useQuest((s) => s.mode)
+  const stage = useQuest((s) => s.stage)
+
   const claims = identity.authenticated
-    ? JSON.stringify({ email: identity.email, groups: groupsOf(identity) }, null, 2)
+    ? JSON.stringify({ email: identity.email, groups: identity.groups }, null, 2)
     : null
+
   return (
     <section className="panel">
       <h2>Your identity</h2>
-      <p className={`mode mode-${mode}`}>
-        {mode === 'pomerium' ? 'Live Pomerium' : mode === 'simulated' ? 'Simulated' : 'Detecting…'}
-      </p>
+      <p className={`mode mode-${mode}`}>{MODE_LABEL[mode]}</p>
       {claims ? (
         <pre className="claims">{claims}</pre>
       ) : (
@@ -317,9 +356,10 @@ function IdentityPanel() {
 }
 
 function GearPanel() {
-  const stage = useQuest(s => s.stage)
-  const xp = useQuest(s => s.xp)
+  const stage = useQuest((s) => s.stage)
+  const xp = useQuest((s) => s.xp)
   const steel = stage === 'armed'
+
   return (
     <section className="panel">
       <h2>Gear</h2>
@@ -345,7 +385,8 @@ function GearPanel() {
 }
 
 function AccessLog() {
-  const log = useQuest(s => s.log)
+  const log = useQuest((s) => s.log)
+
   return (
     <section className="panel">
       <h2>Access log</h2>
@@ -353,10 +394,12 @@ function AccessLog() {
         <p className="muted">Every request a guard checks shows up here.</p>
       ) : (
         <ol className="log">
-          {log.map(entry => (
+          {log.map((entry) => (
             <li key={entry.id}>
               <span className="log-time">{entry.at}</span>
-              <span className={`chip chip-${entry.decision === 'ALLOW' ? 'allow' : 'deny'}`}>{entry.decision}</span>
+              <span className={`chip chip-${entry.decision === 'ALLOW' ? 'allow' : 'deny'}`}>
+                {entry.decision}
+              </span>
               <code className="log-req">
                 {entry.method} {entry.path}
               </code>
@@ -370,15 +413,19 @@ function AccessLog() {
 }
 
 function Lessons() {
-  const learned = useQuest(s => s.progress.lessons)
+  const learned = useQuest((s) => s.progress.lessons)
   const [confirming, setConfirming] = useState(false)
+
   return (
     <section className="panel">
       <h2>
-        Lessons <span className="muted">{learned.length} of {LESSON_ORDER.length}</span>
+        Lessons{' '}
+        <span className="muted">
+          {learned.length} of {LESSON_ORDER.length}
+        </span>
       </h2>
       <ol className="lessons">
-        {LESSON_ORDER.map(id =>
+        {LESSON_ORDER.map((id) =>
           learned.includes(id) ? (
             <li key={id}>
               <a href={LESSONS[id].link.href} target="_blank" rel="noreferrer">

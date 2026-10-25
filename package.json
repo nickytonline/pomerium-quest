@@ -8,6 +8,10 @@
     "type": "git",
     "url": "git+https://github.com/nickytonline/pomerium-quest.git"
   },
+  "workspaces": [
+    "app",
+    "oracle"
+  ],
   "type": "module",
   "scripts": {
     "check": "vp check",
@@ -19,16 +23,12 @@
     "typescript": "5.9.3",
     "vite-plus": "1.4.0"
   },
-  "packageManager": "npm@12.2.0",
-  "workspaces": [
-    "app",
-    "oracle"
-  ],
   "overrides": {
     "vite": "npm:@voidzero-dev/vite-plus-core@1.4.0",
     "vitest": "5.0.5"
   },
   "engines": {
     "node": ">=24.22.1"
-  }
+  },
+  "packageManager": "npm@12.2.0"
 }

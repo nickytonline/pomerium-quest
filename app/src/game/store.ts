@@ -6,7 +6,9 @@ import type { EvalLine, Identity } from './ppl.ts'
 import { persist, questActor, resetQuest, type QuestEvent, type QuestStage } from './quest-machine.ts'
 
 export type Dir = 'down' | 'up' | 'right' | 'left'
+
 export type Mode = 'loading' | 'pomerium' | 'simulated'
+
 export interface Progress {
   readonly x: number
   readonly y: number
@@ -72,7 +74,7 @@ export interface QuestState {
 }
 
 export const MAX_HP = 5
-export const ANONYMOUS: Identity = { authenticated: false, email: '', claims: {} }
+export const ANONYMOUS: Identity = { authenticated: false, email: '', groups: [] }
 const STORAGE_KEY = 'pomerium-quest/progress/v1'
 
 const freshProgress = (): Progress => ({
@@ -87,6 +89,7 @@ const freshProgress = (): Progress => ({
 function loadProgress(): Progress {
   try {
     const raw = globalThis.localStorage?.getItem(STORAGE_KEY)
+
     // SAFETY: written only by saveProgress below; a missing field falls back to a fresh value.
     return raw ? { ...freshProgress(), ...(JSON.parse(raw) as Partial<Progress>) } : freshProgress()
   } catch {
@@ -126,13 +129,15 @@ let nextId = 1
 
 function update(patch: Partial<QuestState>) {
   state = { ...state, ...patch }
+
   for (const listener of listeners) listener()
 }
 
 export const quest = {
   get: () => state,
-  subscribe(listener: () => void) {
+  subscribe: (listener: () => void) => {
     listeners.add(listener)
+
     return () => listeners.delete(listener)
   },
   isPaused: () => state.dialog !== null || state.deny !== null || !state.started,
@@ -174,11 +179,15 @@ export const quest = {
   },
   advance: () => {
     const dialog = state.dialog
+
     if (!dialog) return
+
     if (dialog.index + 1 < dialog.pages.length) {
       update({ dialog: { ...dialog, index: dialog.index + 1 } })
+
       return
     }
+
     const done = dialogDone
     dialogDone = undefined
     update({ dialog: null, inputResumesAt: performance.now() + 200 })

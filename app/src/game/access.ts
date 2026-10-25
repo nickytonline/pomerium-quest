@@ -24,7 +24,12 @@ const SIM_EMAIL = `hero@${KINGDOM_DOMAIN}`
 
 export function simulatedIdentity(progress: Progress): Identity {
   if (!progress.sim.signedIn) return ANONYMOUS
-  return { authenticated: true, email: SIM_EMAIL, claims: { email: SIM_EMAIL, groups: [...progress.sim.groups] } }
+
+  return {
+    authenticated: true,
+    email: SIM_EMAIL,
+    groups: progress.sim.groups,
+  }
 }
 
 const redirected = (response: Response) => response.type === 'opaqueredirect' || response.status === 302
@@ -32,14 +37,24 @@ const redirected = (response: Response) => response.type === 'opaqueredirect' ||
 /** Finds out whether Pomerium is in front of us and, if so, who we are. */
 export async function probe(progress: Progress): Promise<{ mode: Mode; identity: Identity }> {
   try {
-    const response = await fetch('/zones/oracle/', { redirect: 'manual', headers: { accept: 'application/json' } })
+    const response = await fetch('/zones/oracle/', {
+      redirect: 'manual',
+      headers: { accept: 'application/json' },
+    })
+
     if (redirected(response)) return { mode: 'pomerium', identity: ANONYMOUS }
     // SAFETY: our own server route returns this JSON shape (app/src/server/zones.ts).
     const body = (await response.json()) as OracleResponse
+
     if (body.mode === 'pomerium' && body.player) {
       const { email, groups } = body.player
-      return { mode: 'pomerium', identity: { authenticated: true, email, claims: { email, groups: [...groups] } } }
+
+      return {
+        mode: 'pomerium',
+        identity: { authenticated: true, email, groups },
+      }
     }
+
     return { mode: 'simulated', identity: simulatedIdentity(progress) }
   } catch {
     return { mode: 'simulated', identity: simulatedIdentity(progress) }
@@ -50,6 +65,7 @@ async function readMessage(response: Response) {
   try {
     // SAFETY: zone handlers answer with JSON; a non-JSON body just yields no message.
     const body = (await response.json()) as ZoneResponse
+
     return body.message ?? null
   } catch {
     return null
@@ -64,15 +80,26 @@ export async function requestZone(
   action: string,
 ): Promise<Outcome> {
   const path = `${zone.prefix}/${action}`
+
   if (mode === 'simulated') {
     if (!identity.authenticated) return { kind: 'signin' }
+
     if (!decide(zone, identity, { method, path }).allow) return { kind: 'deny' }
   }
+
   try {
-    const response = await fetch(path, { method, redirect: 'manual', headers: { accept: 'application/json' } })
+    const response = await fetch(path, {
+      method,
+      redirect: 'manual',
+      headers: { accept: 'application/json' },
+    })
+
     if (redirected(response)) return { kind: 'signin' }
+
     if (response.status === 403) return { kind: 'deny' }
+
     if (!response.ok) return { kind: 'error', message: `${response.status} ${response.statusText}` }
+
     return { kind: 'allow', message: await readMessage(response) }
   } catch (error) {
     return { kind: 'error', message: String(error) }

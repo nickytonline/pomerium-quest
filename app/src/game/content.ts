@@ -1,4 +1,5 @@
 // Everything the characters say, what the signs show and what each lesson links to.
+import type { ZoneId } from './zones.ts'
 
 const DOCS = 'https://www.pomerium.com/docs'
 
@@ -85,7 +86,7 @@ export const LESSON_ORDER: readonly LessonId[] = [
 export const link = (lesson: LessonId) => LESSONS[lesson].link
 
 /** What each gate's sign says above its route config. */
-export const SIGN_TEXT: Record<string, string> = {
+export const SIGN_TEXT: Partial<Record<ZoneId, string>> = {
   fields:
     'This gate is a route. Pomerium checks every request for this path against the policy below, then forwards it to the app behind the route.',
   town: 'The town only lets in citizens: people whose email domain is kingdom.com.',
@@ -95,7 +96,7 @@ export const SIGN_TEXT: Record<string, string> = {
     'One route, different answers. Reading (GET) is open to citizens. Writing (POST) needs the scribes group.',
 }
 
-export const SIGN_DOCS: Record<string, readonly DocLink[]> = {
+export const SIGN_DOCS: Partial<Record<ZoneId, readonly DocLink[]>> = {
   fields: [link('route'), { label: 'authenticated_user', href: `${DOCS}/internals/ppl` }],
   town: [{ label: 'The domain criterion', href: `${DOCS}/internals/ppl` }],
   guild: [link('route')],

@@ -4,91 +4,134 @@
 import type { PPLNode, Zone } from './zones.ts'
 
 export interface Identity {
-  authenticated: boolean
-  email: string
-  claims: Record<string, unknown>
+  readonly authenticated: boolean
+  readonly email: string
+  /** The `groups` claim from the identity provider, as carried in the session. */
+  readonly groups: readonly string[]
 }
 
 export interface RequestInfo {
-  method: string
-  path: string
+  readonly method: 'GET' | 'POST'
+  readonly path: string
 }
 
 export interface EvalLine {
-  text: string
-  ok: boolean
-  actual?: string
+  readonly text: string
+  readonly ok: boolean
+  readonly actual?: string
 }
 
 export interface Decision {
-  allow: boolean
-  lines: EvalLine[]
+  readonly allow: boolean
+  readonly lines: readonly EvalLine[]
 }
 
 interface Evaluated {
-  ok: boolean
-  lines: EvalLine[]
+  readonly ok: boolean
+  readonly lines: readonly EvalLine[]
 }
+
+type Operator = Extract<PPLNode, { kind: 'and' | 'or' }>
+
+type Criterion = Exclude<PPLNode, Operator>
 
 const pad = (n: number) => ' '.repeat(n)
 
-function claimValues(identity: Identity, name: string): string[] {
-  const value = identity.claims[name]
-  if (Array.isArray(value)) return value.map(String)
-  if (value === undefined || value === null) return []
-  return [String(value)]
+/** The YAML lines Pomerium reads for one criterion. */
+function criterionYaml(node: Criterion): readonly string[] {
+  switch (node.kind) {
+    case 'authenticated_user':
+      return ['authenticated_user: true']
+    case 'claim':
+      return [`claim/${node.claim}: ${node.value}`]
+    case 'domain':
+    case 'email':
+    case 'http_method':
+      return [`${node.kind}:`, `  is: ${node.is}`]
+  }
+}
+
+/** The same criterion on one line, for the denial screen. */
+function criterionLabel(node: Criterion): string {
+  switch (node.kind) {
+    case 'authenticated_user':
+      return 'authenticated_user: true'
+    case 'claim':
+      return `claim/${node.claim}: ${node.value}`
+    case 'domain':
+    case 'email':
+    case 'http_method':
+      return `${node.kind}: { is: ${node.is} }`
+  }
+}
+
+export function pplYaml(node: PPLNode, indent: number): string[] {
+  if (node.kind === 'and' || node.kind === 'or') {
+    const items = node.rules.flatMap((rule) => {
+      const [first = '', ...rest] = pplYaml(rule, indent + 4)
+
+      return [`${pad(indent + 2)}- ${first.trimStart()}`, ...rest]
+    })
+
+    return [`${pad(indent)}${node.kind}:`, ...items]
+  }
+
+  return criterionYaml(node).map((line) => `${pad(indent)}${line}`)
+}
+
+interface Check {
+  readonly ok: boolean
+  readonly actual: string
+}
+
+function check(node: Criterion, id: Identity, req: RequestInfo): Check {
+  const domain = id.email.split('@')[1] ?? ''
+
+  switch (node.kind) {
+    case 'authenticated_user':
+      return { ok: id.authenticated, actual: id.authenticated ? 'you are signed in' : 'no session' }
+    case 'domain':
+      return { ok: domain === node.is, actual: `your domain: ${domain || 'none'}` }
+    case 'email':
+      return { ok: id.email === node.is, actual: `your email: ${id.email || 'none'}` }
+    case 'http_method':
+      return { ok: req.method === node.is, actual: `this request: ${req.method}` }
+    case 'claim': {
+      const values = node.claim === 'groups' ? id.groups : [id.email]
+
+      return { ok: values.includes(node.value), actual: `your ${node.claim}: [${values.join(', ')}]` }
+    }
+  }
 }
 
 function evaluate(node: PPLNode, id: Identity, req: RequestInfo, indent: number): Evaluated {
-  const [key, value] = Object.entries(node)[0] as [string, unknown]
-  if (key === 'and' || key === 'or') {
-    const parts = (value as PPLNode[]).map(child => {
-      const ev = evaluate(child, id, req, indent + 4)
-      ev.lines[0] = { ...ev.lines[0], text: `${pad(indent + 2)}- ${ev.lines[0].text.trimStart()}` }
-      return ev
+  if (node.kind === 'and' || node.kind === 'or') {
+    const parts = node.rules.map((rule) => evaluate(rule, id, req, indent + 4))
+    const ok = node.kind === 'and' ? parts.every((part) => part.ok) : parts.some((part) => part.ok)
+
+    const children = parts.flatMap((part) => {
+      const [first, ...rest] = part.lines
+
+      return first ? [{ ...first, text: `${pad(indent + 2)}- ${first.text.trimStart()}` }, ...rest] : []
     })
-    const ok = key === 'and' ? parts.every(p => p.ok) : parts.some(p => p.ok)
-    return { ok, lines: [{ text: `${pad(indent)}${key}:`, ok }, ...parts.flatMap(p => p.lines)] }
+
+    return { ok, lines: [{ text: `${pad(indent)}${node.kind}:`, ok }, ...children] }
   }
-  const leaf = (ok: boolean, text: string, actual: string): Evaluated => ({
-    ok,
-    lines: [{ text: `${pad(indent)}${text}`, ok, actual }],
-  })
-  const domain = id.email.split('@')[1] ?? ''
-  switch (key) {
-    case 'authenticated_user':
-      return leaf(id.authenticated, 'authenticated_user: true', id.authenticated ? 'you are signed in' : 'no session')
-    case 'domain': {
-      const want = (value as { is: string }).is
-      return leaf(domain === want, `domain: { is: ${want} }`, `your domain: ${domain || 'none'}`)
-    }
-    case 'email': {
-      const want = (value as { is: string }).is
-      return leaf(id.email === want, `email: { is: ${want} }`, `your email: ${id.email || 'none'}`)
-    }
-    case 'http_method': {
-      const want = (value as { is: string }).is
-      return leaf(req.method === want, `http_method: { is: ${want} }`, `this request: ${req.method}`)
-    }
-    default: {
-      if (key.startsWith('claim/')) {
-        const name = key.slice('claim/'.length)
-        const have = claimValues(id, name)
-        return leaf(have.includes(String(value)), `${key}: ${value}`, `your ${name}: [${have.join(', ')}]`)
-      }
-      throw new Error(`unsupported PPL criterion ${key}`)
-    }
-  }
+
+  const { ok, actual } = check(node, id, req)
+
+  return { ok, lines: [{ text: `${pad(indent)}${criterionLabel(node)}`, ok, actual }] }
 }
 
 export function decide(zone: Zone, id: Identity, req: RequestInfo): Decision {
   const ev = evaluate(zone.policy.allow, id, req, 2)
+
   return { allow: ev.ok, lines: [{ text: 'allow:', ok: ev.ok }, ...ev.lines] }
 }
 
 /** Route config as YAML, the way it appears in the Pomerium config file. */
 export function routeYaml(zone: Zone, host: string, upstream: string): string {
-  const lines = [
+  return [
     `- from: https://${host}`,
     `  prefix: ${zone.prefix}`,
     `  to: ${upstream}`,
@@ -96,23 +139,5 @@ export function routeYaml(zone: Zone, host: string, upstream: string): string {
     `  policy:`,
     `    allow:`,
     ...pplYaml(zone.policy.allow, 6),
-  ]
-  return lines.join('\n')
-}
-
-export function pplYaml(node: PPLNode, indent: number): string[] {
-  const [key, value] = Object.entries(node)[0] as [string, unknown]
-  if (key === 'and' || key === 'or') {
-    return [
-      `${pad(indent)}${key}:`,
-      ...(value as PPLNode[]).flatMap(child => {
-        const lines = pplYaml(child, indent + 4)
-        lines[0] = `${pad(indent + 2)}- ${lines[0].trimStart()}`
-        return lines
-      }),
-    ]
-  }
-  if (value === true || typeof value === 'string') return [`${pad(indent)}${key}: ${value}`]
-  const [op, operand] = Object.entries(value as Record<string, string>)[0]
-  return [`${pad(indent)}${key}:`, `${pad(indent + 2)}${op}: ${operand}`]
+  ].join('\n')
 }

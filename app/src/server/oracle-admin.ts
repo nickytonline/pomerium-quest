@@ -25,7 +25,7 @@ export const OracleAdminLive = Layer.effect(
         client.execute,
         Effect.flatMap(HttpClientResponse.filterStatusOk),
         Effect.asVoid,
-        Effect.mapError(error => new OracleUnavailable({ reason: error.message })),
+        Effect.mapError((error) => new OracleUnavailable({ reason: error.message })),
       )
 
     return { grant }

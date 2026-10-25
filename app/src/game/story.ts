@@ -1,41 +1,56 @@
 // What happens when the player talks, reads or walks into a gate. The scene handles
 // movement and drawing; this module handles the conversation with Pomerium.
 import { refreshClaimsUrl, requestZone, signInUrl, simulatedIdentity, type Outcome } from './access.ts'
-import { BOOKS, END_SIGN, LESSONS, SIGN_DOCS, SIGN_TEXT, link, type LessonId, type Page } from './content.ts'
+import {
+  BOOKS,
+  END_SIGN,
+  LESSONS,
+  LESSON_ORDER,
+  SIGN_DOCS,
+  SIGN_TEXT,
+  link,
+  type LessonId,
+  type Page,
+} from './content.ts'
 import { decide, routeYaml, type Identity } from './ppl.ts'
 import { KNIGHT_XP, hasSteel, isAtLeast, stage } from './quest-machine.ts'
-import { quest, type DenyView } from './store.ts'
+import { quest, type DenyView, type LogEntry } from './store.ts'
 import type { NpcId } from './world.ts'
-import { KINGDOM_DOMAIN, zoneById, type Zone } from './zones.ts'
+import { KINGDOM_DOMAIN, zoneById, type Zone, type ZoneId } from './zones.ts'
 
 const UPSTREAM = 'http://quest.quest.svc.cluster.local:3000'
+
 const TRAVELER: Identity = {
   authenticated: true,
   email: 'wanderer@outlands.net',
-  claims: { email: 'wanderer@outlands.net', groups: [] },
+  groups: [],
 }
 
 const learn = (lesson: LessonId) => quest.learn(lesson, LESSONS[lesson].title)
 const identity = () => quest.get().identity
 const who = (id: Identity) => (id.authenticated ? id.email : 'anonymous')
-const groupsOf = (id: Identity) => {
-  const groups = id.claims['groups']
-  return Array.isArray(groups) ? groups.map(String) : []
-}
 
 const claimsCode = (id: Identity) =>
-  JSON.stringify({ email: id.email, email_verified: true, groups: groupsOf(id) }, null, 2)
+  JSON.stringify({ email: id.email, email_verified: true, groups: id.groups }, null, 2)
 
-const DENY_HINTS: Record<string, string> = {
+const DENY_HINTS: Partial<Record<ZoneId, string>> = {
   town: `Only citizens of ${KINGDOM_DOMAIN} may enter.`,
   guild: `Only citizens of ${KINGDOM_DOMAIN} may enter.`,
   armory: "Only the knights group may enter. The Captain in the Knights' Guild can vouch for you.",
   library: 'Reading is a GET and passes. Writing is a POST, so this request needs the scribes group.',
 }
 
+const LOG_DECISION: Record<Outcome['kind'], LogEntry['decision']> = {
+  allow: 'ALLOW',
+  signin: 'SIGN IN',
+  deny: 'DENY',
+  error: 'DENY',
+}
+
 function denyView(zone: Zone, method: 'GET' | 'POST', path: string, id: Identity, signIn: boolean): DenyView {
   const decision = decide(zone, id, { method, path })
   const requestLine = `${method} ${location.origin}${path}`
+
   if (signIn) {
     return {
       status: 401,
@@ -47,7 +62,9 @@ function denyView(zone: Zone, method: 'GET' | 'POST', path: string, id: Identity
       links: [link('idp'), link('authz')],
     }
   }
+
   const stale = decision.allow
+
   return {
     status: 403,
     title: 'Access denied',
@@ -67,29 +84,36 @@ async function attempt(zone: Zone, method: 'GET' | 'POST', action: string): Prom
   const id = identity()
   const path = `${zone.prefix}/${action}`
   const outcome = await requestZone(mode, id, zone, method, action)
-  const decision = outcome.kind === 'allow' ? 'ALLOW' : outcome.kind === 'signin' ? 'SIGN IN' : 'DENY'
+  const decision = LOG_DECISION[outcome.kind]
   quest.log({ decision, method, path, who: who(id) })
 
   if (outcome.kind === 'signin') quest.showDeny(denyView(zone, method, path, id, true))
+
   if (outcome.kind === 'deny') {
     const view = denyView(zone, method, path, id, false)
     quest.showDeny(view, () => {
       learn('authz')
+
       if (view.links.includes(link('refresh'))) learn('refresh')
     })
   }
+
   if (outcome.kind === 'error') quest.toast(`The gate jammed: ${outcome.message}`, 'deny')
+
   return outcome
 }
 
-export async function enterGate(zoneId: string): Promise<boolean> {
+export async function enterGate(zoneId: ZoneId): Promise<boolean> {
   const zone = zoneById(zoneId)
   const outcome = await attempt(zone, 'GET', 'enter')
+
   if (outcome.kind !== 'allow') return false
   quest.toast(`ALLOW · GET ${zone.prefix}/enter`, 'allow')
   learn('every')
   learn('route')
+
   if (zone.id === 'armory' || zone.id === 'library') learn('jwt')
+
   return true
 }
 
@@ -100,11 +124,13 @@ const signPage = (zone: Zone): Page => ({
   links: SIGN_DOCS[zone.id] ?? [],
 })
 
-export function readSign(signId: string) {
+export function readSign(signId: ZoneId | 'end') {
   if (signId === 'end') {
     quest.say(END_SIGN)
+
     return
   }
+
   quest.say([signPage(zoneById(signId))], () => learn('route'))
 }
 
@@ -125,6 +151,7 @@ function oracle() {
         links: [link('idp')],
       },
     ]
+
     if (mode === 'pomerium') {
       quest.say(
         [
@@ -139,20 +166,29 @@ function oracle() {
           goTo(signInUrl())
         },
       )
+
       return
     }
+
     quest.say(intro, () => {
       quest.progress({ sim: { ...progress.sim, signedIn: true } })
       const next = simulatedIdentity(quest.get().progress)
       quest.setIdentity(next)
-      quest.send({ type: 'SIGNED_IN', groups: groupsOf(next) })
+      quest.send({ type: 'SIGNED_IN', groups: next.groups })
       learn('idp')
-      quest.say([{ who: 'Oracle', text: `There. You are ${next.email}. Here are your claims.`, code: claimsCode(next) }])
+      quest.say([
+        {
+          who: 'Oracle',
+          text: `There. You are ${next.email}. Here are your claims.`,
+          code: claimsCode(next),
+        },
+      ])
     })
+
     return
   }
 
-  if (stage() === 'knighted' && !groupsOf(id).includes('knights')) {
+  if (stage() === 'knighted' && !id.groups.includes('knights')) {
     quest.say(
       [
         { who: 'Oracle', text: "The Captain's letter arrived. I have added knights to your groups." },
@@ -165,18 +201,22 @@ function oracle() {
       ],
       () => {
         learn('refresh')
+
         if (mode === 'pomerium') {
           goTo(refreshClaimsUrl())
+
           return
         }
+
         const sim = quest.get().progress.sim
         quest.progress({ sim: { ...sim, groups: [...sim.groups, ...sim.pendingGroups], pendingGroups: [] } })
         const next = simulatedIdentity(quest.get().progress)
         quest.setIdentity(next)
-        quest.send({ type: 'SIGNED_IN', groups: groupsOf(next) })
+        quest.send({ type: 'SIGNED_IN', groups: next.groups })
         quest.say([{ who: 'Oracle', text: 'Signed in again. Your new claims:', code: claimsCode(next) }])
       },
     )
+
     return
   }
 
@@ -185,6 +225,7 @@ function oracle() {
 
 async function captain() {
   const { xp, mode } = quest.get()
+
   if (isAtLeast('knighted')) {
     quest.say([
       {
@@ -192,8 +233,10 @@ async function captain() {
         text: 'Go claim your steel. The armory is east of the square. If the guard turns you away, ask the Oracle to refresh your claims.',
       },
     ])
+
     return
   }
+
   if (stage() !== 'proven') {
     quest.say([
       { who: 'Captain', text: 'The armory is for knights only.' },
@@ -202,18 +245,26 @@ async function captain() {
         text: `Prove yourself first: clear ${KNIGHT_XP} slimes from the fields, then come back. Slimes defeated: ${Math.min(xp, KNIGHT_XP)} of ${KNIGHT_XP}.`,
       },
     ])
+
     return
   }
+
   const outcome = await attempt(zoneById('guild'), 'POST', 'knight')
+
   if (outcome.kind !== 'allow') return
   quest.send({ type: 'KNIGHTED' })
+
   if (mode === 'simulated') {
     const sim = quest.get().progress.sim
     quest.progress({ sim: { ...sim, pendingGroups: ['knights'] } })
   }
+
   quest.say(
     [
-      { who: 'Captain', text: "Well fought. I've written to the Oracle: from now on you are in the knights group." },
+      {
+        who: 'Captain',
+        text: "Well fought. I've written to the Oracle: from now on you are in the knights group.",
+      },
       {
         who: 'Captain',
         text: 'Notice what changed. Not the armory: its policy is the same as yesterday. Your identity changed. The Oracle now lists you in groups: [knights].',
@@ -237,7 +288,11 @@ function traveler() {
         who: 'Traveler',
         text: `But this town only lets in people whose email domain is ${KINGDOM_DOMAIN}. Signing in got me to the guard. It didn't get me in.`,
       },
-      { who: 'Traveler', text: 'Signing in says who you are. Policy says where you can go.', links: [link('authz')] },
+      {
+        who: 'Traveler',
+        text: 'Signing in says who you are. Policy says where you can go.',
+        links: [link('authz')],
+      },
     ],
     () => {
       quest.log({ decision: 'DENY', method: 'GET', path: `${town.prefix}/enter`, who: TRAVELER.email })
@@ -255,8 +310,10 @@ const SCRIPTS: Record<NpcId, () => void> = {
           text: 'The Oracle vouches for you now. Head north through the Fields Gate. Read the sign beside each gate: it shows the exact rule its guard enforces.',
         },
       ])
+
       return
     }
+
     quest.say(
       [
         { who: 'Sage', text: "You're awake. Good. The kingdom has changed while you slept." },
@@ -289,8 +346,10 @@ const SCRIPTS: Record<NpcId, () => void> = {
           links: [link('onroute')],
         },
       ])
+
       return
     }
+
     quest.say([
       {
         who: 'Armorer',
@@ -331,26 +390,28 @@ export function openChest(): boolean {
     ],
     () => learn('onroute'),
   )
+
   return true
 }
 
 export async function readBook(index: number) {
   const book = BOOKS[index % BOOKS.length]
+
   if (!book) return
   const outcome = await attempt(zoneById('library'), 'GET', `books/${index}`)
+
   if (outcome.kind !== 'allow') return
   const lesson = book.links?.[0]
   quest.say([book], () => {
-    for (const [id, entry] of Object.entries(LESSONS)) {
-      // SAFETY: Object.entries over LESSONS yields its own keys.
-      if (entry.link === lesson) learn(id as LessonId)
-    }
+    for (const id of LESSON_ORDER) if (LESSONS[id].link === lesson) learn(id)
   })
 }
 
 export async function writeLedger() {
   const outcome = await attempt(zoneById('library'), 'POST', 'ledger')
-  if (outcome.kind === 'allow') quest.say([{ who: 'Royal Ledger', text: 'Your words are recorded. You must be a scribe.' }])
+
+  if (outcome.kind === 'allow')
+    quest.say([{ who: 'Royal Ledger', text: 'Your words are recorded. You must be a scribe.' }])
 }
 
 export function nightGate() {

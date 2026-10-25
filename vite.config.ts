@@ -1,6 +1,13 @@
 import { defineConfig } from 'vite-plus'
 
-const ignored = ['**/node_modules/**', '**/.output/**', '**/dist/**', 'tools/oxlint/anti-slop/**', '.claude/**', 'app/src/routeTree.gen.ts']
+const ignored = [
+  '**/node_modules/**',
+  '**/.output/**',
+  '**/dist/**',
+  'tools/oxlint/anti-slop/**',
+  '.claude/**',
+  'app/src/routeTree.gen.ts',
+]
 
 export default defineConfig({
   fmt: {

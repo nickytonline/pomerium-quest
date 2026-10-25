@@ -21,15 +21,19 @@ export const QuestConfigLive = Layer.effect(
     const mode = yield* Config.Literals(['pomerium', 'simulated'], 'QUEST_MODE').pipe(
       Config.withDefault('simulated'),
     )
+
     const publicOrigin = yield* Config.String('QUEST_PUBLIC_ORIGIN').pipe(
       Config.withDefault('http://localhost:3000'),
     )
+
     const oracleAdminUrl = yield* Config.String('ORACLE_ADMIN_URL').pipe(
       Config.withDefault('http://localhost:4000'),
     )
+
     const oracleAdminKey = yield* Config.Redacted('ORACLE_ADMIN_KEY').pipe(
       Config.withDefault(Redacted.make('dev-only-oracle-key')),
     )
+
     return { mode, publicOrigin, oracleAdminUrl, oracleAdminKey }
   }),
 )

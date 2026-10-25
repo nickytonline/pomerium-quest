@@ -1,3 +1,5 @@
+import type { ZoneId } from './zones.ts'
+
 // The kingdom map: a 40x30 tile grid built from a few drawing helpers, plus where every
 // gate, sign, NPC, slime and prop sits. Tile ids match the order in art/tiles.mjs.
 
@@ -24,12 +26,19 @@ export const TILE = {
 
 export type TileId = (typeof TILE)[keyof typeof TILE]
 
-export const WALKABLE: ReadonlySet<number> = new Set([TILE.grass, TILE.flowers, TILE.path, TILE.cobble, TILE.floor])
+export const WALKABLE: ReadonlySet<number> = new Set([
+  TILE.grass,
+  TILE.flowers,
+  TILE.path,
+  TILE.cobble,
+  TILE.floor,
+])
 
 export const MAP_WIDTH = 40
 export const MAP_HEIGHT = 30
 
 export type NpcId = 'sage' | 'oracle' | 'traveler' | 'captain' | 'armorer' | 'librarian'
+
 /** Frame index of each NPC in npcs.png. */
 export const NPC_FRAME: Record<NpcId, number> = {
   sage: 0,
@@ -44,12 +53,15 @@ export interface Point {
   readonly x: number
   readonly y: number
 }
+
 export interface Gate extends Point {
-  readonly zoneId: string
+  readonly zoneId: ZoneId
 }
+
 export interface Sign extends Point {
-  readonly signId: string
+  readonly signId: ZoneId | 'end'
 }
+
 export interface Npc extends Point {
   readonly npcId: NpcId
 }
@@ -71,23 +83,31 @@ export type Region = 'Hearth Village' | 'Slime Fields' | 'Kingdom Town' | 'Libra
 
 export function regionAt(point: Point): Region {
   if (point.x <= 15) return point.y >= 18 ? 'Hearth Village' : 'Slime Fields'
+
   return point.y >= 18 ? 'Library Quarter' : 'Kingdom Town'
 }
 
 export function buildWorld(): World {
-  const tiles = Array.from({ length: MAP_HEIGHT }, () => Array.from({ length: MAP_WIDTH }, () => TILE.grass))
+  const tiles: number[][] = Array.from({ length: MAP_HEIGHT }, () =>
+    Array.from({ length: MAP_WIDTH }, (): number => TILE.grass),
+  )
+
   const set = (x: number, y: number, tile: number) => {
     const row = tiles[y]
+
     if (row && x >= 0 && x < MAP_WIDTH) row[x] = tile
   }
+
   const fill = (x0: number, y0: number, x1: number, y1: number, tile: number) => {
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) set(x, y, tile)
   }
+
   // A walled room with a floor; doors are punched in afterwards.
   const room = (x0: number, y0: number, x1: number, y1: number) => {
     fill(x0, y0, x1, y1, TILE.wall)
     fill(x0 + 1, y0 + 1, x1 - 1, y1 - 1, TILE.floor)
   }
+
   const each = (points: ReadonlyArray<readonly [number, number]>, tile: number) => {
     for (const [x, y] of points) set(x, y, tile)
   }
@@ -213,6 +233,7 @@ export function buildWorld(): World {
     { x: 33, y: 7, zoneId: 'armory' },
     { x: 33, y: 20, zoneId: 'library' },
   ]
+
   for (const gate of gates) set(gate.x, gate.y, TILE.gateClosed)
 
   const signs: Sign[] = [
@@ -223,12 +244,14 @@ export function buildWorld(): World {
     { x: 35, y: 19, signId: 'library' },
     { x: 22, y: 27, signId: 'end' },
   ]
+
   for (const sign of signs) set(sign.x, sign.y, TILE.sign)
 
   const rocks = [
     { x: 27, y: 17 },
     { x: 28, y: 17 },
   ]
+
   for (const rock of rocks) set(rock.x, rock.y, TILE.rock)
 
   const chest = { x: 33, y: 4 }

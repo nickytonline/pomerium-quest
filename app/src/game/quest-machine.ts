@@ -17,9 +17,15 @@ export type QuestEvent =
   | { readonly type: 'KNIGHTED' }
   | { readonly type: 'STEEL_TAKEN' }
 
+export interface QuestContext {
+  readonly xp: number
+}
+
 export const questMachine = setup({
   types: {
-    context: {} as { xp: number },
+    // SAFETY: XState reads these only as type carriers; the values are never used at runtime.
+    context: {} as QuestContext,
+    // SAFETY: same type-carrier idiom as above.
     events: {} as QuestEvent,
   },
   guards: {
@@ -68,6 +74,7 @@ const STORAGE_KEY = 'pomerium-quest/machine/v1'
 function restore() {
   try {
     const raw = globalThis.localStorage?.getItem(STORAGE_KEY)
+
     // SAFETY: written by persist() below from actor.getPersistedSnapshot().
     return raw ? (JSON.parse(raw) as SnapshotFrom<typeof questMachine>) : undefined
   } catch {
@@ -96,18 +103,22 @@ export function persist() {
 
 export function resetQuest() {
   questActor.stop()
+
   try {
     globalThis.localStorage?.removeItem(STORAGE_KEY)
   } catch {
     // Nothing stored.
   }
+
   questActor = start(undefined)
 }
 
 export const stage = (): QuestStage => questActor.getSnapshot().value
 export const xp = () => questActor.getSnapshot().context.xp
 export const hasSteel = () => stage() === 'armed'
+
 export const isAtLeast = (target: QuestStage) => {
   const order: readonly QuestStage[] = ['anonymous', 'citizen', 'proven', 'knighted', 'knight', 'armed']
+
   return order.indexOf(stage()) >= order.indexOf(target)
 }

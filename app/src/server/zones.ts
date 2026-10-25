@@ -12,8 +12,10 @@ import { json } from './runtime.ts'
 const currentPlayer = (request: Request) =>
   Effect.gen(function* () {
     const config = yield* QuestConfig
+
     if (config.mode === 'simulated') return undefined
     const identity = yield* PomeriumIdentity
+
     return yield* identity.verify(request)
   })
 
@@ -25,7 +27,8 @@ export const handleZone = (request: Request, splat: string) =>
     const config = yield* QuestConfig
     const [zoneId = '', ...rest] = splat.split('/')
     const action = rest.join('/')
-    const zone = ZONES.find(candidate => candidate.id === zoneId)
+    const zone = ZONES.find((candidate) => candidate.id === zoneId)
+
     if (!zone) return json(404, { error: 'unknown zone', path: splat })
 
     const player = yield* currentPlayer(request)
@@ -41,8 +44,10 @@ export const handleZone = (request: Request, splat: string) =>
           const oracle = yield* OracleAdmin
           yield* oracle.grant(player.email, 'knights')
         }
+
         return json(200, { granted: 'knights', refreshRequired: Boolean(player), verifiedBy })
       }
+
       case 'POST library/ledger':
         return json(200, { written: true, verifiedBy })
       default:
@@ -57,7 +62,9 @@ export const handleZone = (request: Request, splat: string) =>
     Effect.catchTags({
       MissingAssertion: () =>
         Effect.succeed(json(401, { error: 'no Pomerium JWT: this request did not come through Pomerium' })),
-      InvalidAssertion: error => Effect.succeed(json(401, { error: 'invalid Pomerium JWT', reason: error.reason })),
-      OracleUnavailable: error => Effect.succeed(json(502, { error: 'the Oracle is unreachable', reason: error.reason })),
+      InvalidAssertion: (error) =>
+        Effect.succeed(json(401, { error: 'invalid Pomerium JWT', reason: error.reason })),
+      OracleUnavailable: (error) =>
+        Effect.succeed(json(502, { error: 'the Oracle is unreachable', reason: error.reason })),
     }),
   )
