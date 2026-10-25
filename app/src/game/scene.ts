@@ -10,8 +10,10 @@ import {
   enterGate,
   nightGate,
   openChest,
+  readAnvil,
   readBook,
   readSign,
+  readWorkbench,
   talk,
   writeLedger,
 } from './story.ts'
@@ -437,6 +439,10 @@ export class KingdomScene extends Phaser.Scene {
     if (tile === TILE.nightGate) nightGate()
 
     if (isFountain(tile)) drinkFromFountain()
+
+    if (tile === TILE.anvil) readAnvil()
+
+    if (tile === TILE.workbench) readWorkbench()
   }
 
   private swing() {

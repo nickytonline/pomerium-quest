@@ -251,6 +251,65 @@ const ROCK_COLORS = {
   S: '#55576a', // ground shadow
 }
 
+// The Armorer's forge: an anvil on a stump with a hammer resting on top, and a bench laid out with
+// hammers and tongs. Only for reading; nothing here can be taken.
+const ANVIL = [
+  '................',
+  '................',
+  '.......KKKK.....',
+  '......KDDDDK....',
+  '..KKKKKKKKKKKK..',
+  '.KHHHHHHHHHHHHK.',
+  'KIIIIIIIIIIIIDK.',
+  '.KKIIIIIIIIDDK..',
+  '...KKIIIIIDKK...',
+  '.....KIIIDK.....',
+  '.....KIIIDK.....',
+  '....KIIIIIDK....',
+  '...KBBBBBBBBK...',
+  '...KbBBBBBBbK...',
+  '...KKKKKKKKKK...',
+  '....SSSSSSSS....',
+]
+
+const ANVIL_COLORS = {
+  K: '#241a2e', // outline
+  H: '#b8bfcc', // worn face
+  I: '#5b6070', // iron
+  D: '#3a3d48', // iron shadow, hammer head
+  B: '#7a5126', // stump
+  b: '#5b3a22', // stump shadow
+  S: '#4a2f18', // floor shadow
+}
+
+const WORKBENCH = [
+  '................',
+  '................',
+  '................',
+  '..KKKK......KK..',
+  '..KIIK.....KIK..',
+  '..KIIKKKKK.KIK..',
+  '..KIIKDDDDKIIIK.',
+  'KKKKKKKKKKKKKKKK',
+  'KBBBBBBBBBBBBBBK',
+  'KbbbbbbbbbbbbbbK',
+  'KKKKKKKKKKKKKKKK',
+  '.KbK........KbK.',
+  '.KbK........KbK.',
+  '.KbK........KbK.',
+  '.KKK........KKK.',
+  '..SS........SS..',
+]
+
+const WORKBENCH_COLORS = {
+  K: '#241a2e', // outline
+  I: '#9aa3b2', // steel tools
+  D: '#7a5126', // hammer handle
+  B: '#a87a45', // bench top
+  b: '#6b4226', // bench front and legs
+  S: '#4a2f18', // floor shadow
+}
+
 /** Paints a 16x16 grid of color keys; '.' leaves the pixel underneath. */
 const pixels = (rect, rows, colors) => {
   rows.forEach((row, y) => {
@@ -385,6 +444,16 @@ const painters = [
   },
   // 17–28 fountain: three frames of top-left, top-right, bottom-left, bottom-right
   ...fountain,
+  // 29 anvil
+  (rect) => {
+    floor(rect)
+    pixels(rect, ANVIL, ANVIL_COLORS)
+  },
+  // 30 workbench
+  (rect) => {
+    floor(rect)
+    pixels(rect, WORKBENCH, WORKBENCH_COLORS)
+  },
 ]
 
 export const tiles = painters.map((paint) => {

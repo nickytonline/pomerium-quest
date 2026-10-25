@@ -499,6 +499,23 @@ export function drinkFromFountain() {
   )
 }
 
+// The forge is scenery: something to read in the armory, never something to take.
+export const readAnvil = () =>
+  quest.say([
+    {
+      who: 'Anvil',
+      text: 'A heavy iron anvil, its face worn bright by years of hammering. Every blade in the kingdom was shaped here. Forging a sword never decided who may carry it through the gate.',
+    },
+  ])
+
+export const readWorkbench = () =>
+  quest.say([
+    {
+      who: 'Workbench',
+      text: "Hammers, tongs and a whetstone, laid out in neat rows. They belong to the Armorer, and you're only here to look.",
+    },
+  ])
+
 export function nightGate() {
   quest.log({ decision: 'NO ROUTE', method: 'GET', path: 'night-market', who: who(identity()) })
   quest.showDeny(

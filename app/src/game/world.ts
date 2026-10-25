@@ -25,6 +25,8 @@ export const TILE = {
   fountainTopRight: 18,
   fountainBottomLeft: 19,
   fountainBottomRight: 20,
+  anvil: 29,
+  workbench: 30,
 } as const
 
 export type TileId = (typeof TILE)[keyof typeof TILE]
@@ -275,6 +277,8 @@ export function buildWorld(): World {
 
   const chest = { x: 33, y: 4 }
   set(chest.x, chest.y, TILE.chest)
+  set(31, 4, TILE.anvil)
+  set(35, 3, TILE.workbench)
   const ledger = { x: 33, y: 25 }
   set(ledger.x, ledger.y, TILE.lectern)
   const nightGate = { x: 21, y: 29 }
