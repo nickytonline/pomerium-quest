@@ -417,6 +417,11 @@ function DenyScreen() {
       aria-labelledby="deny-title"
     >
       <div className="w-[min(560px,100%)] rounded-lg border-t-6 border-deny bg-paper px-5 py-[18px] text-paper-ink [&_a]:text-paper-link">
+        {deny.onBehalfOf && (
+          <p className="mb-2 rounded bg-paper-tint px-2.5 py-1.5 text-[0.8rem] text-paper-muted">
+            Not your request: this is what {deny.onBehalfOf} saw at the gate.
+          </p>
+        )}
         <p className="m-0 font-display text-[2.2rem] leading-none text-deny">{deny.status}</p>
         <h2 className="mt-0.5 mb-2 text-[1.25rem] font-bold" id="deny-title">
           {deny.title}

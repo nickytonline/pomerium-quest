@@ -300,6 +300,7 @@ async function captain() {
 
 function traveler() {
   const town = zoneById('town')
+  const path = `${town.prefix}/enter`
   quest.say(
     [
       { who: 'Traveler', text: "The Oracle knows me. I'm wanderer@outlands.net, signed in and everything." },
@@ -314,8 +315,20 @@ function traveler() {
       },
     ],
     () => {
-      quest.log({ decision: 'DENY', method: 'GET', path: `${town.prefix}/enter`, who: TRAVELER.email })
-      quest.showDeny(denyView(town, 'GET', `${town.prefix}/enter`, TRAVELER, false), () => learn('authz'))
+      quest.log({ decision: 'DENY', method: 'GET', path, who: TRAVELER.email })
+      quest.showDeny(
+        {
+          status: 403,
+          title: 'Access denied',
+          onBehalfOf: 'the Traveler',
+          requestLine: `GET ${location.origin}${path}`,
+          who: TRAVELER.email,
+          lines: decide(town, TRAVELER, { method: 'GET', path }, 'their').lines,
+          hint: `Their domain is ${TRAVELER.email.split('@')[1]}, and only citizens of ${KINGDOM_DOMAIN} may enter. This was the Traveler's request: your own access hasn't changed.`,
+          links: [link('authz'), link('defaultDeny')],
+        },
+        () => learn('authz'),
+      )
     },
   )
 }

@@ -28,6 +28,8 @@ export interface Progress {
 export interface DenyView {
   readonly status: 401 | 403 | 404
   readonly title: string
+  /** Set when the denial belongs to someone else (an NPC), so the screen doesn't read as the player's. */
+  readonly onBehalfOf?: string
   readonly requestLine: string
   readonly who: string
   readonly lines: readonly EvalLine[]

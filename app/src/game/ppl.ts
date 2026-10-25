@@ -21,6 +21,9 @@ export interface EvalLine {
   readonly actual?: string
 }
 
+/** Whose request the explanation describes: the player's own, or someone the player is watching. */
+export type Viewpoint = 'your' | 'their'
+
 export interface Decision {
   readonly allow: boolean
   readonly lines: readonly EvalLine[]
@@ -74,28 +77,31 @@ export function policyYaml(policy: readonly AllowRule[], indent: number): string
   ])
 }
 
-function check(node: Criterion, id: Identity, req: RequestInfo): Check {
+function check(node: Criterion, id: Identity, req: RequestInfo, whose: Viewpoint): Check {
   const domain = id.email.split('@')[1] ?? ''
 
   switch (node.kind) {
     case 'authenticated_user':
-      return { ok: id.authenticated, actual: id.authenticated ? 'you are signed in' : 'no session' }
+      return {
+        ok: id.authenticated,
+        actual: id.authenticated ? `${whose === 'your' ? 'you are' : 'they are'} signed in` : 'no session',
+      }
     case 'domain':
-      return { ok: domain === node.is, actual: `your domain: ${domain || 'none'}` }
+      return { ok: domain === node.is, actual: `${whose} domain: ${domain || 'none'}` }
     case 'email':
-      return { ok: id.email === node.is, actual: `your email: ${id.email || 'none'}` }
+      return { ok: id.email === node.is, actual: `${whose} email: ${id.email || 'none'}` }
     case 'http_method':
       return { ok: req.method === node.is, actual: `this request: ${req.method}` }
     case 'claim': {
       const values = node.claim === 'groups' ? id.groups : [id.email]
 
-      return { ok: values.includes(node.value), actual: `your ${node.claim}: [${values.join(', ')}]` }
+      return { ok: values.includes(node.value), actual: `${whose} ${node.claim}: [${values.join(', ')}]` }
     }
   }
 }
 
-function evaluateRule(rule: AllowRule, id: Identity, req: RequestInfo): Decision {
-  const checks = rule.criteria.map((criterion) => ({ criterion, ...check(criterion, id, req) }))
+function evaluateRule(rule: AllowRule, id: Identity, req: RequestInfo, whose: Viewpoint): Decision {
+  const checks = rule.criteria.map((criterion) => ({ criterion, ...check(criterion, id, req, whose) }))
   const ok = rule.match === 'and' ? checks.every((c) => c.ok) : checks.some((c) => c.ok)
 
   return {
@@ -109,8 +115,8 @@ function evaluateRule(rule: AllowRule, id: Identity, req: RequestInfo): Decision
 }
 
 /** Allowed when any allow rule matches; with no matching rule, Pomerium denies. */
-export function decide(zone: Zone, id: Identity, req: RequestInfo): Decision {
-  const rules = zone.policy.map((rule) => evaluateRule(rule, id, req))
+export function decide(zone: Zone, id: Identity, req: RequestInfo, whose: Viewpoint = 'your'): Decision {
+  const rules = zone.policy.map((rule) => evaluateRule(rule, id, req, whose))
 
   return { allow: rules.some((rule) => rule.allow), lines: rules.flatMap((rule) => rule.lines) }
 }
