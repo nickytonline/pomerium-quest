@@ -44,6 +44,9 @@ export const WALKABLE: ReadonlySet<number> = new Set([
   TILE.floor,
 ])
 
+/** The dog can also swim. Monsters keep to their own terrain, so bot slimes stay out of the water. */
+export const PLAYER_TERRAIN: ReadonlySet<number> = new Set([...WALKABLE, TILE.water])
+
 export const MAP_WIDTH = 40
 export const MAP_HEIGHT = 30
 

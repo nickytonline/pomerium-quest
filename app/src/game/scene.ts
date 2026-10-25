@@ -21,6 +21,7 @@ import {
   MAP_HEIGHT,
   MAP_WIDTH,
   NPC_FRAME,
+  PLAYER_TERRAIN,
   FOUNTAIN_FRAMES,
   TILE,
   WALKABLE,
@@ -76,6 +77,9 @@ const SWORD_ANGLE: Record<Dir, number> = { up: 0, right: 90, down: 180, left: 27
 const SWORD_GRIP = 14 / 16
 const SWING = { from: 100, to: -50, ms: 160 }
 const ITEM = { swordWood: 0, swordSteel: 1 }
+
+/** Rows of the dog's frame left above the waterline while swimming: head and collar. */
+const SWIM_DEPTH = 11
 
 /** A monster's bite takes a full heart (health counts half hearts). */
 const HIT_DAMAGE = 2
@@ -189,6 +193,7 @@ export class KingdomScene extends Phaser.Scene {
     this.player = this.add
       .sprite(center(this.pos.x), center(this.pos.y), 'dog', DOG_FRAME[this.dir])
       .setDepth(10)
+    this.swim(this.tileAt(this.pos) === TILE.water)
     this.sword = this.add.image(0, 0, 'items', ITEM.swordWood).setVisible(false).setDepth(9)
 
     this.cameras.main.setBounds(0, 0, MAP_WIDTH * T, MAP_HEIGHT * T)
@@ -368,7 +373,7 @@ export class KingdomScene extends Phaser.Scene {
       return
     }
 
-    if (WALKABLE.has(tile) || tile === TILE.gateOpen) this.walk(target)
+    if (PLAYER_TERRAIN.has(tile) || tile === TILE.gateOpen) this.walk(target)
   }
 
   private walk(target: Point) {
@@ -376,6 +381,7 @@ export class KingdomScene extends Phaser.Scene {
 
     if (!player) return
     this.mode.send({ type: 'WALK' })
+    this.swim(this.tileAt(target) === TILE.water)
     player.anims.play(`walk-${this.dir}`, true)
     this.tweens.add({
       targets: player,
@@ -662,16 +668,23 @@ export class KingdomScene extends Phaser.Scene {
     quest.setHp(hp)
     const back = { x: this.pos.x + STEP[dir].x, y: this.pos.y + STEP[dir].y }
 
-    if (this.mode.idle() && WALKABLE.has(this.tileAt(back)) && !this.occupied(back)) {
+    if (this.mode.idle() && PLAYER_TERRAIN.has(this.tileAt(back)) && !this.occupied(back)) {
       const facing = this.dir
       this.walk(back)
       this.dir = facing
     }
   }
 
+  /** In water only the dog's head and collar show above the surface. */
+  private swim(swimming: boolean) {
+    if (swimming) this.player?.setCrop(0, 0, T, SWIM_DEPTH)
+    else this.player?.setCrop()
+  }
+
   private respawn() {
     this.pos = this.world.spawn
     this.player?.setPosition(center(this.pos.x), center(this.pos.y))
+    this.swim(false)
     quest.setHp(MAX_HP)
     quest.progress({ x: this.pos.x, y: this.pos.y })
     quest.setRegion(regionAt(this.pos))
