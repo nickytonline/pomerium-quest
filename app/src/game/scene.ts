@@ -9,6 +9,7 @@ import {
   drinkFromFountain,
   eatFish,
   enterGate,
+  meetPhish,
   openChest,
   readAnvil,
   readBook,
@@ -21,6 +22,7 @@ import {
   MAP_HEIGHT,
   MAP_WIDTH,
   NPC_FRAME,
+  PHISH_FRAME,
   PLAYER_TERRAIN,
   FOUNTAIN_FRAMES,
   TILE,
@@ -87,11 +89,18 @@ const SHAKE = { delayMs: 250, swings: 9, swingMs: 55, reach: 2 }
 /** A monster's bite takes a full heart (health counts half hearts). */
 const HIT_DAMAGE = 2
 
-/** Fish swim in the village pond, at most FISH_MAX at a time; a new one arrives FISH_RESPAWN_MS after one is eaten. */
-const VILLAGE_POND = { x0: 2, y0: 25, x1: 4, y1: 27 }
+/** Fish swim in each pond, at most FISH_MAX at a time; a new one arrives FISH_RESPAWN_MS after one is eaten. */
+const PONDS: readonly Pond[] = [
+  { x0: 2, y0: 25, x1: 4, y1: 27 },
+  { x0: 2, y0: 5, x1: 5, y1: 7 },
+]
+
 const FISH_MAX = 2
 const FISH_RESPAWN_MS = 30_000
-const FISH_FRAME = 7
+const FISH_FRAME = 5
+
+/** A phish within `reach` steps calls out to the player, at most once every `ms`. */
+const PHISH_CALL = { reach: 3, ms: 20_000 }
 
 /** Monsters never leave the fields. */
 const FIELDS = { x0: 1, y0: 1, x1: 15, y1: 16 }
@@ -99,11 +108,18 @@ const FIELDS = { x0: 1, y0: 1, x1: 15, y1: 16 }
 /** Each kind's first frame in items.png (two frames each), hit points and name. */
 const MONSTER: Record<MonsterKind, { readonly frame: number; readonly hp: number; readonly name: string }> = {
   bot: { frame: 3, hp: 2, name: 'Bot slime' },
-  phish: { frame: 5, hp: 2, name: 'Phish' },
+}
+
+interface Pond {
+  readonly x0: number
+  readonly y0: number
+  readonly x1: number
+  readonly y1: number
 }
 
 interface Fish {
   readonly sprite: Phaser.GameObjects.Sprite
+  readonly pond: Pond
   x: number
   y: number
   nextMoveAt: number
@@ -118,6 +134,15 @@ interface Monster {
   hp: number
   nextMoveAt: number
   moving: boolean
+}
+
+/** A phish stands still, dressed as the Oracle; `index` is its place in the world's list. */
+interface Phish {
+  readonly index: number
+  readonly sprite: Phaser.GameObjects.Sprite
+  readonly x: number
+  readonly y: number
+  calledAt: number
 }
 
 const center = (tile: number) => tile * T + T / 2
@@ -138,6 +163,7 @@ export class KingdomScene extends Phaser.Scene {
   private shownItem: Phaser.GameObjects.Image | undefined
   private monsters: Monster[] = []
   private fish: Fish[] = []
+  private phish: Phish[] = []
   private shake: Phaser.Time.TimerEvent | undefined
   private seen = { interact: 0, attack: 0 }
   private pending = new Set<Action>()
@@ -199,7 +225,21 @@ export class KingdomScene extends Phaser.Scene {
       moving: false,
     })
 
-    this.monsters = [...this.world.bots.map(spawn('bot')), ...this.world.phish.map(spawn('phish'))]
+    this.monsters = this.world.bots.map(spawn('bot'))
+
+    this.phish = this.world.phish.flatMap((spot, index) =>
+      progress.phishTurnedAway.includes(index)
+        ? []
+        : [
+            {
+              index,
+              sprite: this.add.sprite(center(spot.x), center(spot.y), 'npcs', PHISH_FRAME),
+              x: spot.x,
+              y: spot.y,
+              calledAt: -Infinity,
+            },
+          ],
+    )
 
     this.anims.create({
       key: 'fish',
@@ -208,7 +248,7 @@ export class KingdomScene extends Phaser.Scene {
       repeat: -1,
     })
 
-    for (let i = 0; i < FISH_MAX; i++) this.spawnFish()
+    for (const pond of PONDS) for (let i = 0; i < FISH_MAX; i++) this.spawnFish(pond)
 
     for (const dir of DIRS) {
       const base = DOG_FRAME[dir]
@@ -271,6 +311,7 @@ export class KingdomScene extends Phaser.Scene {
 
     this.updateMonsters(time)
     this.updateFish(time)
+    this.callOutPhish(time)
     this.dismissItem()
 
     if (!this.mode.idle()) {
@@ -354,7 +395,8 @@ export class KingdomScene extends Phaser.Scene {
     return (
       this.world.npcs.some((npc) => same(npc, p)) ||
       this.monsters.some((monster) => same(monster, p)) ||
-      this.fish.some((fish) => same(fish, p))
+      this.fish.some((fish) => same(fish, p)) ||
+      this.phish.some((phish) => same(phish, p))
     )
   }
 
@@ -369,6 +411,8 @@ export class KingdomScene extends Phaser.Scene {
     const target = this.front()
 
     if (this.world.npcs.some((npc) => same(npc, target))) return
+
+    if (this.phish.some((phish) => same(phish, target))) return
 
     const fish = this.fish.find((candidate) => same(candidate, target))
 
@@ -453,6 +497,14 @@ export class KingdomScene extends Phaser.Scene {
 
     if (npc) {
       talk(npc.npcId)
+
+      return
+    }
+
+    const phish = this.phish.find((candidate) => same(candidate, target))
+
+    if (phish) {
+      meetPhish(() => this.turnAway(phish))
 
       return
     }
@@ -547,6 +599,15 @@ export class KingdomScene extends Phaser.Scene {
       return
     }
 
+    if (this.phish.some((phish) => same(phish, target))) {
+      quest.toast(
+        "The robed figure steps back from your swing, smiling. You can't fight a phish, only refuse it.",
+        'info',
+      )
+
+      return
+    }
+
     if (this.tileAt(target) !== TILE.rock) return
 
     if (!hasSteel()) {
@@ -598,9 +659,9 @@ export class KingdomScene extends Phaser.Scene {
 
     for (const dir of order) {
       const spot = { x: this.pos.x + STEP[dir].x, y: this.pos.y + STEP[dir].y }
-      const taken = this.world.npcs.some((npc) => same(npc, spot))
 
-      if (!taken && PLAYER_TERRAIN.has(this.tileAt(spot)) && this.tileAt(spot) !== TILE.water) return spot
+      if (!this.occupied(spot) && PLAYER_TERRAIN.has(this.tileAt(spot)) && this.tileAt(spot) !== TILE.water)
+        return spot
     }
 
     return { x: this.pos.x + 1, y: this.pos.y }
@@ -745,7 +806,7 @@ export class KingdomScene extends Phaser.Scene {
     if (monster.hp > 0) {
       const back = { x: monster.x + STEP[this.dir].x, y: monster.y + STEP[this.dir].y }
 
-      if (this.monsterCanEnter(monster, back)) this.moveMonster(monster, back)
+      if (this.monsterCanEnter(back)) this.moveMonster(monster, back)
 
       return
     }
@@ -760,13 +821,11 @@ export class KingdomScene extends Phaser.Scene {
     )
   }
 
-  /** Bot slimes walk the fields; phish stay in the pond. */
-  private monsterCanEnter(monster: Monster, p: Point) {
+  /** Bot slimes walk the fields and stay out of the water. */
+  private monsterCanEnter(p: Point) {
     const inFields = p.x >= FIELDS.x0 && p.x <= FIELDS.x1 && p.y >= FIELDS.y0 && p.y <= FIELDS.y1
-    const tile = this.tileAt(p)
-    const terrain = monster.kind === 'phish' ? tile === TILE.water : WALKABLE.has(tile)
 
-    return inFields && terrain && !this.occupied(p) && !same(p, this.pos)
+    return inFields && WALKABLE.has(this.tileAt(p)) && !this.occupied(p) && !same(p, this.pos)
   }
 
   private moveMonster(monster: Monster, target: Point) {
@@ -810,40 +869,39 @@ export class KingdomScene extends Phaser.Scene {
         continue
       }
 
-      if (this.monsterCanEnter(monster, target)) this.moveMonster(monster, target)
+      if (this.monsterCanEnter(target)) this.moveMonster(monster, target)
     }
   }
 
-  private inPond(p: Point) {
-    const inside =
-      p.x >= VILLAGE_POND.x0 && p.x <= VILLAGE_POND.x1 && p.y >= VILLAGE_POND.y0 && p.y <= VILLAGE_POND.y1
+  private inPond(p: Point, pond: Pond) {
+    const inside = p.x >= pond.x0 && p.x <= pond.x1 && p.y >= pond.y0 && p.y <= pond.y1
 
     return inside && this.tileAt(p) === TILE.water && !this.occupied(p) && !same(p, this.pos)
   }
 
   /** Puts a fish on a free pond tile; if the dog and the other fish fill the pond, tries again shortly. */
-  private spawnFish() {
+  private spawnFish(pond: Pond) {
     const free: Point[] = []
 
-    for (let y = VILLAGE_POND.y0; y <= VILLAGE_POND.y1; y++)
-      for (let x = VILLAGE_POND.x0; x <= VILLAGE_POND.x1; x++) if (this.inPond({ x, y })) free.push({ x, y })
+    for (let y = pond.y0; y <= pond.y1; y++)
+      for (let x = pond.x0; x <= pond.x1; x++) if (this.inPond({ x, y }, pond)) free.push({ x, y })
     const spot = free[Math.floor(Math.random() * free.length)]
 
     if (!spot) {
-      this.time.delayedCall(2000, () => this.spawnFish())
+      this.time.delayedCall(2000, () => this.spawnFish(pond))
 
       return
     }
 
     const sprite = this.add.sprite(center(spot.x), center(spot.y), 'items', FISH_FRAME).play('fish')
-    this.fish.push({ sprite, x: spot.x, y: spot.y, nextMoveAt: 0, moving: false })
+    this.fish.push({ sprite, pond, x: spot.x, y: spot.y, nextMoveAt: 0, moving: false })
   }
 
   private catchFish(fish: Fish) {
     if (!eatFish()) return
     fish.sprite.destroy()
     this.fish = this.fish.filter((candidate) => candidate !== fish)
-    this.time.delayedCall(FISH_RESPAWN_MS, () => this.spawnFish())
+    this.time.delayedCall(FISH_RESPAWN_MS, () => this.spawnFish(fish.pond))
   }
 
   /** Fish drift around the pond at random, turning to face the way they swim. */
@@ -854,7 +912,7 @@ export class KingdomScene extends Phaser.Scene {
       const dir = DIRS[Math.floor(Math.random() * DIRS.length)] ?? 'left'
       const target = { x: fish.x + STEP[dir].x, y: fish.y + STEP[dir].y }
 
-      if (!this.inPond(target)) continue
+      if (!this.inPond(target, fish.pond)) continue
 
       if (dir === 'left' || dir === 'right') fish.sprite.setFlipX(dir === 'right')
       fish.moving = true
@@ -869,6 +927,30 @@ export class KingdomScene extends Phaser.Scene {
           fish.moving = false
         },
       })
+    }
+  }
+
+  /** A phish the player refused gives up: it fades away and doesn't come back. */
+  private turnAway(phish: Phish) {
+    this.phish = this.phish.filter((candidate) => candidate !== phish)
+    quest.progress({ phishTurnedAway: [...quest.get().progress.phishTurnedAway, phish.index] })
+    this.tweens.add({
+      targets: phish.sprite,
+      alpha: 0,
+      y: phish.sprite.y - 6,
+      duration: 500,
+      onComplete: () => phish.sprite.destroy(),
+    })
+  }
+
+  /** A phish that spots the player nearby beckons them over, like a lure in the dark. */
+  private callOutPhish(time: number) {
+    for (const phish of this.phish) {
+      const near = Math.abs(phish.x - this.pos.x) + Math.abs(phish.y - this.pos.y) <= PHISH_CALL.reach
+
+      if (!near || time - phish.calledAt < PHISH_CALL.ms) continue
+      phish.calledAt = time
+      quest.toast('A robed figure waves you over: "Psst! Your session is about to expire!"', 'info')
     }
   }
 

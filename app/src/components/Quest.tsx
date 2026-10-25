@@ -9,9 +9,10 @@ import {
 } from 'react'
 import { probe } from '../game/access.ts'
 import { Celebration } from './Celebration.tsx'
-import { INTRO, LESSONS, LESSON_ORDER } from '../game/content.ts'
+import { Phished } from './Phished.tsx'
+import { INTRO, LESSONS, LESSON_ORDER, type Choice } from '../game/content.ts'
 import { KNIGHT_QUOTA, questMachine, type QuestStage } from '../game/quest-machine.ts'
-import { MAX_HP, quest, useQuest, type DenyView, type Dir } from '../game/store.ts'
+import { MAX_HP, SETTLE_MS, quest, useQuest, type DenyView, type Dir } from '../game/store.ts'
 import { decide, type EvalLine, type Identity } from '../game/ppl.ts'
 import { KINGDOM_DOMAIN, SIGNED_IN_MESSAGE, zoneById } from '../game/zones.ts'
 
@@ -124,10 +125,10 @@ function useDialogKeys() {
     const onKey = (event: KeyboardEvent) => {
       // A handled key (like the Enter that starts the game) must not also advance a dialog.
       if (event.repeat) return
-      const { celebrating, deny, dialog, finale, journalOpen, menuOpen, signIn } = quest.get()
+      const { celebrating, deny, dialog, finale, journalOpen, menuOpen, phished, signIn } = quest.get()
 
-      // The celebration screen handles its own keys.
-      if (celebrating) return
+      // The celebration and phished screens handle their own keys.
+      if (celebrating || phished) return
       const journalKey = event.key === 'i' || event.key === 'I'
       const confirm = event.key === 'Enter' || event.key === ' ' || event.key === 'e' || event.key === 'E'
 
@@ -152,7 +153,7 @@ function useDialogKeys() {
       } else if (deny && ((confirm && !onButton) || event.key === 'Escape')) {
         event.preventDefault()
         quest.closeDeny()
-      } else if (dialog && confirm) {
+      } else if (dialog && confirm && !onButton) {
         event.preventDefault()
         quest.advance()
       } else if (journalOpen && (journalKey || event.key === 'Escape')) {
@@ -341,6 +342,7 @@ function Kingdom() {
       <SignInSheet />
       <Finale />
       <Celebration />
+      <Phished />
     </div>
   )
 }
@@ -603,9 +605,7 @@ function Hud() {
         })}
       </span>
       <span className="text-sun">{region}</span>
-      <span className="text-muted tabular-nums">
-        Bots {defeated.bot} · Phish {defeated.phish}
-      </span>
+      <span className="text-muted tabular-nums">Bots {defeated.bot}</span>
     </div>
   )
 }
@@ -639,10 +639,11 @@ function DialogBox() {
 
   if (!page) return null
   const last = dialog.index === dialog.pages.length - 1
+  const { choices } = page
 
   return (
     <div
-      className="absolute right-2.5 bottom-2.5 left-2.5 max-h-[calc(100%-20px)] cursor-pointer overflow-auto rounded-md border-3 border-ink bg-night-deep/96 px-4 py-3 shadow-[0_0_0_3px_var(--color-night-deep)]"
+      className={`absolute right-2.5 bottom-2.5 left-2.5 max-h-[calc(100%-20px)] overflow-auto rounded-md border-3 border-ink bg-night-deep/96 px-4 py-3 shadow-[0_0_0_3px_var(--color-night-deep)] ${choices ? '' : 'cursor-pointer'}`}
       role="dialog"
       aria-live="polite"
       onClick={() => quest.advance()}
@@ -666,9 +667,56 @@ function DialogBox() {
           ))}
         </ul>
       )}
-      <p className="mt-2 text-right font-display text-[0.85rem] text-muted">
-        {last ? 'Enter or tap to close' : 'Enter or tap to continue ▾'}
-      </p>
+      {choices ? (
+        <Choices choices={choices} />
+      ) : (
+        <p className="mt-2 text-right font-display text-[0.85rem] text-muted">
+          {last ? 'Enter or tap to close' : 'Enter or tap to continue ▾'}
+        </p>
+      )}
+    </div>
+  )
+}
+
+/** A dialog's answers as buttons; arrow keys move between them. */
+function Choices({ choices }: { readonly choices: readonly Choice[] }) {
+  const [shownAt] = useState(() => performance.now())
+
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    // A held Enter must not pick an answer the moment the choice appears.
+    if (event.repeat) {
+      event.preventDefault()
+
+      return
+    }
+
+    const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[event.key]
+
+    if (!step) return
+    event.preventDefault()
+    const buttons = [...event.currentTarget.querySelectorAll('button')]
+    const at = buttons.findIndex((button) => button === document.activeElement)
+    buttons[(at + step + buttons.length) % buttons.length]?.focus()
+  }
+
+  return (
+    <div className="mt-3 flex flex-wrap justify-end gap-2" role="group" onKeyDown={onKeyDown}>
+      {choices.map((choice, i) => (
+        <button
+          key={choice.label}
+          className="rounded border-2 border-panel-edge bg-panel px-3.5 py-2 font-display text-ink hover:border-lens focus-visible:border-lens"
+          type="button"
+          autoFocus={i === 0}
+          onClick={(event) => {
+            event.stopPropagation()
+
+            // The Enter that turned to this page lands on the focused answer too: ignore it.
+            if (performance.now() - shownAt > SETTLE_MS) quest.choose(choice)
+          }}
+        >
+          {choice.label}
+        </button>
+      ))}
     </div>
   )
 }
@@ -1140,13 +1188,6 @@ function GearPanel() {
           <span className="tabular-nums">
             {defeated.bot}
             {defeated.bot < KNIGHT_QUOTA && ` / ${KNIGHT_QUOTA}`}
-          </span>
-        </li>
-        <li>
-          <span>Phish defeated</span>
-          <span className="tabular-nums">
-            {defeated.phish}
-            {defeated.phish < KNIGHT_QUOTA && ` / ${KNIGHT_QUOTA}`}
           </span>
         </li>
       </ul>

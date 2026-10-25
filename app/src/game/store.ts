@@ -1,7 +1,7 @@
 // Shared state between the Phaser scene and the React UI. The scene writes to it (dialog,
 // denials, log, progress); React renders it and reports button presses back.
 import { useSyncExternalStore } from 'react'
-import type { DocLink, LessonId, Page } from './content.ts'
+import type { Choice, DocLink, LessonId, Page } from './content.ts'
 import type { EvalLine, Identity } from './ppl.ts'
 import {
   persist,
@@ -26,6 +26,8 @@ export interface Progress {
   readonly fountainHealed: number
   /** Half hearts pond fish have restored this game (at most FISH_LIMIT). */
   readonly fishEaten: number
+  /** Phish (by index into the world's list) the player refused to sign in with; they don't come back. */
+  readonly phishTurnedAway: readonly number[]
   /** Which of the library's books the player has read (indexes into BOOKS). */
   readonly booksRead: readonly number[]
   /** The Librarian has vouched for the player, so the Oracle lists them as a scholar. */
@@ -103,6 +105,8 @@ export interface QuestState {
   readonly finale: boolean
   /** After Quest complete: fireworks, a happy Pomeranian and the cast. */
   readonly celebrating: boolean
+  /** The player signed in with a phish: the game is lost and can only start over. */
+  readonly phished: boolean
   /** The Journal drawer, used when the panels can't sit beside the game. Pauses the game while open. */
   readonly journalOpen: boolean
   /** Something new reached the Journal (a log entry, lesson or identity change) since it was last open. */
@@ -113,6 +117,9 @@ export interface QuestState {
 
 /** Health is counted in half hearts: 10 is five full hearts. */
 export const MAX_HP = 10
+
+/** How long a just-shown answer or button ignores clicks, so a key meant for the last screen can't press it. */
+export const SETTLE_MS = 250
 
 /** A short buzz on phones that support it (not iPhones); nothing depends on it. */
 export const buzz = (pattern: number | number[]) => {
@@ -130,6 +137,7 @@ const freshProgress = (): Progress => ({
   brokenRocks: [],
   fountainHealed: 0,
   fishEaten: 0,
+  phishTurnedAway: [],
   booksRead: [],
   scholar: false,
   playedBefore: false,
@@ -175,6 +183,7 @@ let state: QuestState = {
   oracleBeside: false,
   finale: false,
   celebrating: false,
+  phished: false,
   journalOpen: false,
   journalUnread: false,
   savedAt: null,
@@ -212,6 +221,7 @@ export const quest = {
     state.signIn !== null ||
     state.finale ||
     state.celebrating ||
+    state.phished ||
     state.menuOpen ||
     state.journalOpen ||
     !state.started,
@@ -294,7 +304,8 @@ export const quest = {
   advance: () => {
     const dialog = state.dialog
 
-    if (!dialog) return
+    // A page with choices waits for one to be picked.
+    if (!dialog || dialog.pages[dialog.index]?.choices) return
 
     if (dialog.index + 1 < dialog.pages.length) {
       update({ dialog: { ...dialog, index: dialog.index + 1 } })
@@ -306,6 +317,13 @@ export const quest = {
     dialogDone = undefined
     update({ dialog: null, inputResumesAt: performance.now() + 200 })
     done?.()
+  },
+
+  /** Closes a page with choices and runs the one picked, instead of the dialog's onDone. */
+  choose: (choice: Choice) => {
+    dialogDone = undefined
+    update({ dialog: null, inputResumesAt: performance.now() + 200 })
+    choice.pick()
   },
 
   showDeny: (deny: DenyView, onDone?: () => void) => {
@@ -345,6 +363,7 @@ export const quest = {
   /** Quest complete leads straight on to the celebration. */
   closeFinale: () => update({ finale: false, celebrating: true }),
   endCelebration: () => update({ celebrating: false, inputResumesAt: performance.now() + 200 }),
+  fallForPhish: () => update({ phished: true, menuOpen: false, journalOpen: false }),
 
   toast: (text: string, tone: Toast['tone']) => update({ toast: { id: nextId++, text, tone } }),
   clearToast: (id: number) => {

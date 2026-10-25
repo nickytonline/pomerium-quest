@@ -9,13 +9,14 @@
 import { assign, createActor, setup, type SnapshotFrom } from 'xstate'
 
 /** The Captain vouches for anyone who has cleared this many of each monster kind. */
-export const KNIGHT_QUOTA = 2
+export const KNIGHT_QUOTA = 3
 
-export type MonsterKind = 'bot' | 'phish'
+/** Phish aren't monsters: they're fake Oracles, and a sword is no defense against them. */
+export type MonsterKind = 'bot'
 
 export type Defeated = Readonly<Record<MonsterKind, number>>
 
-export const MONSTER_KINDS: readonly MonsterKind[] = ['bot', 'phish']
+export const MONSTER_KINDS: readonly MonsterKind[] = ['bot']
 
 export const isProven = (defeated: Defeated) => MONSTER_KINDS.every((kind) => defeated[kind] >= KNIGHT_QUOTA)
 
@@ -44,7 +45,7 @@ export const questMachine = setup({
 }).createMachine({
   id: 'quest',
   initial: 'anonymous',
-  context: { defeated: { bot: 0, phish: 0 } },
+  context: { defeated: { bot: 0 } },
   on: {
     MONSTER_DEFEATED: {
       actions: assign({
@@ -66,7 +67,7 @@ export const questMachine = setup({
       on: { SIGNED_OUT: 'anonymous' },
     },
     proven: {
-      description: 'Has defeated enough bot slimes and phish for the Captain to vouch for them.',
+      description: 'Has defeated enough bot slimes for the Captain to vouch for them.',
       on: { KNIGHTED: 'knighted', SIGNED_OUT: 'anonymous' },
     },
     knighted: {
@@ -94,12 +95,10 @@ function restore() {
     if (!raw) return undefined
     // SAFETY: written by persist() below from actor.getPersistedSnapshot().
     const snapshot = JSON.parse(raw) as SnapshotFrom<typeof questMachine>
-    // SAFETY: saves from before bot slimes and phish counted one `xp` total of slimes.
+    // SAFETY: saves from before defeated bot slimes were counted by kind kept one `xp` total.
     const legacy = snapshot.context as Partial<QuestContext> & { readonly xp?: number }
 
-    return legacy.defeated
-      ? snapshot
-      : { ...snapshot, context: { defeated: { bot: legacy.xp ?? 0, phish: 0 } } }
+    return legacy.defeated ? snapshot : { ...snapshot, context: { defeated: { bot: legacy.xp ?? 0 } } }
   } catch {
     return undefined
   }

@@ -8,11 +8,19 @@ export interface DocLink {
   readonly href: string
 }
 
+/** An answer the player can give; picking it closes the dialog. */
+export interface Choice {
+  readonly label: string
+  readonly pick: () => void
+}
+
 export interface Page {
   readonly who: string
   readonly text: string
   readonly code?: string
   readonly links?: readonly DocLink[]
+  /** Shown as buttons in place of "continue"; only valid on a dialog's last page. */
+  readonly choices?: readonly Choice[]
 }
 
 export const LESSONS = {

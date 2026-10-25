@@ -153,34 +153,42 @@ function useFireworks(canvas: React.RefObject<HTMLCanvasElement | null>) {
   }, [canvas])
 }
 
-/** One frame of a 16px sprite sheet, drawn at 3x without smoothing. */
-function Sprite({
+/** One frame of a 16px sprite sheet, drawn at `scale` (3x by default) without smoothing. */
+export function Sprite({
   sheet,
   frame,
   frames,
+  scale = 3,
+  className = '',
 }: {
   readonly sheet: string
   readonly frame: number
   readonly frames: number
+  readonly scale?: number
+  readonly className?: string
 }) {
+  const size = 16 * scale
+
   return (
     <span
-      className="inline-block size-12 shrink-0 [image-rendering:pixelated]"
+      className={`inline-block shrink-0 [image-rendering:pixelated] ${className}`}
       style={{
+        width: size,
+        height: size,
         backgroundImage: `url(${sheet})`,
-        backgroundSize: `${frames * 48}px 48px`,
-        backgroundPosition: `-${frame * 48}px 0`,
+        backgroundSize: `${frames * size}px ${size}px`,
+        backgroundPosition: `-${frame * size}px 0`,
       }}
       aria-hidden="true"
     />
   )
 }
 
-const NPCS = { sheet: SHEETS.npcs, frames: 7 }
-const ITEMS = { sheet: SHEETS.items, frames: 9 }
+export const NPCS = { sheet: SHEETS.npcs, frames: 8 }
+const ITEMS = { sheet: SHEETS.items, frames: 7 }
 const DOG = { sheet: SHEETS.dog, frames: 12 }
 
-/** Who played whom. Frames match NPC_FRAME in world.ts and the item and dog sheets. */
+/** Who played whom. Frames match NPC_FRAME and PHISH_FRAME in world.ts and the item and dog sheets. */
 const CAST: readonly {
   readonly name: string
   readonly role: string
@@ -196,7 +204,7 @@ const CAST: readonly {
   { name: 'The Librarian', role: 'the admin who adds you to the scholars group', sheet: NPCS, frame: 5 },
   { name: 'The Armorer', role: 'an app behind a route, leaving access to Pomerium', sheet: NPCS, frame: 4 },
   { name: 'Bot slimes', role: 'automated bots hammering every gate', sheet: ITEMS, frame: 3 },
-  { name: 'Phish', role: 'phishing, luring you into handing over your sign-in', sheet: ITEMS, frame: 5 },
+  { name: 'Phish', role: 'phishing: a fake Oracle after your sign-in', sheet: NPCS, frame: 7 },
 ]
 
 function CastList({ hidden = false }: { readonly hidden?: boolean }) {
@@ -218,7 +226,7 @@ function CastList({ hidden = false }: { readonly hidden?: boolean }) {
   )
 }
 
-const playAgain = () => {
+export const playAgain = () => {
   quest.resetProgress()
   location.reload()
 }
@@ -231,11 +239,7 @@ export function Celebration() {
 
   if (!open) return null
 
-  return (
-    <CelebrationScreen
-      stats={`${defeated.bot} bot slimes and ${defeated.phish} phish defeated · ${lessons} lessons learned`}
-    />
-  )
+  return <CelebrationScreen stats={`${defeated.bot} bot slimes defeated · ${lessons} lessons learned`} />
 }
 
 function CelebrationScreen({ stats }: { readonly stats: string }) {

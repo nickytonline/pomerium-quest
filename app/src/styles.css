@@ -32,10 +32,17 @@
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 
   --animate-blink: blink 1.4s steps(2, start) infinite;
+  --animate-bob: bob 1.2s steps(2, start) infinite;
 
   @keyframes blink {
     50% {
       opacity: 0.75;
+    }
+  }
+
+  @keyframes bob {
+    50% {
+      translate: 0 -6px;
     }
   }
 }
@@ -79,6 +86,20 @@
 
   .sunset-text {
     background: linear-gradient(180deg, var(--color-sun), var(--color-ember) 55%, var(--color-neon));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* The phished screen: the splash's scanlines, in a cold red glow. */
+  .phished-bg {
+    background:
+      repeating-linear-gradient(to bottom, transparent 0 22px, rgb(255 93 115 / 0.07) 22px 26px),
+      radial-gradient(circle at 50% 30%, #3a1430 0%, var(--color-night-deep) 65%);
+  }
+
+  .phished-text {
+    background: linear-gradient(180deg, var(--color-sun), var(--color-deny) 60%, #a8324a);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;

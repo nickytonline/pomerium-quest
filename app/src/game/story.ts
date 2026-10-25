@@ -394,11 +394,11 @@ async function captain() {
       { who: 'Captain', text: 'The armory is for knights only.' },
       {
         who: 'Captain',
-        text: 'Two pests plague the fields. Bot slimes hammer every gate at once, never tiring. Phish lurk in the pond, dangling a friendly light to lure folk into handing over their sign-in.',
+        text: 'Bot slimes plague the fields, hammering every gate at once, never tiring. And watch for strangers in dark robes, dressed as the Oracle. Those are phish, and no sword will help you there.',
       },
       {
         who: 'Captain',
-        text: `Prove yourself: defeat ${KNIGHT_QUOTA} of each, then come back. Bot slimes: ${Math.min(defeated.bot, KNIGHT_QUOTA)} of ${KNIGHT_QUOTA}. Phish: ${Math.min(defeated.phish, KNIGHT_QUOTA)} of ${KNIGHT_QUOTA}.`,
+        text: `Prove yourself: defeat ${KNIGHT_QUOTA} bot slimes, then come back. So far: ${Math.min(defeated.bot, KNIGHT_QUOTA)} of ${KNIGHT_QUOTA}.`,
       },
     ])
 
@@ -540,7 +540,7 @@ const SCRIPTS: Record<NpcId, () => void> = {
         },
         {
           who: 'Sage',
-          text: "The phish are craftier. They don't storm the gate. They try to trick you into handing over your sign-in, because a gate can't tell a stolen sign-in from yours. Only ever sign in with the Oracle.",
+          text: "The phish are craftier. They don't storm the gate. They dress up as the Oracle, robes and all, and offer to sign you in, because a gate can't tell a stolen sign-in from yours. The real Oracle keeps to his temple. Only ever sign in there.",
         },
         {
           who: 'Sage',
@@ -653,6 +653,53 @@ async function librarian() {
 
 export const talk = (npc: NpcId) => SCRIPTS[npc]()
 
+/** The address a phish's sign-in page lives at: close to the kingdom's, and not it. */
+const PHISH_DOMAIN = `${KINGDOM_DOMAIN.split('.')[0]}-login.net`
+
+/**
+ * A phish, dressed as the Oracle, offers to sign the player in. Accepting loses the game;
+ * refusing sends it away (`onTurnedAway`).
+ */
+export function meetPhish(onTurnedAway: () => void) {
+  quest.say([
+    {
+      who: 'Oracle?',
+      text: "Ah, there you are! I am the Oracle. Your session is about to expire, and then every gate will lock you out. Quick, there's no time to walk back to the temple.",
+    },
+    {
+      who: 'Oracle?',
+      text: `Just sign in with me right here. My page is at oracle.${PHISH_DOMAIN}. Your email and password, that's all I need.`,
+      choices: [
+        {
+          label: 'Sign in here',
+          pick: () =>
+            quest.say([{ who: 'Oracle?', text: 'Thank you kindly. Heh. Heh heh heh…' }], () =>
+              quest.fallForPhish(),
+            ),
+        },
+        {
+          label: 'No. I only sign in at the temple.',
+          pick: () =>
+            quest.say(
+              [
+                {
+                  who: 'Oracle?',
+                  text: 'Hmph. Suit yourself. The robe slips as it turns away: no beard, just scales.',
+                },
+                {
+                  who: 'Pomerium Quest',
+                  text: `That was a phish. The real Oracle never comes looking for your password, and his page is never at ${PHISH_DOMAIN}. Only ever sign in with your real identity provider.`,
+                  links: [link('idp')],
+                },
+              ],
+              onTurnedAway,
+            ),
+        },
+      ],
+    },
+  ])
+}
+
 export function openChest(): boolean {
   if (hasSteel() || stage() !== 'knight') return false
   quest.send({ type: 'STEEL_TAKEN' })
@@ -754,14 +801,14 @@ export const readWorkbench = () =>
     },
   ])
 
-/** Each fish from the village pond restores half a heart, up to two full hearts each game. */
+/** Each fish from a pond restores half a heart, up to two full hearts each game. */
 export const FISH_LIMIT = 4
 
 /** Eats a caught fish if it would help. Returns false to leave the fish in the pond. */
 export function eatFish(): boolean {
   const { hp, progress } = quest.get()
   const left = FISH_LIMIT - progress.fishEaten
-  const say = (text: string) => quest.say([{ who: 'Village Pond', text }])
+  const say = (text: string) => quest.say([{ who: 'Pond', text }])
 
   if (hp >= MAX_HP) {
     say("A fish darts past. You're already at full health, so you let it be.")
@@ -779,8 +826,8 @@ export function eatFish(): boolean {
   quest.progress({ fishEaten: progress.fishEaten + 1 })
   say(
     left > 1
-      ? `You catch a fish and gulp it down: half a heart restored. The pond has ${hearts(left - 1)} left to give this game.`
-      : "You catch a fish and gulp it down: half a heart restored. That's all the pond can give this game.",
+      ? `You catch a fish and gulp it down: half a heart restored. The ponds have ${hearts(left - 1)} left to give this game.`
+      : "You catch a fish and gulp it down: half a heart restored. That's all the ponds can give this game.",
   )
 
   return true

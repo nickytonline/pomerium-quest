@@ -26,9 +26,6 @@ const PALETTE = {
   h: '#d6e2f5', // bot slime highlight
   z: '#1b1530', // bot slime visor
   r: '#ff5d73', // bot slime LEDs
-  f: '#6a4fd8', // phish
-  p: '#ff7ac8', // phish fins
-  y: '#ffd86b', // phish lure
   U: '#ffb27a', // fur highlight
   Y: '#e3b48a', // cream shadow
   Q: '#0b0910', // sunglasses black
@@ -185,26 +182,6 @@ const BOT_SLIME = [
   ],
 ]
 
-// An anglerfish dangling a friendly-looking light: bait for anyone who trusts it.
-const PHISH_LIT = [
-  '................',
-  '.....KKK........',
-  '....K...K.......',
-  '..KK....K.......',
-  '.KyyK...K.......',
-  '.KyyK..KKKKK..KK',
-  '..KK.KffffffKKpK',
-  '....KfWKffffKppK',
-  '...KfffffffffppK',
-  '...KWKWKffffffpK',
-  '...KfWfWfffffKpK',
-  '....KfffffffK.KK',
-  '.....KKKKKKK....',
-  '................',
-  '................',
-  '................',
-]
-
 // A pond koi the dog can catch and eat; its tail flicks between the two frames.
 const FISH_COLORS = { g: '#f08a4b', s: '#ffd2a8' }
 
@@ -252,8 +229,6 @@ const FISH = [
     palette: FISH_COLORS,
   },
 ]
-
-const PHISH = [PHISH_LIT, PHISH_LIT.map((r, i) => (i === 4 || i === 5 ? r.replace(/y/g, 'W') : r))]
 
 // ---- tiny PNG encoder ----
 const CRC = new Int32Array(256).map((_, n) => {
@@ -523,6 +498,38 @@ const NPCS = {
       '...KKKK..KKKK...',
     ],
   },
+  // A phish dressed as the Oracle: the same hood and beard, but a dark robe, shadowed face, red
+  // eyes, and a warm yellow light in place of the orb, dangled like an anglerfish's lure.
+  phish: {
+    palette: {
+      A: '#33224f',
+      a: '#4f3878',
+      F: '#9c8a90',
+      W: '#c9c9d6',
+      w: '#8d8aa0',
+      G: '#a8324a',
+      R: '#ff5d73',
+      o: '#ffd86b',
+    },
+    rows: [
+      '.......KK.......',
+      '......KaAK......',
+      '.....KaAGAK.....',
+      '....KaAAAAAK....',
+      '...KAFRFFRFAK...',
+      '...KAFFFFFFAK...',
+      '...KAWWFFWWAK...',
+      '..KAKWWWWWWKAK..',
+      '..KaKWWwWWWKaK..',
+      '..KaKWwWWwWKaK..',
+      '.KaaKWWWWWWKaaK.',
+      '.KaaaKFooFKaaaK.',
+      '..KAAAKooKAAAK..',
+      '..KAAAAKKAAAAK..',
+      '..KKKKKKKKKKKK..',
+      '................',
+    ],
+  },
 }
 
 // Frame order is load-bearing: see NPC_FRAME in app/src/game/world.ts.
@@ -574,7 +581,6 @@ function sheet(file, cells, { scale = 1, checker = false } = {}) {
 const grids = {
   ...dog,
   bot_slime: BOT_SLIME,
-  phish: PHISH,
   fish: FISH.map((f) => f.rows),
   sword_wood: [SWORD_WOOD],
   sword_steel: [SWORD_STEEL],
@@ -594,7 +600,7 @@ const dogCells = [dog.down, dog.up, dog.right, dog.left]
 // Game sheets. Frame order is load-bearing: see app/src/game/sprites.ts.
 sheet(join(assets, 'dog.png'), [dogCells.flat()])
 
-sheet(join(assets, 'items.png'), [[SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, ...BOT_SLIME, ...PHISH, ...FISH]])
+sheet(join(assets, 'items.png'), [[SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, ...BOT_SLIME, ...FISH]])
 
 sheet(join(assets, 'npcs.png'), [npcs])
 
@@ -605,9 +611,9 @@ sheet(
   join(out, 'preview.png'),
   [
     ...dogCells.map((r) => [...r, null, null]),
-    [SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, ...BOT_SLIME, ...PHISH, ...FISH],
+    [SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, ...BOT_SLIME, ...FISH],
     npcs.slice(0, 5),
-    [npcs[5], npcs[6], ...tiles.slice(0, 3)],
+    [npcs[5], npcs[6], npcs[7], ...tiles.slice(0, 2)],
   ],
   { scale: 10, checker: true },
 )

@@ -63,6 +63,9 @@ export const NPC_FRAME: Record<NpcId, number> = {
   baker: 6,
 }
 
+/** Phish dress as the Oracle, so their frame in npcs.png follows the real NPCs'. */
+export const PHISH_FRAME = 7
+
 export interface Point {
   readonly x: number
   readonly y: number
@@ -87,7 +90,7 @@ export interface World {
   readonly npcs: readonly Npc[]
   /** Bot slimes roam the fields on foot. */
   readonly bots: readonly Point[]
-  /** Phish swim only in the fields' pond. */
+  /** Phish, dressed as the Oracle, wait outside town to offer a sign-in that isn't his. */
   readonly phish: readonly Point[]
   readonly rocks: readonly Point[]
   readonly chest: Point
@@ -160,7 +163,7 @@ export function buildWorld(): World {
     TILE.tree,
   )
 
-  // Slime Fields, with the pond the phish lurk in.
+  // Slime Fields, with a pond of fish.
   fill(2, 5, 5, 7, TILE.water)
   fill(8, 12, 8, 16, TILE.path)
   fill(8, 12, 15, 12, TILE.path)
@@ -312,9 +315,8 @@ export function buildWorld(): World {
       { x: 13, y: 6 },
     ],
     phish: [
-      { x: 2, y: 5 },
-      { x: 5, y: 6 },
-      { x: 3, y: 7 },
+      { x: 7, y: 4 },
+      { x: 11, y: 10 },
     ],
     spawn: { x: 9, y: 25 },
   }
