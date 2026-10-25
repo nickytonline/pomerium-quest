@@ -36,6 +36,7 @@ password the first time.
 | Command                 | What it does                                                                            |
 | ----------------------- | --------------------------------------------------------------------------------------- |
 | `./quest up`            | Create the cluster if needed, build the images, deploy, and wait until the game answers |
+| `./quest dev`           | Same as `up`, but the game runs its Vite dev server and hot-reloads `app/src`           |
 | `./quest deploy`        | Rebuild and redeploy into the existing cluster                                          |
 | `./quest test`          | Sign players in through Pomerium with curl and check every zone policy                  |
 | `./quest status`        | Show the pods                                                                           |
