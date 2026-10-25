@@ -18,11 +18,11 @@ export interface Page {
 export const LESSONS = {
   every: {
     title: 'Every request is checked',
-    link: { label: 'Zero trust', href: `${DOCS}/concepts/zero-trust` },
+    link: { label: 'Zero trust', href: `${DOCS}/internals/zero-trust` },
   },
   idp: {
     title: 'Your identity provider proves who you are',
-    link: { label: 'OIDC identity providers', href: `${DOCS}/integrations/user-identity/oidc` },
+    link: { label: 'Identity providers', href: `${DOCS}/integrations/user-identity/identity-providers` },
   },
   route: {
     title: 'A route pairs an address with a policy',
@@ -34,7 +34,7 @@ export const LESSONS = {
   },
   claims: {
     title: 'Claims come from your identity provider',
-    link: { label: 'PPL: the claim criterion', href: `${DOCS}/internals/ppl` },
+    link: { label: 'PPL: the claim criterion', href: `${DOCS}/internals/ppl#supported-ppl-criteria` },
   },
   refresh: {
     title: 'Your session holds the claims from sign-in',
@@ -46,11 +46,11 @@ export const LESSONS = {
   },
   request: {
     title: 'Rules can check the request itself',
-    link: { label: 'PPL criteria', href: `${DOCS}/internals/ppl` },
+    link: { label: 'PPL criteria', href: `${DOCS}/internals/ppl#supported-ppl-criteria` },
   },
   defaultDeny: {
     title: 'No matching allow rule means no entry',
-    link: { label: 'Policy language', href: `${DOCS}/internals/ppl` },
+    link: { label: 'PPL: allow and deny', href: `${DOCS}/internals/ppl#actions` },
   },
   jwt: {
     title: 'Apps behind a route get a signed identity',
@@ -62,7 +62,7 @@ export const LESSONS = {
   },
   allOf: {
     title: 'An and rule needs every check to pass',
-    link: { label: 'PPL: and, or, not, nor', href: `${DOCS}/internals/ppl` },
+    link: { label: 'PPL: and, or, not, nor', href: `${DOCS}/internals/ppl#logical-operators` },
   },
 } as const
 
@@ -88,7 +88,7 @@ export const link = (lesson: LessonId) => LESSONS[lesson].link
 /** What each gate's sign says above its route config. */
 export const SIGN_TEXT: Partial<Record<ZoneId, string>> = {
   fields:
-    'This gate is a route. Pomerium checks every request for this path against the policy below, then forwards it to the app behind the route.',
+    'This gate is a route. Pomerium checks every request for this path against the policy below, and forwards the ones it allows to the app behind the route.',
   town: 'The town only lets in citizens: people whose email domain is kingdom.com.',
   guild: "The Knights' Guild hall. Any citizen may enter.",
   armory: 'Only knights. The gate reads the groups claim your identity provider put in your session.',
@@ -98,10 +98,13 @@ export const SIGN_TEXT: Partial<Record<ZoneId, string>> = {
 }
 
 export const SIGN_DOCS: Partial<Record<ZoneId, readonly DocLink[]>> = {
-  fields: [link('route'), { label: 'authenticated_user', href: `${DOCS}/internals/ppl` }],
-  town: [{ label: 'The domain criterion', href: `${DOCS}/internals/ppl` }],
+  fields: [
+    link('route'),
+    { label: 'authenticated_user', href: `${DOCS}/internals/ppl#supported-ppl-criteria` },
+  ],
+  town: [{ label: 'The domain criterion', href: `${DOCS}/internals/ppl#supported-ppl-criteria` }],
   guild: [link('route')],
-  armory: [link('claims'), { label: 'Claim headers', href: `${DOCS}/reference/jwt-claim-headers` }],
+  armory: [link('claims'), link('refresh')],
   library: [link('request'), { label: 'Path matching', href: `${DOCS}/reference/routes/path-matching` }],
   keep: [link('allOf'), link('claims')],
 }
@@ -114,8 +117,11 @@ export const BOOKS: Page[] = [
   },
   {
     who: 'Book · The Gate’s Seal',
-    text: 'When Pomerium lets a request through, it adds a signed JWT in the X-Pomerium-Jwt-Assertion header. The app behind the route learns who you are without running its own login.',
-    links: [link('jwt')],
+    text: 'When Pomerium lets a request through on a route with pass_identity_headers turned on, it adds a signed JWT in the X-Pomerium-Jwt-Assertion header. The app behind the route learns who you are without running its own login. Every gate in this kingdom turns it on.',
+    links: [
+      link('jwt'),
+      { label: 'Pass identity headers', href: `${DOCS}/reference/routes/pass-identity-headers-per-route` },
+    ],
   },
   {
     who: 'Book · Trust, But Verify',
