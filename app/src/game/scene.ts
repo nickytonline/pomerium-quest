@@ -572,7 +572,7 @@ export class KingdomScene extends Phaser.Scene {
     const item = this.add.image(center(chest.x), center(chest.y) - 2, 'items', frame).setDepth(11)
 
     this.shownItem = item
-    this.tweens.add({ targets: item, y: center(chest.y) - 14, duration: 420, ease: 'Back.easeOut' })
+    this.tweens.add({ targets: item, y: center(chest.y) - 18, duration: 420, ease: 'Back.easeOut' })
     this.tweens.add({ targets: item, alpha: { from: 0, to: 1 }, duration: 200 })
   }
 
