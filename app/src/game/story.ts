@@ -437,18 +437,28 @@ export async function writeLedger() {
     quest.say([{ who: 'Royal Ledger', text: 'Your words are recorded. You must be a scribe.' }])
 }
 
+// game.localhost.pomerium.io → localhost.pomerium.io; a bare host like localhost stays as is.
+const siblingDomain = () => {
+  const [first, ...rest] = location.hostname.split('.')
+
+  return rest.length > 0 ? rest.join('.') : first
+}
+
 export function nightGate() {
   quest.log({ decision: 'NO ROUTE', method: 'GET', path: 'night-market', who: who(identity()) })
   quest.showDeny(
     {
       status: 404,
       title: 'No route',
-      requestLine: `GET https://night-market.${location.hostname.split('.').slice(1).join('.')}`,
+      requestLine: `GET https://night-market.${siblingDomain()}/`,
       who: who(identity()),
       lines: [],
-      hint: 'Pomerium only proxies addresses it has a route for. There is no route for the Night Market yet: it opens in chapter two, with time-based rules.',
+      hint: 'Pomerium only proxies addresses it has a route for, and there is no route for the Night Market yet. You have reached the end of chapter one: the market opens in chapter two, with time-based rules.',
       links: [link('notFound')],
     },
-    () => learn('notFound'),
+    () => {
+      learn('notFound')
+      quest.say(END_SIGN)
+    },
   )
 }
