@@ -21,7 +21,7 @@ export const OracleAdminLive = Layer.effect(
     const grant = (email: string, group: string) =>
       HttpClientRequest.post(`${config.oracleAdminUrl}/admin/grants`).pipe(
         HttpClientRequest.setHeader('x-oracle-key', Redacted.value(config.oracleAdminKey)),
-        HttpClientRequest.bodyJsonUnsafe({ email, group }),
+        HttpClientRequest.bodyUrlParams({ email, group }),
         client.execute,
         Effect.flatMap(HttpClientResponse.filterStatusOk),
         Effect.asVoid,
