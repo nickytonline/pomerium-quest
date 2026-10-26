@@ -182,6 +182,16 @@ const CRUMB_PALETTE = new Map([
 
 const CRUMB_LINGER_MS = 4_000
 
+/** A bite of the loaf on its way to the traveler's mouth: crust round a pale inside, in CRUMBS' colors. */
+const MORSEL: readonly string[] = ['.11.', '1332', '1322', '.21.']
+
+/** How a bite goes: up from the table to the mouth, held there while it's chewed. */
+const MORSEL_LIFT_MS = 200
+const MORSEL_CHEW_MS = 450
+
+/** Most bites go down whole; this share of them drops a crumb. */
+const CRUMB_CHANCE = 0.35
+
 /** How long after the last of the loaf is eaten until a fresh one is on the table. */
 const NEW_LOAF_MS = 90_000
 
@@ -1764,10 +1774,11 @@ export class KingdomScene extends Phaser.Scene {
   }
 
   /**
-   * At the table, a bite every so often: a munch, and crumbs falling to the floor. The loaf gets
+   * At the table, a bite every so often: a piece of the loaf goes up to the traveler's mouth and is
+   * chewed, now and then dropping a crumb. The loaf gets
    * smaller every few bites, and once it's gone (or if it already was) the traveler leaves.
    */
-  private eatBread(traveler: Point, time: number) {
+  private eatBread(traveler: NpcSprite, time: number) {
     const plan = this.traveler
 
     if (time < plan.nextBiteAt) return
@@ -1788,7 +1799,49 @@ export class KingdomScene extends Phaser.Scene {
 
     if (!this.canSee(traveler)) return
     sfx('munch')
-    this.dropCrumbs(traveler)
+    this.takeBite(traveler)
+
+    if (Math.random() < CRUMB_CHANCE) this.dropCrumb(traveler)
+  }
+
+  /** A bite lifts off the loaf to the traveler's mouth, and they chew it out of sight. */
+  private takeBite(traveler: NpcSprite) {
+    const motion = matchMedia('(prefers-reduced-motion: no-preference)').matches
+    const mouth = { x: center(traveler.x), y: center(traveler.y) + 2 }
+    const morsel = this.add.image(mouth.x, mouth.y, this.pixelTexture('morsel', MORSEL)).setDepth(11)
+
+    if (!motion) {
+      this.time.delayedCall(MORSEL_CHEW_MS, () => morsel.destroy())
+
+      return
+    }
+
+    // In a few whole steps, like the crumbs.
+    const step = (t: number) => Math.round(t * CRUMB_FRAMES) / CRUMB_FRAMES
+
+    morsel.setPosition(center(HOUSE.table.x), center(HOUSE.table.y) - 3)
+    this.tweens.add({
+      targets: morsel,
+      x: { value: mouth.x, ease: step },
+      y: { value: mouth.y, ease: step },
+      duration: MORSEL_LIFT_MS,
+      onComplete: () => {
+        // Chewing: the traveler bobs twice, and the bite is gone.
+        this.tweens.add({
+          targets: traveler.sprite,
+          y: center(traveler.y) - 1,
+          duration: MORSEL_CHEW_MS / 4,
+          yoyo: true,
+          repeat: 1,
+          ease: step,
+          // Unless a guard has started leading them out mid-chew.
+          onComplete: () => {
+            if (this.traveler.plan === 'eat') traveler.sprite.setY(center(traveler.y))
+          },
+        })
+        this.time.delayedCall(MORSEL_CHEW_MS / 2, () => morsel.destroy())
+      },
+    })
   }
 
   /** Once the loaf is gone, a fresh one turns up on the table a while later. */
@@ -1810,69 +1863,69 @@ export class KingdomScene extends Phaser.Scene {
 
   /** Makes the crumb textures, once: each a few pixels in the loaf's colors. */
   private crumbTextures() {
-    return CRUMBS.map((rows, i) => {
-      const key = `crumb-${i}`
+    return CRUMBS.map((rows, i) => this.pixelTexture(`crumb-${i}`, rows))
+  }
 
-      if (this.textures.exists(key)) return key
-      const width = Math.max(...rows.map((row) => row.length))
-      const canvas = this.textures.createCanvas(key, width, rows.length)
-      const ctx = canvas?.getContext()
+  /** A tiny texture drawn from rows of CRUMB_PALETTE keys, made once and then reused by its key. */
+  private pixelTexture(key: string, rows: readonly string[]) {
+    if (this.textures.exists(key)) return key
+    const width = Math.max(...rows.map((row) => row.length))
+    const canvas = this.textures.createCanvas(key, width, rows.length)
+    const ctx = canvas?.getContext()
 
-      rows.forEach((row, y) => {
-        for (let x = 0; x < row.length; x++) {
-          const color = CRUMB_PALETTE.get(row.charAt(x))
+    rows.forEach((row, y) => {
+      for (let x = 0; x < row.length; x++) {
+        const color = CRUMB_PALETTE.get(row.charAt(x))
 
-          if (!ctx || !color) continue
-          ctx.fillStyle = color
-          ctx.fillRect(x, y, 1, 1)
-        }
-      })
-      canvas?.refresh()
-
-      return key
+        if (!ctx || !color) continue
+        ctx.fillStyle = color
+        ctx.fillRect(x, y, 1, 1)
+      }
     })
+    canvas?.refresh()
+
+    return key
   }
 
   /**
-   * A few crumbs fall from the traveler's mouth in jerky steps, lie on the floor a while, then blink
-   * out, the way an old console would show them.
+   * A crumb falls from the traveler's mouth in jerky steps, lies on the floor a while, then blinks
+   * out, the way an old console would show it.
    */
-  private dropCrumbs(at: Point) {
+  private dropCrumb(at: Point) {
     const motion = matchMedia('(prefers-reduced-motion: no-preference)').matches
     const keys = this.crumbTextures()
 
-    for (let i = 0; i < Phaser.Math.Between(2, 3); i++) {
-      const key = keys[Phaser.Math.Between(0, keys.length - 1)] ?? 'crumb-0'
-      const x = center(at.x) + Phaser.Math.Between(-2, 2)
-      const y = center(at.y) - 3
-      const landX = x + Phaser.Math.Between(-6, 6)
-      const landY = center(at.y) + Phaser.Math.Between(5, 7)
-      const crumb = this.add.image(motion ? x : landX, motion ? y : landY, key).setDepth(11)
-      const linger = CRUMB_LINGER_MS + Phaser.Math.Between(0, 1_000)
+    const key = keys[Phaser.Math.Between(0, keys.length - 1)] ?? 'crumb-0'
+    const x = center(at.x) + Phaser.Math.Between(-2, 2)
+    const y = center(at.y) - 3
+    const landX = x + Phaser.Math.Between(-6, 6)
+    const landY = center(at.y) + Phaser.Math.Between(5, 7)
+    const crumb = this.add.image(motion ? x : landX, motion ? y : landY, key).setDepth(11)
+    const linger = CRUMB_LINGER_MS + Phaser.Math.Between(0, 1_000)
 
-      if (!motion) {
-        crumb.setDepth(0.5)
-        this.time.delayedCall(linger, () => crumb.destroy())
-        continue
-      }
+    if (!motion) {
+      crumb.setDepth(0.5)
+      this.time.delayedCall(linger, () => crumb.destroy())
 
-      // y(t) = (1 + lift)t² − lift·t: a little hop out of the mouth, then down to the floor, drawn in
-      // a few whole steps rather than smoothly.
-      const lift = Phaser.Math.FloatBetween(0.3, 0.8)
-      const step = (t: number) => Math.round(t * CRUMB_FRAMES) / CRUMB_FRAMES
-
-      this.tweens.add({
-        targets: crumb,
-        x: { value: landX, ease: (t: number) => step(t) },
-        y: { value: landY, ease: (t: number) => (1 + lift) * step(t) ** 2 - lift * step(t) },
-        duration: Phaser.Math.Between(240, 320),
-        onComplete: () => {
-          // On the floor now, so whoever stands there is drawn over it.
-          crumb.setDepth(0.5)
-          this.blinkOut(crumb, linger)
-        },
-      })
+      return
     }
+
+    // y(t) = (1 + lift)t² − lift·t: a little hop out of the mouth, then down to the floor, drawn in
+    // a few whole steps rather than smoothly.
+    const lift = Phaser.Math.FloatBetween(0.3, 0.8)
+    const step = (t: number) => Math.round(t * CRUMB_FRAMES) / CRUMB_FRAMES
+
+    this.tweens.add({
+      targets: crumb,
+      x: { value: landX, ease: (t: number) => step(t) },
+      y: { value: landY, ease: (t: number) => (1 + lift) * step(t) ** 2 - lift * step(t) },
+      duration: Phaser.Math.Between(240, 320),
+      onComplete: () => {
+        // On the floor now, so whoever stands there is drawn over it.
+        crumb.setDepth(0.5)
+        this.blinkOut(crumb, linger)
+      },
+    })
   }
 
   /** After a while, blinks a crumb a few times and removes it. */
