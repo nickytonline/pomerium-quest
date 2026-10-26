@@ -14,7 +14,7 @@ import {
   type Page,
   type SignId,
 } from './content.ts'
-import { decide, routeYaml, type Identity } from './ppl.ts'
+import { decide, failedChecks, routeYaml, type Identity, type RequestInfo } from './ppl.ts'
 import { KNIGHT_QUOTA, hasSteel, isAtLeast, stage, type QuestStage } from './quest-machine.ts'
 import { sfx } from './sound.ts'
 import { MAX_HP, quest, type DenyView, type LogEntry } from './store.ts'
@@ -88,7 +88,7 @@ interface Refusal {
   readonly hint: string
 }
 
-function refusal(zone: Zone, method: 'GET' | 'POST', id: Identity): Refusal {
+function refusal(zone: Zone, req: RequestInfo, id: Identity): Refusal {
   const citizensOnly = (place: string): Refusal => ({
     story: {
       title: 'Citizens only',
@@ -112,16 +112,24 @@ function refusal(zone: Zone, method: 'GET' | 'POST', id: Identity): Refusal {
       }
     case 'keep':
       return keepRefusal(id)
-    case 'library':
-      return method === 'POST'
-        ? {
-            story: {
-              title: 'Scribes only',
-              text: 'The scriptorium guard bars the door. "This room is for writing in the Royal Ledger, and my orders say only scribes may write. Your papers say you may read, not write."',
-            },
-            hint: "Going in to write is a POST. The rule for readers only allows GET, so it doesn't match, and the other rule needs the scribes group, which you aren't in. This denial is the lesson.",
-          }
-        : citizensOnly('The library')
+    case 'library': {
+      const room = req.method === 'POST' ? 'The scriptorium' : 'The library'
+
+      if (domainOf(id) !== KINGDOM_DOMAIN || req.method === 'GET') return citizensOnly(room)
+
+      const fails = failedChecks(zone, id, req)
+        .map((failed, i) => `rule ${i + 1} fails ${failed.join(' and ')}`)
+        .join('; ')
+
+      return {
+        story: {
+          title: 'Scribes only',
+          text: 'The scriptorium guard bars the door. "This room is for writing in the Royal Ledger, and my orders say only scribes may write. Your papers say you may read, not write."',
+        },
+        hint: `Going in to write is a POST to the library's route. Against a POST, ${fails}. No rule matched, so Pomerium denied it. This denial is the lesson.`,
+      }
+    }
+
     default:
       return {
         story: { title: "The guard won't let you pass", text: '"Sorry, my orders don\'t cover you."' },
@@ -189,7 +197,7 @@ function denyView(
               },
         hint: 'Try again in a moment. Once the cached copy expires, Pomerium reads your updated user record and the guard lets you through.',
       }
-    : refusal(zone, method, id)
+    : refusal(zone, { method, path }, id)
 
   return {
     status: 403,

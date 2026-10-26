@@ -121,6 +121,13 @@ export function decide(zone: Zone, id: Identity, req: RequestInfo, whose: Viewpo
   return { allow: rules.some((rule) => rule.allow), lines: rules.flatMap((rule) => rule.lines) }
 }
 
+/** For each allow rule in order, the criteria the request fails, labelled as on the denial screen. */
+export function failedChecks(zone: Zone, id: Identity, req: RequestInfo): string[][] {
+  return zone.policy.map((rule) =>
+    rule.criteria.filter((criterion) => !check(criterion, id, req, 'your').ok).map(criterionLabel),
+  )
+}
+
 /** Route config as YAML, the way it appears in the Pomerium config file. */
 export function routeYaml(zone: Zone, host: string, upstream: string): string {
   return [
