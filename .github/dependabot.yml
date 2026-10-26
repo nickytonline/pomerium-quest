@@ -1,0 +1,35 @@
+version: 2
+updates:
+  # One root lockfile covers the app workspace too
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+    groups:
+      # The root package.json overrides vite to vite-plus-core, so they have to move together
+      vite-plus:
+        patterns:
+          - 'vite'
+          - 'vite-plus'
+          - '@voidzero-dev/vite-plus-core'
+      react:
+        patterns:
+          - 'react'
+          - 'react-dom'
+          - '@types/react'
+          - '@types/react-dom'
+      tanstack:
+        patterns:
+          - '@tanstack/*'
+      tailwind:
+        patterns:
+          - 'tailwindcss'
+          - '@tailwindcss/*'
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
