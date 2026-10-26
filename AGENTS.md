@@ -31,7 +31,10 @@ policy. The [README](README.md) explains how it fits together; this file is how 
 - After changing a policy in `zones.ts` or anything in `render.ts`, run `./quest deploy`, then
   `./quest test` to check every zone end to end. If the Keycloak realm changed, also run
   `./quest reset-oracle`, since Keycloak only imports the realm on its first start.
-- There are no unit tests yet. Check a change by playing it in the browser, and say so if you couldn't.
+- `npm test` runs the Vitest unit tests (`*.test.ts` next to the code). They cover pure logic: the policy
+  evaluator, house rule validation, the quest and house statecharts and the citizens' domain. Behaviour that
+  needs Pomerium or Keycloak stays in `./quest test`. Add a unit test only for logic with a real way to
+  break. Check anything visual by playing it in the browser, and say so if you couldn't.
 
 ## Checking cheaply
 

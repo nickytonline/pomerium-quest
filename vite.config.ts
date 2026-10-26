@@ -10,6 +10,9 @@ const ignored = [
 ]
 
 export default defineConfig({
+  test: {
+    include: ['app/src/**/*.test.ts'],
+  },
   fmt: {
     ignorePatterns: ignored,
     singleQuote: true,

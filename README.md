@@ -197,6 +197,7 @@ password the first time.
 | `./quest dev`           | Same as `up`, but the game runs its Vite dev server and hot-reloads `app/src`           |
 | `./quest deploy`        | Rebuild and redeploy into the existing cluster                                          |
 | `./quest test`          | Sign players in through Pomerium with curl and check every zone policy and house        |
+| `npm test`              | Run the unit tests for the policy evaluator, house rule validation and statecharts      |
 | `./quest status`        | Show the pods, services and Ingresses                                                   |
 | `./quest logs pomerium` | Follow logs (`pomerium`, `quest` or `keycloak`)                                         |
 | `./quest admin`         | Open Keycloak's admin console on http://localhost:8080 and print its password           |
