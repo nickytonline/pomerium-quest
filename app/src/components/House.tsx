@@ -5,6 +5,7 @@ import { LESSONS, link, type LessonId } from '../game/content.ts'
 import {
   HOUSE_LIMITS,
   HOUSE_VALUE,
+  TOWNSFOLK_DOMAIN,
   VISITOR_IDS,
   VISITORS,
   turnsAwayOwner,
@@ -13,7 +14,6 @@ import {
 } from '../game/house.ts'
 import { currentLetter, houseRouteYaml, saveDoorRules } from '../game/house-story.ts'
 import { quest, useQuest } from '../game/store.ts'
-import { KINGDOM_DOMAIN } from '../game/zones.ts'
 import { TabbedScreen, switchTab } from './TabbedScreen.tsx'
 
 type Kind = HouseCriterion['kind']
@@ -47,7 +47,7 @@ function blank(kind: Kind): HouseCriterion {
     case 'email':
       return { kind, is: peopleWith()[0]?.email ?? '' }
     case 'domain':
-      return { kind, is: KINGDOM_DOMAIN }
+      return { kind, is: TOWNSFOLK_DOMAIN }
     case 'claim':
       return { kind, claim: 'groups', value: 'knights' }
     case 'http_method':

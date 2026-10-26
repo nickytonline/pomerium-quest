@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { parse } from 'yaml'
 import { decide, policyDocument, policyYaml, type Identity } from './ppl.ts'
-import { KINGDOM_DOMAIN, ZONES, zoneById, type PolicyRule, type ZoneId } from './zones.ts'
+import { ZONES, zoneById, type PolicyRule, type ZoneId } from './zones.ts'
 
 const person = (email: string, groups: readonly string[] = []): Identity => ({
   authenticated: true,
@@ -9,10 +9,10 @@ const person = (email: string, groups: readonly string[] = []): Identity => ({
   groups,
 })
 
-const citizen = person(`nick@${KINGDOM_DOMAIN}`)
-const knight = person(`captain@${KINGDOM_DOMAIN}`, ['knights'])
-const scribe = person(`scribe@${KINGDOM_DOMAIN}`, ['scribes'])
-const knightAndScholar = person(`both@${KINGDOM_DOMAIN}`, ['knights', 'scholars'])
+const citizen = person('nick@example.org', ['citizen'])
+const knight = person('captain@example.org', ['citizen', 'knights'])
+const scribe = person('scribe@example.org', ['citizen', 'scribes'])
+const knightAndScholar = person('both@example.org', ['citizen', 'knights', 'scholars'])
 const traveler = person('wanderer@outlands.net')
 const nobody: Identity = { authenticated: false, email: '', groups: [] }
 
@@ -25,9 +25,10 @@ describe('the game explains the same decision Pomerium makes for every zone', ()
     expect(allowed('fields', nobody)).toBe(false)
   })
 
-  it('keeps the town for citizens, whatever else a stranger carries', () => {
+  it('keeps the town for the citizen group, whatever else a stranger carries', () => {
     expect(allowed('town', citizen)).toBe(true)
     expect(allowed('town', traveler)).toBe(false)
+    expect(allowed('town', person('nick@example.org'))).toBe(false)
     expect(allowed('town', person('x@evil.net', ['knights']))).toBe(false)
   })
 
@@ -45,14 +46,14 @@ describe('the game explains the same decision Pomerium makes for every zone', ()
   it('needs scribes for the scriptorium, even though knights and citizens can read the library', () => {
     expect(allowed('scriptorium', scribe)).toBe(true)
     expect(allowed('scriptorium', knight)).toBe(false)
-    expect(allowed('scriptorium', person('scribe@outlands.net', ['scribes']))).toBe(false)
+    expect(allowed('scriptorium', person('scribe@example.org', ['scribes']))).toBe(false)
   })
 
   it('opens the keep only when every check in its one rule passes', () => {
     expect(allowed('keep', knightAndScholar)).toBe(true)
     expect(allowed('keep', knight)).toBe(false)
-    expect(allowed('keep', person(`s@${KINGDOM_DOMAIN}`, ['scholars']))).toBe(false)
-    expect(allowed('keep', person('x@outlands.net', ['knights', 'scholars']))).toBe(false)
+    expect(allowed('keep', person('s@example.org', ['citizen', 'scholars']))).toBe(false)
+    expect(allowed('keep', person('x@example.org', ['knights', 'scholars']))).toBe(false)
   })
 })
 
@@ -66,12 +67,12 @@ describe('decide', () => {
 
   it('lets a deny rule win over a matching allow rule', () => {
     const policy = house(
-      { action: 'allow', match: 'and', criteria: [{ kind: 'domain', is: KINGDOM_DOMAIN }] },
-      { action: 'deny', match: 'or', criteria: [{ kind: 'email', is: `baker@${KINGDOM_DOMAIN}` }] },
+      { action: 'allow', match: 'and', criteria: [{ kind: 'claim', claim: 'groups', value: 'citizen' }] },
+      { action: 'deny', match: 'or', criteria: [{ kind: 'email', is: 'baker@example.org' }] },
     )
 
     expect(decide(policy, citizen, get).allow).toBe(true)
-    expect(decide(policy, person(`baker@${KINGDOM_DOMAIN}`), get).allow).toBe(false)
+    expect(decide(policy, person('baker@example.org', ['citizen']), get).allow).toBe(false)
   })
 
   it('combines criteria the way and, or and not say', () => {

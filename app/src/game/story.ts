@@ -21,7 +21,7 @@ import { KNIGHT_QUOTA, hasSteel, isAtLeast, stage, type QuestStage } from './que
 import { sfx } from './sound.ts'
 import { MAX_HP, quest, type DenyView, type LogEntry } from './store.ts'
 import type { Gate, GateRequest, NpcId } from './world.ts'
-import { KINGDOM_DOMAIN, zoneById, type Zone } from './zones.ts'
+import { zoneById, type Zone } from './zones.ts'
 
 const UPSTREAM = 'http://quest.quest.svc.cluster.local:3000'
 
@@ -45,16 +45,17 @@ const who = (id: Identity) => (id.authenticated ? id.email : 'anonymous')
 const claimsCode = (id: Identity) =>
   JSON.stringify({ email: id.email, email_verified: true, groups: id.groups }, null, 2)
 
-const domainOf = (id: Identity) => id.email.split('@')[1] ?? ''
+const isCitizen = (id: Identity) => id.groups.includes('citizen')
 
-const NOT_A_CITIZEN = `Every allow rule needs domain: ${KINGDOM_DOMAIN}, and your email's domain doesn't match. When no rule matches, Pomerium denies the request.`
+const NOT_A_CITIZEN =
+  "Every allow rule needs claim/groups: citizen, and the groups claim in your session doesn't include it. When no rule matches, Pomerium denies the request."
 
 /** The Royal Keep checks three things at once; say which ones the player still lacks. */
 function keepRefusal(id: Identity): Refusal {
   const vouched = vouchedGroups()
   const missing: string[] = []
 
-  if (domainOf(id) !== KINGDOM_DOMAIN) missing.push(`a citizen of ${KINGDOM_DOMAIN}`)
+  if (!isCitizen(id)) missing.push('a citizen (the Oracle can make you one)')
 
   if (!id.groups.includes('knights'))
     missing.push(
@@ -75,7 +76,7 @@ function keepRefusal(id: Identity): Refusal {
       title: 'Knights who are scholars only',
       text: `The guard of the Royal Keep reads your papers twice. "My orders: only knights who are also scholars. You still need to be ${missing.join(', and ')}."`,
     },
-    hint: `The keep's one rule needs domain: ${KINGDOM_DOMAIN}, claim/groups: knights and claim/groups: scholars. In an and rule every check must pass; the ✗ lines are the ones your session fails.`,
+    hint: `The keep's one rule needs claim/groups: citizen, claim/groups: knights and claim/groups: scholars. In an and rule every check must pass; the ✗ lines are the ones your session fails.`,
   }
 }
 
@@ -92,7 +93,7 @@ function refusal(zone: Zone, id: Identity): Refusal {
   const citizensOnly = (place: string): Refusal => ({
     story: {
       title: 'Citizens only',
-      text: `The guard lowers a spear across the road. "${place} is for citizens of ${KINGDOM_DOMAIN}. Those are my orders. Your papers say ${id.email}, from ${domainOf(id)}, so I can't let you pass."`,
+      text: `The guard lowers a spear across the road. "${place} is for citizens. Those are my orders. Your papers say ${id.email}, but nothing in them says citizen, so I can't let you pass."`,
     },
     hint: NOT_A_CITIZEN,
   })
@@ -115,7 +116,7 @@ function refusal(zone: Zone, id: Identity): Refusal {
     case 'library':
       return citizensOnly('The library')
     case 'scriptorium':
-      if (domainOf(id) !== KINGDOM_DOMAIN) return citizensOnly('The scriptorium')
+      if (!isCitizen(id)) return citizensOnly('The scriptorium')
 
       return {
         story: {
@@ -410,7 +411,7 @@ function oracle() {
         ...intro,
         {
           who: 'Oracle',
-          text: `Step into the light and tell me who you are. New here? Introduce yourself with your ${KINGDOM_DOMAIN} email and a password. I only know citizens of ${KINGDOM_DOMAIN}.`,
+          text: `Step into the light and tell me who you are. New here? Introduce yourself with your email and a password.`,
         },
       ],
       () => {
@@ -522,7 +523,7 @@ function traveler() {
       { who: 'Traveler', text: "The Oracle knows me. I'm wanderer@outlands.net, signed in and everything." },
       {
         who: 'Traveler',
-        text: `But this town only lets in people whose email domain is ${KINGDOM_DOMAIN}. Signing in got me as far as the guard. It didn't get me past them.`,
+        text: "But this town only lets in citizens, and the Oracle hasn't made me one. Signing in got me as far as the guard. It didn't get me past them.",
       },
       {
         who: 'Traveler',
@@ -539,12 +540,12 @@ function traveler() {
           onBehalfOf: 'the Traveler',
           story: {
             title: 'Not a citizen',
-            text: `The town guard turns the Traveler away. The Oracle knows them as ${TRAVELER.email}, but the town only opens to citizens of ${KINGDOM_DOMAIN}.`,
+            text: `The town guard turns the Traveler away. The Oracle knows them as ${TRAVELER.email}, but the town only opens to citizens.`,
           },
           requestLine: `GET ${location.origin}${path}`,
           who: TRAVELER.email,
           lines: decide(town, TRAVELER, { method: 'GET', path }, 'their').lines,
-          hint: `Their domain is ${TRAVELER.email.split('@')[1]}, and only citizens of ${KINGDOM_DOMAIN} may enter. This was the Traveler's request: your own access hasn't changed.`,
+          hint: "Their groups claim has no citizen in it, and only citizens may enter. This was the Traveler's request: your own access hasn't changed.",
           links: [link('authz'), link('defaultDeny')],
         },
         () => learn('authz'),
@@ -565,7 +566,7 @@ function baker() {
       },
       {
         who: 'Baker',
-        text: `The guard checks me every single time, same as everyone. My email domain is ${KINGDOM_DOMAIN}, so I match the guard's orders and I'm let through.`,
+        text: `The guard checks me every single time, same as everyone. My groups claim says citizen, so I match the guard's orders and I'm let through.`,
       },
       {
         who: 'Baker',
@@ -729,7 +730,7 @@ async function librarian() {
 export const talk = (npc: NpcId) => SCRIPTS[npc]()
 
 /** The address a phish's sign-in page lives at: close to the kingdom's, and not it. */
-const PHISH_DOMAIN = `${KINGDOM_DOMAIN.split('.')[0]}-login.net`
+const PHISH_DOMAIN = 'game-login.net'
 
 /**
  * A phish, dressed as the Oracle, offers to sign the player in. Accepting loses the game;

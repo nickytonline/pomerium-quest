@@ -23,10 +23,6 @@ const reloadOnGameChange = (): Plugin => ({
 const hmrPort = process.env['QUEST_HMR_PORT'] ? Number(process.env['QUEST_HMR_PORT']) : undefined
 
 export default defineConfig({
-  // The citizens' email domain, for the browser bundle (zones.ts reads process.env elsewhere).
-  define: {
-    'import.meta.env.QUEST_KINGDOM_DOMAIN': JSON.stringify(process.env['QUEST_KINGDOM_DOMAIN'] ?? ''),
-  },
   server: {
     port: 3000,
     // Under `./quest dev` the dev server runs in the cluster: Pomerium forwards the in-cluster host,

@@ -20,7 +20,7 @@ import { MAX_HP, SETTLE_MS, quest, useQuest, type DenyView, type Dir } from '../
 import { decide, type Identity } from '../game/ppl.ts'
 import { sound, startSound, useSound, type SoundSettings } from '../game/sound.ts'
 import { BOARD_TILES, MAP_HEIGHT, MAP_WIDTH, TILE_PX } from '../game/world.ts'
-import { KINGDOM_DOMAIN, SIGNED_IN_MESSAGE, zoneById } from '../game/zones.ts'
+import { SIGNED_IN_MESSAGE, zoneById } from '../game/zones.ts'
 
 /** Wide enough for the panels beside the game. The game fits the height, so width alone decides. */
 const SIDE_BY_SIDE = '(min-width: 960px)'
@@ -926,7 +926,7 @@ function Finale() {
 }
 
 const VOUCHED_BY: readonly { readonly role: string; readonly by: string }[] = [
-  { role: `A citizen of ${KINGDOM_DOMAIN}`, by: 'the Oracle knows who you are' },
+  { role: 'A citizen', by: 'the Oracle put you in the citizen group' },
   { role: 'A knight', by: 'the Captain vouched for you' },
   { role: 'A scholar', by: 'the Librarian vouched for you' },
 ]

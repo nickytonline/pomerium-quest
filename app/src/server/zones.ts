@@ -110,21 +110,23 @@ export const handleZone = (request: Request, splat: string) =>
         return json(200, { granted: 'knights', refreshRequired: true, verifiedBy })
       }
 
+      // The Oracle makes a newcomer a citizen and grants the deed to their house: the citizen group, and the
+      // group that holds their own house's deed. Only the Oracle's own zone, since a newcomer isn't a citizen yet.
+      case 'POST oracle/citizen': {
+        const oracle = yield* OracleAdmin
+        const deed = deedGroupOf(player.email)
+        yield* oracle.grant(player.email, 'citizen')
+        yield* oracle.grant(player.email, deed, true)
+
+        return json(200, { granted: ['citizen', deed], refreshRequired: true, verifiedBy })
+      }
+
       // The Librarian writes to the Oracle, like the Captain, once the player has read every book.
       case 'POST oracle/scholar': {
         const oracle = yield* OracleAdmin
         yield* oracle.grant(player.email, 'scholars')
 
         return json(200, { granted: 'scholars', refreshRequired: true, verifiedBy })
-      }
-
-      // The sage's deed: the Oracle puts the player in the group that opens their own door, and only theirs.
-      case 'POST builder/deed': {
-        const oracle = yield* OracleAdmin
-        const group = deedGroupOf(player.email)
-        yield* oracle.grant(player.email, group, true)
-
-        return json(200, { granted: group, refreshRequired: true, verifiedBy })
       }
 
       // The owner is always the verified player, never something the request says.

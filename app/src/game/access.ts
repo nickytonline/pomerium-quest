@@ -160,8 +160,25 @@ async function builder<T>(action: string, body: BuilderRequest): Promise<Built<T
 export const openHouse = (rules: readonly HouseRule[] | null) => builder<HouseState>('open', { rules })
 export const saveHouse = (rules: readonly HouseRule[]) => builder<HouseState>('save', { rules })
 
-/** The sage's deed: the Oracle adds the group that opens this player's own door. */
-export const claimDeed = () => builder<{ granted: string }>('deed', {})
+/** The Oracle makes the player a citizen and grants the deed: the groups he adds, the deed's group last. */
+export async function claimCitizenship(): Promise<Built<readonly string[]>> {
+  try {
+    const response = await fetch('/zones/oracle/citizen', {
+      method: 'POST',
+      redirect: 'manual',
+      headers: { accept: 'application/json' },
+    })
+
+    if (!response.ok) return { ok: false, message: `${response.status} ${response.statusText}` }
+
+    // SAFETY: our own server route answers with this JSON shape (app/src/server/zones.ts).
+    const { granted } = (await response.json()) as { granted: readonly string[] }
+
+    return { ok: true, value: granted }
+  } catch (error) {
+    return { ok: false, message: String(error) }
+  }
+}
 
 /** The house as it stands, and whether Pomerium has taken up its latest rules. */
 export const houseStatus = () => builder<HouseState>('status', {})

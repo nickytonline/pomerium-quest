@@ -7,7 +7,6 @@
 // in the knights group, but their Pomerium session still holds the claims from sign-in,
 // so the armory still says no until they sign in again.
 import { assign, createActor, setup, type SnapshotFrom } from 'xstate'
-import { KINGDOM_DOMAIN } from './zones.ts'
 
 /** The Captain vouches for anyone who has cleared this many of each monster kind. */
 export const KNIGHT_QUOTA = 3
@@ -63,7 +62,7 @@ export const questMachine = setup({
       on: { SIGNED_IN: 'citizen' },
     },
     citizen: {
-      description: `Signed in as a ${KINGDOM_DOMAIN} citizen; no groups yet.`,
+      description: 'Signed in with the citizen claim; no other groups yet.',
       always: { guard: 'proven', target: 'proven' },
       on: { SIGNED_OUT: 'anonymous' },
     },

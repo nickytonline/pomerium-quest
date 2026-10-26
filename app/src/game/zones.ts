@@ -48,22 +48,15 @@ export interface Zone {
   readonly policy: readonly PolicyRule[]
 }
 
-/**
- * The email domain of the kingdom's citizens: QUEST_KINGDOM_DOMAIN, or game.localhost.pomerium.io. Node reads it
- * at render and on the server; Vite bakes it into the browser bundle (see vite.config.ts).
- */
-export const KINGDOM_DOMAIN: string =
-  (typeof process === 'undefined'
-    ? import.meta.env.QUEST_KINGDOM_DOMAIN
-    : process.env['QUEST_KINGDOM_DOMAIN']) || 'game.localhost.pomerium.io'
-
 /** Posted to the game by the sign-in frame once Pomerium hands it back with a session. */
 export const SIGNED_IN_MESSAGE = 'pomerium-quest/signed-in'
 
 const all = (...criteria: Criterion[]): PolicyRule => ({ action: 'allow', match: 'and', criteria })
 const signedIn: Criterion = { kind: 'authenticated_user' }
-const citizen: Criterion = { kind: 'domain', is: KINGDOM_DOMAIN }
 const inGroup = (value: string): Criterion => ({ kind: 'claim', claim: 'groups', value })
+
+/** A citizen is whoever the Oracle has put in the citizen group, whatever their email domain. */
+const citizen = inGroup('citizen')
 
 export const ZONES: readonly Zone[] = [
   { id: 'oracle', name: "Oracle's Temple", prefix: '/zones/oracle', policy: [all(signedIn)] },

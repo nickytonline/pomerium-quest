@@ -5,14 +5,14 @@
 //   node scripts/render.ts            → deploy/.generated/pomerium.yaml and manifests.yaml
 //
 // Environment: QUEST_DOMAIN (default localhost.pomerium.io), QUEST_PORT (default 443),
-// QUEST_KINGDOM_DOMAIN (citizens' email domain, default game.localhost.pomerium.io), and QUEST_DEV=1 to run the game's Vite dev server from the source mounted into the cluster.
+// and QUEST_DEV=1 to run the game's Vite dev server from the source mounted into the cluster.
 import { generateKeyPairSync, randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { parseAllDocuments, stringify } from 'yaml'
 import { VISITORS, VISITOR_IDS, visitorPassword } from '../app/src/game/house.ts'
 import { policyDocument } from '../app/src/game/ppl.ts'
-import { KINGDOM_DOMAIN, ZONES } from '../app/src/game/zones.ts'
+import { ZONES } from '../app/src/game/zones.ts'
 
 type Yaml = string | number | boolean | readonly Yaml[] | { readonly [key: string]: Yaml }
 
@@ -328,10 +328,6 @@ const userProfile = {
       validations: {
         email: {},
         length: { max: 255 },
-        pattern: {
-          pattern: `(?i)^[^@\\s]+@${KINGDOM_DOMAIN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`,
-          'error-message': 'kingdomEmailOnly',
-        },
       },
       required: { roles: ['user'] },
       permissions: { view: ['admin', 'user'], edit: ['admin', 'user'] },
@@ -353,8 +349,8 @@ function realm(secrets: Secrets): Yaml {
     displayName: 'The Oracle',
     displayNameHtml: '<div class="kc-logo-text"><span>The Oracle</span></div>',
     loginTheme: 'quest',
-    // Any address in KINGDOM_DOMAIN may sign up, unverified (see userProfile). Never reuse this realm
-    // for anything real.
+    // Any address may sign up, unverified: being a citizen comes from the citizen group, which the Oracle
+    // grants in the game, not from an address. Never reuse this realm for anything real.
     registrationAllowed: true,
     registrationEmailAsUsername: true,
     loginWithEmailAllowed: true,
@@ -363,7 +359,7 @@ function realm(secrets: Secrets): Yaml {
     resetPasswordAllowed: false,
     rememberMe: false,
     sslRequired: 'external',
-    groups: [{ name: 'knights' }, { name: 'scholars' }],
+    groups: [{ name: 'citizen' }, { name: 'knights' }, { name: 'scholars' }],
     clients: [
       {
         clientId: 'pomerium',
@@ -511,7 +507,6 @@ function manifests(secrets: Secrets): Yaml[] {
       3000,
       {
         env: [
-          { name: 'QUEST_KINGDOM_DOMAIN', value: KINGDOM_DOMAIN },
           { name: 'QUEST_PUBLIC_ORIGIN', value: publicUrl('game') },
           { name: 'KEYCLOAK_URL', value: svc('keycloak', 8080) },
           { name: 'KEYCLOAK_REALM', value: REALM },
@@ -555,10 +550,7 @@ function manifests(secrets: Secrets): Yaml[] {
       kind: 'ConfigMap',
       metadata: { name: 'keycloak-theme', namespace: NAMESPACE },
       data: Object.fromEntries(
-        THEME_FILES.map((file) => [
-          themeKey(file),
-          readFileSync(join(THEME, file), 'utf8').replaceAll('{kingdomDomain}', KINGDOM_DOMAIN),
-        ]),
+        THEME_FILES.map((file) => [themeKey(file), readFileSync(join(THEME, file), 'utf8')]),
       ),
     },
     deployment(

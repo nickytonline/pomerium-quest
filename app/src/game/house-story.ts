@@ -1,7 +1,7 @@
 // The player's house: the deed, the letters, the desk and the visitors (docs/prd/your-house.md).
 // Every knock is a real request through Pomerium; the server writes the house's route from the player's
 // door rules, and the explanations below come from the same rules.
-import { claimDeed, houseStatus, knockAs, knockYourself, openHouse, saveHouse } from './access.ts'
+import { claimCitizenship, houseStatus, knockAs, knockYourself, openHouse, saveHouse } from './access.ts'
 import { LESSONS, LETTERS, link, type Caller, type LessonId, type Letter, type Page } from './content.ts'
 import { VISITORS, deedRule, type HouseRule, type HouseState, type VisitorId } from './house.ts'
 import { houseStage, type LetterStage } from './house-machine.ts'
@@ -73,13 +73,16 @@ export const deedPages = (): Page[] => [
   },
 ]
 
-/** The Oracle adds the deed to the player's claims. True once he has; their session carries it after the next sign-in. */
+/**
+ * The Oracle makes the player a citizen and adds the deed to their claims. True once he has; their
+ * session carries both after the next sign-in.
+ */
 export async function addDeed() {
-  const claimed = await claimDeed()
+  const claimed = await claimCitizenship()
 
   if (!claimed.ok) return false
 
-  deed = claimed.value.granted
+  deed = claimed.value.at(-1) ?? null
   quest.sendHouse({ type: 'DEED_GIVEN' })
   sfx('itemGet')
   quest.toast('The Oracle added the deed to your house', 'info')

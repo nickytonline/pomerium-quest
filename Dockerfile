@@ -9,11 +9,9 @@ COPY app/package.json app/
 RUN npm ci --no-audit --no-fund
 
 FROM deps AS app-build
-# The citizens' email domain, baked into the browser bundle.
-ARG QUEST_KINGDOM_DOMAIN=game.localhost.pomerium.io
 COPY tsconfig.base.json ./
 COPY app app
-RUN QUEST_KINGDOM_DOMAIN="$QUEST_KINGDOM_DOMAIN" npm run build -w app
+RUN npm run build -w app
 
 FROM ${NODE_IMAGE} AS app
 WORKDIR /srv

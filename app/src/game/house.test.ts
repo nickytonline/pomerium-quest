@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vite-plus/test'
-import { deedGroup, deedRule, turnsAwayOwner, type HouseRule } from './house.ts'
+import { TOWNSFOLK_DOMAIN, deedGroup, deedRule, turnsAwayOwner, type HouseRule } from './house.ts'
 import { decide, type Identity } from './ppl.ts'
-import { KINGDOM_DOMAIN } from './zones.ts'
 
 const owner: Identity = {
   authenticated: true,
-  email: `nick@${KINGDOM_DOMAIN}`,
+  email: `nick@${TOWNSFOLK_DOMAIN}`,
   groups: [deedGroup('3f9a1c2b7d4e')],
 }
 
@@ -38,8 +37,8 @@ describe('rules that would turn the owner away', () => {
 
   it('catches a deny that matches the owner, whatever else the rules say', () => {
     expect(turnsAwayOwner([rule('deny', { kind: 'email', is: owner.email })], owner)).toBe(true)
-    expect(turnsAwayOwner([rule('deny', { kind: 'domain', is: KINGDOM_DOMAIN })], owner)).toBe(true)
-    expect(turnsAwayOwner([rule('deny', { kind: 'email', is: `baker@${KINGDOM_DOMAIN}` })], owner)).toBe(
+    expect(turnsAwayOwner([rule('deny', { kind: 'domain', is: TOWNSFOLK_DOMAIN })], owner)).toBe(true)
+    expect(turnsAwayOwner([rule('deny', { kind: 'email', is: `baker@${TOWNSFOLK_DOMAIN}` })], owner)).toBe(
       false,
     )
   })

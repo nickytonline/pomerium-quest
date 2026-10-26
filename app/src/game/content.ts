@@ -1,7 +1,7 @@
 // Everything the characters say, what the signs show and what each lesson links to.
 import type { Knocker } from './house.ts'
 import type { LetterStage } from './house-machine.ts'
-import { KINGDOM_DOMAIN, type ZoneId } from './zones.ts'
+import type { ZoneId } from './zones.ts'
 
 /** Every gate has a sign, named for the zone whose route it guards. */
 export type SignId = ZoneId
@@ -122,7 +122,7 @@ export const link = (lesson: LessonId) => LESSONS[lesson].link
 export const SIGN_TEXT: Partial<Record<SignId, string>> = {
   fields:
     "This gate is a route, and its guard follows the route's policy. Pomerium checks every request for this path against the policy below, and forwards the ones it allows to the app behind the route.",
-  town: `The town only lets in citizens: people whose email domain is ${KINGDOM_DOMAIN}.`,
+  town: 'The town only lets in citizens: people the Oracle has put in the citizen group.',
   guild: "The Knights' Guild hall. Any citizen may enter.",
   armory: 'Only knights. The guard reads the groups claim your identity provider put in your session.',
   library:
@@ -248,7 +248,7 @@ export const LETTERS: Record<LetterStage, Letter> = {
   },
   baker: {
     title: 'Open house',
-    text: `Open your door to every citizen of ${KINGDOM_DOMAIN}, except the baker, who keeps bringing bread you've no room for. Use a deny rule for the baker: a deny always wins, even when an allow rule matches too.`,
+    text: `Open your door to every citizen, except the baker, who keeps bringing bread you've no room for. Use a deny rule for the baker: a deny always wins, even when an allow rule matches too.`,
     expect: [
       visit('you', true),
       visit('captain', true),
