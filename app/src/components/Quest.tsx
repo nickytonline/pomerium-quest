@@ -335,6 +335,9 @@ function SplashSound() {
   )
 }
 
+/** The fewest tiles the board shows across or down, however narrow the window. */
+const MIN_BOARD_TILES = 9
+
 /** The frame around the board, in CSS pixels: its border-4. */
 const BOARD_BORDER = 4
 
@@ -347,8 +350,8 @@ interface Board {
 }
 
 /**
- * Sizes the board to the space it's given: as big as fits, showing at least the usual 16 by 12 tiles,
- * more of the map in whichever direction has room, and never more than the whole map.
+ * Sizes the board to the space it's given: it fills it, at a tile size that shows about 16 by 12
+ * tiles' worth of map whatever the window's shape, and never more than the whole map.
  */
 function useBoard() {
   const slot = useRef<HTMLDivElement>(null)
@@ -363,7 +366,11 @@ function useBoard() {
       const space = element.getBoundingClientRect()
       const width = space.width - 2 * BOARD_BORDER
       const height = space.height - 2 * BOARD_BORDER
-      const scale = Math.min(width / (BOARD_TILES.cols * TILE_PX), height / (BOARD_TILES.rows * TILE_PX))
+      // Tiles are the same size whatever the window's shape: the board shows about 16 by 12 tiles' worth
+      // of map, more across in a wide window and more down in a tall one, but never fewer than a few.
+      const area = Math.sqrt((width * height) / (BOARD_TILES.cols * BOARD_TILES.rows)) / TILE_PX
+      const fewest = Math.min(width, height) / (MIN_BOARD_TILES * TILE_PX)
+      const scale = Math.min(area, fewest)
 
       if (scale <= 0) return
       const fitWidth = Math.floor(Math.min(width, MAP_WIDTH * TILE_PX * scale))

@@ -68,7 +68,7 @@ export const MAP_HEIGHT = 30
 /** A tile's size in game pixels. */
 export const TILE_PX = 16
 
-/** The game board shows at least this many tiles across and down, and at most the whole map. */
+/** About how much of the map the game board shows: this many tiles' worth, shaped to the window. */
 export const BOARD_TILES = { cols: 16, rows: 12 } as const
 
 export type NpcId = 'sage' | 'oracle' | 'traveler' | 'captain' | 'armorer' | 'librarian' | 'baker'
