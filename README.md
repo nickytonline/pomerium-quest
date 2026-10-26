@@ -203,6 +203,9 @@ password the first time.
 | `./quest reset-oracle`  | Forget every player and re-import the Keycloak realm                                    |
 | `./quest down`          | Delete the cluster                                                                      |
 
+`./quest dev` (and `./quest up`) take a minute or two to start the cluster, build the images and bring up Keycloak. Wait
+for the `Ready:` line before you open the game.
+
 Port 443 already in use? Run `QUEST_PORT=8443 ./quest up` and open `https://game.localhost.pomerium.io:8443`.
 
 ### Settings
