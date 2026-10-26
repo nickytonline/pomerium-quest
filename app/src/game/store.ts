@@ -343,6 +343,15 @@ export const quest = {
       return
     }
 
+    quest.closeDialog()
+  },
+
+  /** Skips to the end of a dialog, as if every page were read, unless a choice is still to come. */
+  closeDialog: () => {
+    const dialog = state.dialog
+
+    if (!dialog || dialog.pages.slice(dialog.index).some((page) => page.choices)) return
+
     const done = dialogDone
     dialogDone = undefined
     update({ dialog: null, inputResumesAt: performance.now() + 200 })

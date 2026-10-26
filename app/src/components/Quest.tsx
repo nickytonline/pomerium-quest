@@ -164,6 +164,9 @@ function useDialogKeys() {
       } else if (dialog && confirm && !onButton) {
         event.preventDefault()
         quest.advance()
+      } else if (dialog && event.key === 'Escape') {
+        event.preventDefault()
+        quest.closeDialog()
       } else if (journalOpen && (journalKey || event.key === 'Escape')) {
         event.preventDefault()
         quest.closeJournal()
