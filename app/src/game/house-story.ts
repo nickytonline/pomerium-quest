@@ -1,16 +1,22 @@
 // The player's house: the deed, the letters, the desk and the visitors (docs/prd/your-house.md).
 // Every knock is a real request through Pomerium; the server writes the house's route from the player's
 // door rules, and the explanations below come from the same rules.
-import { houseStatus, knockAs, knockYourself, openHouse, saveHouse } from './access.ts'
-import { LESSONS, LETTERS, link, type Caller, type LessonId, type Letter } from './content.ts'
-import { VISITOR_IDS, VISITORS, type HouseRule, type HouseState, type VisitorId } from './house.ts'
+import { claimDeed, houseStatus, knockAs, knockYourself, openHouse, saveHouse } from './access.ts'
+import { LESSONS, LETTERS, link, type Caller, type LessonId, type Letter, type Page } from './content.ts'
+import { VISITORS, deedRule, type HouseRule, type HouseState, type VisitorId } from './house.ts'
 import { houseStage, type LetterStage } from './house-machine.ts'
-import { decide, policyYaml, type Identity } from './ppl.ts'
+import { policyYaml, type Identity } from './ppl.ts'
 import { sfx } from './sound.ts'
 import { ANONYMOUS, quest } from './store.ts'
 
 const learn = (lesson: LessonId) => quest.learn(lesson, LESSONS[lesson].title)
 const rules = () => quest.get().progress.houseRules
+
+/** The group the Oracle added for the deed this visit, if it did. Kept in memory, so a reload forgets it. */
+let deed: string | null = null
+
+/** The deed's group, once the Oracle has added it, whether or not the session carries it yet. */
+export const deedClaim = () => deed
 
 /** The stage's letter, if there's one on the desk. */
 export const currentLetter = (): Letter | null => {
@@ -41,7 +47,7 @@ const nameOf = (who: Caller) => {
 /** The house's route as Pomerium has it, for the sign outside and the editor. */
 export function houseRouteYaml(house: HouseState | null, saved: readonly HouseRule[] | null) {
   const door = saved
-    ? ['  policy:', ...policyYaml(saved, 4)]
+    ? ['  policy:', ...policyYaml([deedRule(house?.id ?? '<your house>'), ...saved], 4)]
     : ['  allow_public_unauthenticated_access: true']
 
   return [
@@ -53,26 +59,32 @@ export function houseRouteYaml(house: HouseState | null, saved: readonly HouseRu
   ].join('\n')
 }
 
-/** The sage hands over the deed once the player has signed in. */
-export function giveDeed() {
-  quest.say(
-    [
-      {
-        who: 'Sage',
-        text: "One more thing. There's an empty house in the Slime Fields, just below the pond. It's yours now: here's the deed.",
-      },
-      {
-        who: 'Sage',
-        text: 'Its door is a Pomerium route like every gate in the kingdom, but you write its rules. The builders left it wide open, with allow_public_unauthenticated_access: everyone gets in, even with no session at all. I hear the slimes have noticed.',
-        links: [link('publicRoute')],
-      },
-    ],
-    () => {
-      quest.sendHouse({ type: 'DEED_GIVEN' })
-      sfx('itemGet')
-      quest.toast('You got the deed to your house', 'info')
-    },
-  )
+/** What the Oracle says when he grants the deed: every citizen is entitled to a house outside the walls. */
+export const deedPages = (): Page[] => [
+  {
+    who: 'Oracle',
+    text: 'One more thing. Every citizen of the kingdom is entitled to a house outside the walls. Yours is in the Slime Fields, just below the pond. I have added its deed to your claims.',
+    links: [link('claims')],
+  },
+  {
+    who: 'Oracle',
+    text: 'Its door is a Pomerium route like every gate in the kingdom, but you write its rules, and whoever holds the deed always gets in. The builders left it wide open, with allow_public_unauthenticated_access: everyone gets in, even with no session at all. I hear the slimes have noticed.',
+    links: [link('publicRoute')],
+  },
+]
+
+/** The Oracle adds the deed to the player's claims. True once he has; their session carries it after the next sign-in. */
+export async function addDeed() {
+  const claimed = await claimDeed()
+
+  if (!claimed.ok) return false
+
+  deed = claimed.value.granted
+  quest.sendHouse({ type: 'DEED_GIVEN' })
+  sfx('itemGet')
+  quest.toast('The Oracle added the deed to your house', 'info')
+
+  return true
 }
 
 /** Walking in puts the house up as a route, with the rules the player last saved. */
@@ -248,7 +260,7 @@ export const travelerWelcome = () => visitorWelcome('traveler')
 
 /**
  * Whether Pomerium turns the player away from their own door: a real knock with their own session. Only
- * a 403 counts, so a lost session or a builders' hiccup never locks them out.
+ * a 403 counts, so a lost session or a builders' hiccup never sends them away.
  */
 export async function youRefused(): Promise<boolean> {
   let { house } = quest.get()
@@ -266,46 +278,15 @@ export async function youRefused(): Promise<boolean> {
   return (await knock('you', 'GET', house)).status === 403
 }
 
-/** Who the door rules let in, of the folk the player knows, as the explainer reads them. */
-function welcomeNow() {
-  const policy = rules() ?? []
-
-  const lets = (who: VisitorId | 'slime') =>
-    decide({ policy }, identityOf(who), { method: 'GET', path: '/' }, 'their').allow
-
-  const names = VISITOR_IDS.filter(lets).map((id) => `${VISITORS[id].name} (${VISITORS[id].email})`)
-
-  if (lets('slime')) names.push('slimes with no session at all')
-
-  if (names.length === 0) return 'Right now they let in no one at all.'
-
-  const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names.join('')
-
-  return `Right now they let in ${list}, but not you.`
-}
-
-/**
- * The player's own door turned them away: whoever tells them (a guard showing them out, or the door
- * itself) says who it lets in now, then the desk opens so they can fix it from the doorstep.
- */
-export function lockedOut(shownOut: boolean) {
-  const who = shownOut ? 'Guard' : 'Your door'
-
-  const first = shownOut
-    ? "Sorry, I know it's your house. But your new door rules don't let you in, so out you go."
-    : "Your door won't open for you. Your door rules don't let you in."
-
-  quest.say(
-    [
-      { who, text: `${first} ${welcomeNow()}` },
-      {
-        who,
-        text: "Pomerium doesn't know whose house this is. It checks each request against the route's rules, and no allow rule matches you. Luckily the builders' office is a route of its own, so you can fix your door rules from right here.",
-        links: [link('writePolicy')],
-      },
-    ],
-    () => quest.openHouseEditor(),
-  )
+/** The player's own door turned them away: their session doesn't carry the deed yet. */
+export function doorRefusesYou() {
+  quest.say([
+    {
+      who: 'Your door',
+      text: "Your door won't open for you. Pomerium checks each request against the route's rules, and the one that lets in the deed's owner needs the deed in your session. The Oracle can sign you in again so it carries it.",
+      links: [link('refresh')],
+    },
+  ])
 }
 
 /** What one visit should have done but didn't, as the house tells it. */
@@ -339,9 +320,6 @@ async function checkLetter() {
 
   const wrong = results.filter((result) => (result.status === 200) !== result.wanted)
 
-  // The player's own door turned them away: the house tells them that story instead (lockedOut).
-  if (results.some((result) => result.who === 'you' && result.status === 403) && quest.get().house?.live)
-    return
   const usesDeny = rules()?.some((rule) => rule.action === 'deny') ?? false
   const who = `Letter · ${letter.title}`
 

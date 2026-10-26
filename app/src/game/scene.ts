@@ -9,7 +9,7 @@ import { houseStage, type HouseStage } from './house-machine.ts'
 import {
   currentLetter,
   enterHouse,
-  lockedOut,
+  doorRefusesYou,
   readHouseSign,
   readLetter,
   readTable,
@@ -360,8 +360,6 @@ export class KingdomScene extends Phaser.Scene {
   private escorting = false
   /** New rules came in while the guard was busy, so they check the house again once they're done. */
   private recheckAgain = false
-  /** The next check asks about the player too: Pomerium only answers them by the new rules once it enforces them. */
-  private recheckPlayer = false
   /** The Captain, a knight, drops by when new door rules let knights in: at the guild, on the way, or in. */
   private captain: 'guild' | 'visiting' | 'inside' | 'shownOut' = 'guild'
   /** Whether the door let the Captain in last time the house checked, so they only visit when that changes. */
@@ -823,7 +821,7 @@ export class KingdomScene extends Phaser.Scene {
     void youRefused().then((refused) => {
       if (refused) {
         this.mode.send({ type: 'GATE_DENIED' })
-        lockedOut(false)
+        doorRefusesYou()
 
         return
       }
@@ -1279,7 +1277,7 @@ export class KingdomScene extends Phaser.Scene {
         void this.recheckHouse()
       }
 
-      // Once Pomerium enforces new rules, the player finds out whether their own door still lets them in.
+      // Once Pomerium enforces new rules, the guard checks the house again.
       // The rules the game loaded with only matter if the player is already inside.
       const nowLive = next.house?.live ? next.house.version : undefined
 
@@ -1287,7 +1285,7 @@ export class KingdomScene extends Phaser.Scene {
         const first = live === undefined
         live = nowLive
 
-        if (next.progress.houseRules && (!first || inHouse(this.pos))) void this.recheckHouse(true)
+        if (next.progress.houseRules && (!first || inHouse(this.pos))) void this.recheckHouse()
       }
     })
   }
@@ -1433,12 +1431,10 @@ export class KingdomScene extends Phaser.Scene {
   }
 
   /**
-   * New door rules: the guard checks everyone in the house, the player too once Pomerium enforces the
-   * rules, and shows out whoever Pomerium turns away. Rules that change mid-check get a check of their own.
+   * New door rules: the guard checks everyone in the house and shows out whoever Pomerium turns away.
+   * Rules that change mid-check get a check of their own.
    */
-  private async recheckHouse(player = false) {
-    this.recheckPlayer ||= player
-
+  private async recheckHouse() {
     if (this.escorting) {
       this.recheckAgain = true
 
@@ -1449,17 +1445,14 @@ export class KingdomScene extends Phaser.Scene {
 
     do {
       this.recheckAgain = false
-      const withPlayer = this.recheckPlayer
-
-      this.recheckPlayer = false
-      await this.clearHouse(withPlayer)
+      await this.clearHouse()
     } while (this.recheckAgain)
 
     this.escorting = false
   }
 
   /** Knocks as whoever is inside, through Pomerium, and the guard shows out anyone it refuses. */
-  private async clearHouse(withPlayer: boolean) {
+  private async clearHouse() {
     const intruders: Intruder[] = []
     const slimes = this.monsters.filter((monster) => monster.home === 'house')
 
@@ -1514,14 +1507,6 @@ export class KingdomScene extends Phaser.Scene {
 
     for (const intruder of intruders) await this.showOut(intruder)
 
-    // The player last, so the house is clear by the time the guard explains.
-    if (withPlayer && (await youRefused())) {
-      if (inHouse(this.pos) || same(this.pos, HOUSE.door)) {
-        await this.showPlayerOut()
-        lockedOut(true)
-      } else lockedOut(false)
-    }
-
     await this.guardGoesBack()
 
     // Door rules of the player's own now let knights in: the Captain comes to say hello.
@@ -1531,57 +1516,6 @@ export class KingdomScene extends Phaser.Scene {
       void this.captainVisits(captain)
 
     this.captainWasWelcome = captainWelcome
-  }
-
-  /** The guard leads the dog out of the house; the player can't move until they're outside. */
-  private async showPlayerOut() {
-    const player = this.player
-
-    if (!player) return
-
-    while (!this.mode.idle()) await this.pause(100)
-    this.mode.send({ type: 'GATE' })
-
-    const at = () => this.pos
-
-    const moveTo = (p: Partial<Point>) => {
-      this.pos = { ...this.pos, ...p }
-    }
-
-    const body: Body = {
-      get x() {
-        return at().x
-      },
-      set x(x: number) {
-        moveTo({ x })
-      },
-      get y() {
-        return at().y
-      },
-      set y(y: number) {
-        moveTo({ y })
-      },
-      sprite: player,
-    }
-
-    await this.showOut({
-      body,
-      name: 'you',
-      pronoun: 'you',
-      release: () => {},
-      stepping: (to) => {
-        this.dir =
-          DIRS.find((dir) => same(STEP[dir], { x: to.x - this.pos.x, y: to.y - this.pos.y })) ?? this.dir
-        player.anims.play(`walk-${this.dir}`, true)
-      },
-    })
-
-    player.anims.stop()
-    player.setFrame(DOG_FRAME[this.dir])
-    this.previous = this.pos
-    quest.progress({ x: this.pos.x, y: this.pos.y, dir: this.dir })
-    quest.setRegion(regionAt(this.pos))
-    this.mode.send({ type: 'GATE_DENIED' })
   }
 
   /** The Captain appears on the path outside, comes in, says hello, and goes back to the guild in a while. */

@@ -16,7 +16,7 @@ import {
 import { decide, routeYaml, type Identity } from './ppl.ts'
 import { VISITORS, type VisitorId } from './house.ts'
 import { houseStage } from './house-machine.ts'
-import { giveDeed } from './house-story.ts'
+import { addDeed, deedClaim, deedPages } from './house-story.ts'
 import { KNIGHT_QUOTA, hasSteel, isAtLeast, stage, type QuestStage } from './quest-machine.ts'
 import { sfx } from './sound.ts'
 import { MAX_HP, quest, type DenyView, type LogEntry } from './store.ts'
@@ -304,8 +304,30 @@ function signInWithPomerium(url: string, onSignedIn: (next: Identity) => void, o
   )
 }
 
+/** The Oracle grants the deed to a citizen's house, then signs them in again so their session carries it. */
+const grantDeed = (before: Page[] = []) =>
+  quest.say(
+    [
+      ...before,
+      ...deedPages(),
+      {
+        who: 'Oracle',
+        text: 'Your session still holds the claims I gave you a moment ago, so let me sign you in again. Then it will carry your deed.',
+        links: [link('refresh')],
+      },
+    ],
+    () => {
+      learn('refresh')
+
+      void addDeed().then((added) => {
+        if (added) refreshClaims(() => {})
+        else quest.toast("The Oracle couldn't add your deed. Talk to him again.", 'deny')
+      })
+    },
+  )
+
 const welcome = (next: Identity) =>
-  quest.say([
+  grantDeed([
     { who: 'Oracle', text: `There. You are ${next.email}. Here are your claims.`, code: claimsCode(next) },
   ])
 
@@ -329,8 +351,15 @@ function vouchedGroups() {
 
   if (quest.get().progress.scholar) vouched.push('scholars')
 
+  const deed = deedClaim()
+
+  if (deed) vouched.push(deed)
+
   return vouched
 }
+
+/** How the Oracle names a group aloud: a deed's group is named for the deed it proves. */
+const groupName = (group: string) => (group.startsWith('deed-') ? 'your deed' : group)
 
 /** Groups the Oracle lists for the player that their session doesn't carry yet. */
 const staleGroups = () => vouchedGroups().filter((group) => !identity().groups.includes(group))
@@ -393,11 +422,21 @@ function oracle() {
     return
   }
 
+  // Players who signed in before the Oracle granted deeds get theirs the next time they visit.
+  if (houseStage() === 'unowned') {
+    grantDeed()
+
+    return
+  }
+
   const stale = staleGroups()
 
   if (stale.length > 0) {
     quest.say(
-      [{ who: 'Oracle', text: `I have added ${stale.join(' and ')} to your groups.` }, refreshPage()],
+      [
+        { who: 'Oracle', text: `I have added ${stale.map(groupName).join(' and ')} to your groups.` },
+        refreshPage(),
+      ],
       () => {
         learn('refresh')
         refreshClaims(() => {})
@@ -545,18 +584,16 @@ function baker() {
 const SCRIPTS: Record<NpcId, () => void> = {
   sage: () => {
     if (identity().authenticated) {
-      quest.say(
-        [
-          {
-            who: 'Sage',
-            text: 'The Oracle vouches for you now. Head north through the Fields Gate. A guard stands at every gate, and the sign beside it shows the exact orders that guard follows.',
-          },
-        ],
-        // Once the player has a session, the sage hands over the deed to their house.
-        () => {
-          if (houseStage() === 'unowned') giveDeed()
+      quest.say([
+        {
+          who: 'Sage',
+          text: 'The Oracle vouches for you now. Head north through the Fields Gate. A guard stands at every gate, and the sign beside it shows the exact orders that guard follows.',
         },
-      )
+        {
+          who: 'Sage',
+          text: 'Your house stands out in the Slime Fields, just below the pond. Nobody guards it but its own door rules, and the slimes have noticed.',
+        },
+      ])
 
       return
     }
