@@ -187,9 +187,9 @@ const MONSTER: Record<MonsterKind, { readonly frame: number; readonly hp: number
 
 /**
  * What the traveler is doing: roaming the fields, walking to the doorstep, asking Pomerium to let them
- * in, walking to the table, eating, or walking back out.
+ * in, walking to the table, eating, walking back out, or being shown out by a guard.
  */
-type TravelerPlan = 'roam' | 'visit' | 'knock' | 'enter' | 'eat' | 'leave'
+type TravelerPlan = 'roam' | 'visit' | 'knock' | 'enter' | 'eat' | 'leave' | 'escorted'
 
 interface Traveler {
   plan: TravelerPlan
@@ -230,6 +230,8 @@ interface Monster {
   hp: number
   nextMoveAt: number
   moving: boolean
+  /** Being led out of the house by a guard, so it doesn't wander off on its own. */
+  held: boolean
 }
 
 /**
@@ -264,6 +266,25 @@ const atTable = (p: Point) =>
 
 /** A new game's loaf is whole, unless the bread letter has already said the traveler ate it. */
 const loafFor = (stage: HouseStage) => (stage === 'unowned' || stage === 'slimes' ? WHOLE_LOAF : 0)
+
+/** Anything that walks from tile to tile: a townsperson, a monster, a guard. */
+interface Body {
+  x: number
+  y: number
+  readonly sprite: Phaser.GameObjects.Sprite
+}
+
+/** Someone the door no longer lets in, and what to do with them once they're outside. */
+interface Intruder {
+  readonly body: Body
+  readonly name: string
+  /** How the guard's toast refers to them. */
+  readonly pronoun: 'it' | 'them'
+  readonly release: () => void
+}
+
+/** Where a guard leaves an intruder: the path just past the doorstep. */
+const OUTSIDE = { x: HOUSE.doorstep.x + 1, y: HOUSE.doorstep.y }
 
 interface NpcSprite {
   readonly npcId: NpcId
@@ -308,6 +329,9 @@ export class KingdomScene extends Phaser.Scene {
     bites: 0,
     blocked: 0,
   }
+  /** The guard who shows unwelcome visitors out of the house, and waits by the nearest gate between times. */
+  private houseGuard: Body | undefined
+  private escorting = false
   /** Quarters of the loaf left on the table. */
   private bread = 0
   /** When a fresh loaf turns up, once the last one is gone. */
@@ -394,6 +418,7 @@ export class KingdomScene extends Phaser.Scene {
       hp: MONSTER[kind].hp,
       nextMoveAt: 0,
       moving: false,
+      held: false,
     })
 
     this.monsters = this.world.bots.map(spawn('bot'))
@@ -578,7 +603,8 @@ export class KingdomScene extends Phaser.Scene {
       this.monsters.some((monster) => same(monster, p)) ||
       this.guards.some((guard) => same(guard.spot, p)) ||
       this.fish.some((fish) => same(fish, p)) ||
-      this.phish.some((phish) => same(phish, p))
+      this.phish.some((phish) => same(phish, p)) ||
+      Boolean(this.houseGuard && same(this.houseGuard, p))
     )
   }
 
@@ -592,7 +618,8 @@ export class KingdomScene extends Phaser.Scene {
     this.face(dir)
     const target = this.front()
 
-    if (this.npcs.some((npc) => same(npc, target))) return
+    if (this.npcs.some((npc) => same(npc, target)) || (this.houseGuard && same(this.houseGuard, target)))
+      return
 
     if (this.phish.some((phish) => same(phish, target))) return
 
@@ -1141,7 +1168,9 @@ export class KingdomScene extends Phaser.Scene {
     return (
       same(player, HOUSE.door) ||
       same(this.pos, HOUSE.door) ||
-      Boolean(traveler && same(traveler, HOUSE.door))
+      Boolean(traveler && same(traveler, HOUSE.door)) ||
+      Boolean(this.houseGuard && same(this.houseGuard, HOUSE.door)) ||
+      this.monsters.some((monster) => same(monster, HOUSE.door))
     )
   }
 
@@ -1188,7 +1217,7 @@ export class KingdomScene extends Phaser.Scene {
 
       if (next.progress.houseRules !== rules || closedVisits) {
         rules = next.progress.houseRules
-        void this.recheckTraveler()
+        void this.recheckHouse()
       }
     })
   }
@@ -1217,7 +1246,7 @@ export class KingdomScene extends Phaser.Scene {
     const traveler = this.travelerNpc()
     const plan = this.traveler
 
-    if (!traveler || plan.moving || plan.plan === 'knock') return
+    if (!traveler || plan.moving || plan.plan === 'knock' || plan.plan === 'escorted') return
     plan.nextVisitAt ??= time + TRAVELER.firstVisitMs
 
     if (plan.plan === 'eat') {
@@ -1333,20 +1362,179 @@ export class KingdomScene extends Phaser.Scene {
       )
   }
 
-  /** New door rules: a traveler already inside finds out whether they're still welcome. */
-  private async recheckTraveler() {
-    const plan = this.traveler.plan
+  /**
+   * New door rules: whoever is already inside finds out whether they're still welcome, by knocking as
+   * them. A guard shows out anyone the door no longer lets in.
+   */
+  private async recheckHouse() {
+    if (this.escorting) return
+    this.escorting = true
+    const intruders: Intruder[] = []
+    const slimes = this.monsters.filter((monster) => monster.home === 'house')
 
-    if (plan !== 'enter' && plan !== 'eat') return
+    if (slimes.length > 0 && !(await slimeKnocks()))
+      for (const slime of slimes) {
+        // Stay put until the guard comes.
+        slime.held = true
+        intruders.push({
+          body: slime,
+          name: 'a slime',
+          pronoun: 'it',
+          release: () => {
+            slime.home = 'fields'
+            slime.held = false
+          },
+        })
+      }
 
-    if (await travelerWelcome()) return
     const traveler = this.travelerNpc()
+    const inside = this.traveler.plan === 'enter' || this.traveler.plan === 'eat'
 
-    if (!traveler) return
-    this.planTraveler('leave', this.pathFor(traveler, isDoorstep, { throughDoor: true }))
+    if (traveler && inside && !(await travelerWelcome())) {
+      // Put the bread down and wait for the guard.
+      this.planTraveler('escorted')
+      intruders.push({
+        body: traveler,
+        name: 'the traveler',
+        pronoun: 'them',
+        release: () => {
+          // Shown out, they don't come straight back.
+          this.planTraveler('roam')
+          this.traveler.nextVisitAt = this.time.now + TRAVELER.visitMs
+        },
+      })
+    }
+
+    for (const intruder of intruders) await this.showOut(intruder)
+
+    await this.guardGoesBack()
+    this.escorting = false
+  }
+
+  /**
+   * A guard comes in through the door, walks up to someone the door no longer lets in, and leads them
+   * out, one step behind.
+   */
+  private async showOut(intruder: Intruder) {
+    const { body } = intruder
+
+    // Let them finish the step they're on. Anyone already outside needs no guard.
+    while (this.traveler.moving && body === this.travelerNpc()) await this.pause(100)
+
+    for (const monster of this.monsters) while (monster === body && monster.moving) await this.pause(100)
+
+    if (!inHouse(body) && !same(body, HOUSE.door)) {
+      intruder.release()
+
+      return
+    }
+
+    const guard = this.houseGuard ?? this.callGuard()
+    const beside = (p: Point) => Math.abs(p.x - body.x) + Math.abs(p.y - body.y) === 1
+
+    for (const step of this.pathFor(guard, beside, { throughDoor: true })) {
+      await this.waitUntilFree(step)
+      await this.walkBody(guard, step)
+    }
 
     if (this.near(HOUSE.door))
-      quest.toast('No rule lets the traveler in any more. They put down the bread and head out.', 'allow')
+      quest.toast(
+        `A guard shows ${intruder.name} out. Your new door rules don't let ${intruder.pronoun} in.`,
+        'allow',
+      )
+
+    // Out the door, with the intruder following in the guard's footsteps.
+    for (const step of this.pathFor(guard, (p) => same(p, OUTSIDE), { throughDoor: true })) {
+      await this.waitUntilFree(step)
+      const behind = { x: guard.x, y: guard.y }
+
+      await Promise.all([this.walkBody(guard, step), this.walkBody(body, behind)])
+    }
+
+    intruder.release()
+    this.closeDoorBehind()
+  }
+
+  /** The gate nearest the house, which the house's guard waits beside. */
+  private nearestGate() {
+    const distance = (guard: Guard) =>
+      Math.abs(guard.gate.x - HOUSE.doorstep.x) + Math.abs(guard.gate.y - HOUSE.doorstep.y)
+
+    return this.guards.reduce<Guard | undefined>(
+      (best, guard) => (!best || distance(guard) < distance(best) ? guard : best),
+      undefined,
+    )
+  }
+
+  /** Where the house's guard waits: on the grass just inside the nearest gate, out of the road. */
+  private guardPost(): Point {
+    const gate = this.nearestGate()
+
+    if (!gate) return OUTSIDE
+
+    const beside = (p: Point) =>
+      Math.max(Math.abs(p.x - gate.gate.x), Math.abs(p.y - gate.gate.y)) === 1 &&
+      (this.tileAt(p) === TILE.grass || this.tileAt(p) === TILE.flowers) &&
+      this.travelerCanEnter(p)
+
+    return this.pathFor(HOUSE.doorstep, beside).at(-1) ?? OUTSIDE
+  }
+
+  /** The first time the house needs a guard, one comes through the nearest gate. */
+  private callGuard(): Body {
+    const post = this.guardPost()
+    const sprite = this.add.sprite(center(post.x), center(post.y), 'npcs', GUARD_FRAME).setDepth(1)
+    const guard = { ...post, sprite }
+
+    this.houseGuard = guard
+
+    if (matchMedia('(prefers-reduced-motion: no-preference)').matches)
+      this.tweens.add({ targets: sprite, alpha: { from: 0, to: 1 }, duration: 300 })
+
+    return guard
+  }
+
+  /** Once everyone unwelcome is outside, the guard walks back to wait by the gate. */
+  private async guardGoesBack() {
+    const guard = this.houseGuard
+
+    if (!guard) return
+    const post = this.guardPost()
+
+    for (const step of this.pathFor(guard, (p) => same(p, post))) {
+      await this.waitUntilFree(step)
+      await this.walkBody(guard, step)
+    }
+  }
+
+  /** One step for anyone, opening the door on the way through and shutting it after. */
+  private walkBody(body: Body, to: Point) {
+    body.x = to.x
+    body.y = to.y
+
+    if (same(to, HOUSE.door)) this.openDoor()
+
+    return new Promise<void>((resolve) =>
+      this.tweens.add({
+        targets: body.sprite,
+        x: center(to.x),
+        y: center(to.y),
+        duration: TRAVELER.stepMs,
+        onComplete: () => {
+          this.closeDoorBehind()
+          resolve()
+        },
+      }),
+    )
+  }
+
+  /** Waits a little while for a tile to clear, then goes ahead regardless, so nobody waits forever. */
+  private async waitUntilFree(p: Point) {
+    for (let tries = 0; tries < 20 && !this.travelerCanEnter(p); tries++) await this.pause(300)
+  }
+
+  private pause(ms: number) {
+    return new Promise<void>((resolve) => this.time.delayedCall(ms, () => resolve()))
   }
 
   /**
@@ -1585,6 +1773,7 @@ export class KingdomScene extends Phaser.Scene {
       hp: MONSTER.bot.hp,
       nextMoveAt: 0,
       moving: false,
+      held: false,
     })
   }
 
@@ -1663,7 +1852,7 @@ export class KingdomScene extends Phaser.Scene {
   /** Each monster drifts at random, or heads for the player when near; stepping into the player bites. */
   private updateMonsters(time: number) {
     for (const monster of this.monsters) {
-      if (monster.moving || time < monster.nextMoveAt) continue
+      if (monster.held || monster.moving || time < monster.nextMoveAt) continue
       monster.nextMoveAt = time + 600 + Math.random() * 700
       const dx = this.pos.x - monster.x
       const dy = this.pos.y - monster.y
