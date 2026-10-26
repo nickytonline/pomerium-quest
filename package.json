@@ -20,7 +20,7 @@
   },
   "devDependencies": {
     "@oxlint/plugins": "1.89.0",
-    "typescript": "5.9.3",
+    "typescript": "7.0.2",
     "vite-plus": "1.4.0",
     "yaml": "^2.9.1"
   },
