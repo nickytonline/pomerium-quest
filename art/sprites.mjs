@@ -3,6 +3,7 @@
 import { createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { faviconSvg } from './favicon.mjs'
 import { tiles } from './tiles.mjs'
 import { deflateSync } from 'node:zlib'
 
@@ -672,4 +673,8 @@ ${sheetUrls.join('\n')}
 `,
 )
 
-console.log(`wrote ${assets}{dog,items,npcs,tiles}.png, app/src/game/sheets.ts and art/out previews`)
+writeFileSync(new URL('../app/public/favicon.svg', import.meta.url), faviconSvg())
+
+console.log(
+  `wrote ${assets}{dog,items,npcs,tiles}.png, app/public/favicon.svg, app/src/game/sheets.ts and art/out previews`,
+)
