@@ -20,15 +20,15 @@ Chapter one covers the fundamentals:
 
 Then the sage gives you a house in the Slime Fields, and you write the policy on its door yourself:
 
-| At your house                                                  | In Pomerium                                                  |
-| -------------------------------------------------------------- | ------------------------------------------------------------ |
-| Slimes walk in, because a new house is left open to everyone   | A public route (`allow_public_unauthenticated_access`)       |
-| You write door rules at the desk                               | Your route's policy: `allow` and `deny`, `and`, `or`, `not`  |
-| You let in yourself or the traveler, and the slimes bounce off | `or`, and a request with no session matches no rule          |
-| You drop the traveler's line, and they're refused              | No matching allow rule means no entry                        |
-| Every citizen may visit, except the baker                      | A `deny` rule beats any `allow`                              |
-| Knights may look in (GET) but not knock (POST)                 | `http_method`                                                |
-| Ringing the bell sends the townsfolk and a slime to your door  | Real requests through Pomerium, with real sessions (or none) |
+| At your house                                                  | In Pomerium                                                                           |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Slimes walk in, because a new house is left open to everyone   | A public route (`allow_public_unauthenticated_access`), or `accept: true` in a policy |
+| You write door rules at the desk                               | Your route's policy: `allow` and `deny`, `and`, `or`, `not`                           |
+| You let in yourself or the traveler, and the slimes bounce off | `or`, and a request with no session matches no rule                                   |
+| You drop the traveler's line, and they're refused              | No matching allow rule means no entry                                                 |
+| Every citizen may visit, except the baker                      | A `deny` rule beats any `allow`                                                       |
+| Knights may look in (GET) but not knock (POST)                 | `http_method`                                                                         |
+| Ringing the bell sends the townsfolk and a slime to your door  | Real requests through Pomerium, with real sessions (or none)                          |
 
 ## Play it on a real Pomerium (local k3d)
 

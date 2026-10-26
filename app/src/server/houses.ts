@@ -22,7 +22,7 @@ const SAVE_EVERY_MS = 10_000
 const Value = Schema.String.check(Schema.isPattern(HOUSE_VALUE))
 
 const HouseCriterionSchema = Schema.Union([
-  Schema.Struct({ kind: Schema.Literal('authenticated_user') }),
+  Schema.Struct({ kind: Schema.Literals(['accept', 'authenticated_user']) }),
   Schema.Struct({ kind: Schema.Literals(['domain', 'email']), is: Value }),
   Schema.Struct({ kind: Schema.Literal('claim'), claim: Schema.Literal('groups'), value: Value }),
   Schema.Struct({ kind: Schema.Literal('http_method'), is: Schema.Literals(['GET', 'POST']) }),

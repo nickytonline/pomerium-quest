@@ -17,6 +17,7 @@ const KINDS: readonly { readonly kind: Kind; readonly label: string }[] = [
   { kind: 'claim', label: 'groups claim has' },
   { kind: 'http_method', label: 'request method is' },
   { kind: 'authenticated_user', label: 'is signed in' },
+  { kind: 'accept', label: 'anyone, even with no session' },
 ]
 
 const ACTIONS: readonly { readonly value: HouseRule['action']; readonly label: string }[] = [
@@ -33,6 +34,7 @@ const MATCHES: readonly { readonly value: HouseRule['match']; readonly label: st
 /** A fresh check of each kind; an email check starts as the player's own address. */
 function blank(kind: Kind, email: string): HouseCriterion {
   switch (kind) {
+    case 'accept':
     case 'authenticated_user':
       return { kind }
     case 'email':
@@ -49,6 +51,7 @@ function blank(kind: Kind, email: string): HouseCriterion {
 /** The text a check compares, or null for one with nothing to type. */
 function valueOf(criterion: HouseCriterion) {
   switch (criterion.kind) {
+    case 'accept':
     case 'authenticated_user':
     case 'http_method':
       return null
@@ -62,6 +65,7 @@ function valueOf(criterion: HouseCriterion) {
 
 function withValue(criterion: HouseCriterion, value: string): HouseCriterion {
   switch (criterion.kind) {
+    case 'accept':
     case 'authenticated_user':
     case 'http_method':
       return criterion

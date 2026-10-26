@@ -39,6 +39,8 @@ const pad = (n: number) => ' '.repeat(n)
 /** The YAML lines Pomerium reads for one criterion. */
 function criterionYaml(node: Criterion): readonly string[] {
   switch (node.kind) {
+    case 'accept':
+      return ['accept: true']
     case 'authenticated_user':
       return ['authenticated_user: true']
     case 'claim':
@@ -53,6 +55,8 @@ function criterionYaml(node: Criterion): readonly string[] {
 /** The same criterion on one line, for the denial screen. */
 function criterionLabel(node: Criterion): string {
   switch (node.kind) {
+    case 'accept':
+      return 'accept: true'
     case 'authenticated_user':
       return 'authenticated_user: true'
     case 'claim':
@@ -81,6 +85,8 @@ function check(node: Criterion, id: Identity, req: RequestInfo, whose: Viewpoint
   const domain = id.email.split('@')[1] ?? ''
 
   switch (node.kind) {
+    case 'accept':
+      return { ok: true, actual: 'every request matches' }
     case 'authenticated_user':
       return {
         ok: id.authenticated,
@@ -148,6 +154,8 @@ export function failedChecks(zone: Policed, id: Identity, req: RequestInfo): str
 /** A criterion as the structure Pomerium reads; JSON is YAML, so it can go straight into a config. */
 function criterionDocument(node: Criterion) {
   switch (node.kind) {
+    case 'accept':
+      return { accept: true }
     case 'authenticated_user':
       return { authenticated_user: true }
     case 'claim':

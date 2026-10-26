@@ -134,7 +134,7 @@ export function readHouseSign() {
       who: 'Sign · Your house',
       text: progress.houseRules
         ? 'Your door is a route, and its policy is the rules you wrote at the desk.'
-        : 'Your door is a route left wide open with allow_public_unauthenticated_access, so Pomerium lets in every request, signed in or not. The rules you write at the desk replace it. A route with no rules at all would let no one in.',
+        : 'Your door is a route left wide open with allow_public_unauthenticated_access, so Pomerium lets in every request, signed in or not. In a policy, the same thing is written accept: true. The rules you write at the desk replace it. A route with no rules at all would let no one in.',
       code: houseRouteYaml(house, progress.houseRules),
       links: [link('publicRoute'), link('writePolicy')],
     },

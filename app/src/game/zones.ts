@@ -7,6 +7,8 @@
  * `claim/groups: knights`.
  */
 export type Criterion =
+  /** Matches every request, even with no session: the PPL behind allow_public_unauthenticated_access. */
+  | { readonly kind: 'accept' }
   | { readonly kind: 'authenticated_user' }
   | { readonly kind: 'domain'; readonly is: string }
   | { readonly kind: 'email'; readonly is: string }
