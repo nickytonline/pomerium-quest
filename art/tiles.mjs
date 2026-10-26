@@ -541,13 +541,13 @@ const painters = [
     for (const x of [5, 9]) rect(x, 2, 1, 14, '#5b3a22')
     rect(11, 8, 2, 2, '#e3b341')
   },
-  // 37 doormat, where letters arrive
+  // 37 doormat, where letters arrive, running along the door
   (rect) => {
     floor(rect)
-    rect(1, 4, 14, 9, '#8b2e2e')
-    rect(2, 5, 12, 7, '#b5483b')
-    rect(4, 7, 8, 3, '#f4ecd8')
-    rect(5, 8, 6, 1, '#8b8597')
+    rect(4, 1, 9, 14, '#8b2e2e')
+    rect(5, 2, 7, 12, '#b5483b')
+    rect(7, 4, 3, 8, '#f4ecd8')
+    rect(8, 5, 1, 6, '#8b8597')
   },
   // 38 bell beside the door, to invite visitors
   (rect) => {
