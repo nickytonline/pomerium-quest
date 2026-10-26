@@ -3,7 +3,7 @@
 // door rules, and the explanations below come from the same rules.
 import { houseStatus, knockAs, knockYourself, openHouse, saveHouse } from './access.ts'
 import { LESSONS, LETTERS, link, type Caller, type LessonId, type Letter } from './content.ts'
-import { VISITORS, type HouseRule, type HouseState, type Knocker } from './house.ts'
+import { VISITORS, type HouseRule, type HouseState, type Knocker, type VisitorId } from './house.ts'
 import { houseStage, type LetterStage } from './house-machine.ts'
 import { decide, policyYaml, type EvalLine, type Identity } from './ppl.ts'
 import { sfx } from './sound.ts'
@@ -241,14 +241,16 @@ export async function slimeKnocks(): Promise<boolean> {
   return (await knock('slime', 'GET', house)).status === 200
 }
 
-/** Whether the traveler is welcome right now, by knocking as them. */
-export async function travelerWelcome(): Promise<boolean> {
+/** Whether a townsperson is welcome right now, by knocking as them. */
+export async function visitorWelcome(who: VisitorId): Promise<boolean> {
   const { house } = quest.get()
 
   if (!house) return false
 
-  return (await knock('traveler', 'GET', house)).status === 200
+  return (await knock(who, 'GET', house)).status === 200
 }
+
+export const travelerWelcome = () => visitorWelcome('traveler')
 
 const EVERYONE: readonly Knocker[] = ['baker', 'traveler', 'captain', 'librarian', 'slime']
 

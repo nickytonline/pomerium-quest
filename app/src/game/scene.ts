@@ -15,6 +15,7 @@ import {
   ringBell,
   slimeKnocks,
   travelerWelcome,
+  visitorWelcome,
 } from './house-story.ts'
 import { MAX_HP, buzz, quest, type Dir } from './store.ts'
 import {
@@ -289,6 +290,12 @@ interface Intruder {
   readonly release: () => void
 }
 
+/** How long the Captain stays when they drop by. */
+const CAPTAIN_STAYS_MS = 40_000
+
+/** Where the Captain stands while visiting: by the bell, to say hello. */
+const CAPTAIN_SPOT = { x: 5, y: 11 }
+
 /** Where a guard leaves an intruder: the path just past the doorstep. */
 const OUTSIDE = { x: HOUSE.doorstep.x + 1, y: HOUSE.doorstep.y }
 
@@ -338,6 +345,10 @@ export class KingdomScene extends Phaser.Scene {
   /** The guard who shows unwelcome visitors out of the house, and waits by the nearest gate between times. */
   private houseGuard: Body | undefined
   private escorting = false
+  /** The Captain, a knight, drops by when new door rules let knights in: at the guild, on the way, or in. */
+  private captain: 'guild' | 'visiting' | 'inside' | 'shownOut' = 'guild'
+  /** Whether the door let the Captain in last time the house checked, so they only visit when that changes. */
+  private captainWasWelcome = false
   /** Quarters of the loaf left on the table. */
   private bread = 0
   /** When a fresh loaf turns up, once the last one is gone. */
@@ -1417,10 +1428,107 @@ export class KingdomScene extends Phaser.Scene {
       })
     }
 
+    const captain = this.npcs.find((npc) => npc.npcId === 'captain')
+    const captainWelcome = await visitorWelcome('captain')
+
+    const captainIn = this.captain === 'inside' || this.captain === 'visiting'
+
+    if (captain && captainIn && !captainWelcome) {
+      // Stop where they are, on the way in or inside, and wait for the guard.
+      this.captain = 'shownOut'
+      intruders.push({
+        body: captain,
+        name: 'the Captain',
+        pronoun: 'them',
+        release: () => void this.captainGoesHome(captain),
+      })
+    }
+
     for (const intruder of intruders) await this.showOut(intruder)
 
     await this.guardGoesBack()
     this.escorting = false
+
+    // Door rules of the player's own now let knights in: the Captain comes to say hello.
+    const ownRules = quest.get().progress.houseRules !== null
+
+    if (captain && ownRules && captainWelcome && !this.captainWasWelcome && this.captain === 'guild')
+      void this.captainVisits(captain)
+
+    this.captainWasWelcome = captainWelcome
+  }
+
+  /** The Captain appears on the path outside, comes in, says hello, and goes back to the guild in a while. */
+  private async captainVisits(captain: NpcSprite) {
+    this.captain = 'visiting'
+    await this.waitUntilFree(OUTSIDE)
+    await this.vanish(captain)
+    captain.x = OUTSIDE.x
+    captain.y = OUTSIDE.y
+    captain.sprite.setPosition(center(OUTSIDE.x), center(OUTSIDE.y))
+    await this.appear(captain)
+
+    for (const step of this.pathFor(captain, (p) => same(p, CAPTAIN_SPOT), { throughDoor: true })) {
+      await this.waitUntilFree(step)
+
+      // New rules could have turned them away on the way in.
+      if (this.captain !== 'visiting') return
+      await this.walkBody(captain, step)
+    }
+
+    this.captain = 'inside'
+
+    if (inHouse(this.pos) || this.near(HOUSE.door))
+      quest.toast(
+        'The Captain drops by: "Hello! Your door lets knights in, so I thought I\'d say hello."',
+        'allow',
+      )
+
+    await this.pause(CAPTAIN_STAYS_MS)
+
+    // Shown out by a guard in the meantime, or still here and ready to go.
+    if (this.captain !== 'inside' || this.escorting) return
+
+    for (const step of this.pathFor(captain, (p) => same(p, OUTSIDE), { throughDoor: true })) {
+      await this.waitUntilFree(step)
+      await this.walkBody(captain, step)
+    }
+
+    await this.captainGoesHome(captain)
+  }
+
+  /** Back to the Captain's post at the guild. */
+  private async captainGoesHome(captain: NpcSprite) {
+    const home = this.world.npcs.find((npc) => npc.npcId === 'captain')
+
+    if (!home) return
+    await this.vanish(captain)
+    captain.x = home.x
+    captain.y = home.y
+    captain.sprite.setPosition(center(home.x), center(home.y))
+    await this.appear(captain)
+    this.captain = 'guild'
+  }
+
+  /** A short fade out, or straight away when the player prefers less motion. */
+  private vanish(body: Body) {
+    return this.fadeTo(body, 0)
+  }
+
+  private appear(body: Body) {
+    return this.fadeTo(body, 1)
+  }
+
+  private fadeTo(body: Body, alpha: number) {
+    if (!matchMedia('(prefers-reduced-motion: no-preference)').matches) {
+      body.sprite.setAlpha(alpha)
+
+      return Promise.resolve()
+    }
+
+    return new Promise<void>((resolve) =>
+      this.tweens.add({ targets: body.sprite, alpha, duration: 250, onComplete: () => resolve() }),
+    )
   }
 
   /**
