@@ -457,15 +457,43 @@ const EFFECTS: Record<Effect, (mix: Mixer, out: AudioNode, at: number) => void> 
 
     healChime(out, at + 0.56)
   },
-  itemGet: (_mix, out, at) => {
-    for (const [i, name] of ['G4', 'B4', 'D5', 'G5', 'B5'].entries())
-      tone(out, at + i * 0.08, { wave: 'square', freq: hz(name), dur: 0.12, peak: 0.1 })
+  /**
+   * A fanfare for finding something: a drum-roll pickup of three, then the melody climbs through
+   * I, IV and V to land on a held chord with a cymbal and a sparkle. The music ducks out of the way.
+   */
+  itemGet: (mix, out, at) => {
+    const melody: readonly (readonly [
+      lead: string,
+      harmony: string,
+      bass: string,
+      start: number,
+      dur: number,
+    ])[] = [
+      ['A4', 'E4', 'A2', 0, 0.08],
+      ['A4', 'E4', 'A2', 0.1, 0.08],
+      ['A4', 'E4', 'A2', 0.2, 0.08],
+      ['D5', 'A4', 'D3', 0.3, 0.28],
+      ['G5', 'D5', 'G2', 0.62, 0.16],
+      ['A5', 'E5', 'A2', 0.8, 0.16],
+      ['D6', 'A5', 'D3', 0.98, 1.3],
+    ]
 
-    for (const name of ['G5', 'B5', 'D6'])
-      tone(out, at + 0.46, { wave: 'square', freq: hz(name), dur: 1.0, peak: 0.06, hold: true })
-    tone(out, at + 0.46, { wave: 'triangle', freq: hz('G3'), dur: 1.0, peak: 0.3, hold: true })
-    tone(out, at + 0.6, { wave: 'sine', freq: hz('G6'), dur: 0.3, peak: 0.08 })
-    tone(out, at + 0.8, { wave: 'sine', freq: hz('D7'), dur: 0.5, peak: 0.06 })
+    duck(mix, 2.6)
+
+    for (const [lead, harmony, bass, start, dur] of melody) {
+      tone(out, at + start, { wave: 'square', freq: hz(lead), dur, peak: 0.1, hold: true })
+      tone(out, at + start, { wave: 'square', freq: hz(harmony), dur, peak: 0.05, hold: true })
+      tone(out, at + start, { wave: 'triangle', freq: hz(bass), dur, peak: 0.3, hold: true })
+    }
+
+    for (const start of [0, 0.1, 0.2])
+      hiss(mix, out, at + start, { filter: 'bandpass', freq: 2000, q: 0.8, dur: 0.06, peak: 0.2 })
+    hiss(mix, out, at + 0.3, { filter: 'lowpass', freq: 1200, dur: 0.1, peak: 0.35 })
+    tone(out, at + 0.98, { wave: 'square', freq: hz('F#5'), dur: 1.3, peak: 0.05, hold: true })
+    hiss(mix, out, at + 0.98, { filter: 'highpass', freq: 5000, dur: 1.1, peak: 0.18 })
+
+    for (const [i, name] of ['D6', 'F#6', 'A6', 'D7'].entries())
+      tone(out, at + 1.15 + i * 0.07, { wave: 'sine', freq: hz(name), dur: 0.5, peak: 0.07 })
   },
   laugh,
   victory: (_mix, out, at) => {
