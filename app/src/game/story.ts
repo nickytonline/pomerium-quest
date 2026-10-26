@@ -156,15 +156,18 @@ function denyView(
     }
   }
 
+  // The game's view of the session comes from the JWT on its last request, which already carries
+  // the new claims. If Pomerium still says no, its authorize step is deciding with what it cached
+  // about the user (for up to a minute), not with the papers the player now holds.
   const stale = decision.allow
 
   const { story, hint } = stale
     ? {
         story: {
-          title: 'Old papers',
-          text: "The Oracle has named you a knight, but the gate reads the papers he gave you when you signed in, and those don't say so yet. Visit his temple and sign in again for new papers.",
+          title: 'Word is still on its way',
+          text: 'Your new papers are in your hand, but this gate still remembers you as you were. Word travels slowly: wait a moment, then try the gate again.',
         },
-        hint: 'Pomerium said no, yet by the game’s records you qualify. Your session still holds the claims from when you signed in. Pomerium refreshes them from the identity provider from time to time, but signing in again with the Oracle picks up the change now. If you just did, give Pomerium up to a minute to pick up the new claim.',
+        hint: 'Pomerium said no, yet the claims in your new session say you qualify. Pomerium caches what it knows about a user for up to a minute, and the claim check merges that cached record with your session. Until the cache expires, the old groups win. Try again shortly.',
       }
     : refusal(zone, method, id)
 
@@ -264,7 +267,16 @@ const welcome = (next: Identity) =>
   ])
 
 const welcomeBack = (next: Identity, onDone?: () => void) =>
-  quest.say([{ who: 'Oracle', text: 'Signed in again. Your new claims:', code: claimsCode(next) }], onDone)
+  quest.say(
+    [
+      {
+        who: 'Oracle',
+        text: 'Signed in again. Your new claims are below. Gates may take up to a minute to hear of them.',
+        code: claimsCode(next),
+      },
+    ],
+    onDone,
+  )
 
 /** Groups the Captain or the Librarian asked the Oracle to add, whether or not the session has them yet. */
 function vouchedGroups() {
