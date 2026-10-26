@@ -615,9 +615,17 @@ function unlock() {
     soften.frequency.value = 3200
     music.gain.value = settings.music ? LEVEL.music : 0
     effects.gain.value = settings.effects ? LEVEL.effects : 0
+    // A limiter on the way out, so sounds stacking up can never clip.
+    const limiter = ctx.createDynamicsCompressor()
+
+    limiter.threshold.value = -3
+    limiter.knee.value = 0
+    limiter.ratio.value = 20
+    limiter.attack.value = 0.003
+    limiter.release.value = 0.1
     music.connect(soften).connect(master)
     effects.connect(master)
-    master.connect(ctx.destination)
+    master.connect(limiter).connect(ctx.destination)
     mixer = { ctx, music, effects, noise }
   }
 
