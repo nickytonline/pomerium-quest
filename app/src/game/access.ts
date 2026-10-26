@@ -166,8 +166,11 @@ export const houseStatus = () => builder<HouseState>('status', {})
 export const knockAs = (knocker: Knocker, method: 'GET' | 'POST') =>
   builder<Knock>('knock', { knocker, method })
 
-/** The player at their own door: a real request with their own session, straight from the browser. */
-export async function knockYourself(path: string, method: 'GET' | 'POST'): Promise<number> {
+/** How long the player's knock keeps trying while Pomerium takes up new rules, as the visitors' knocks do. */
+const PICKUP_MS = 25_000
+
+/** One knock by the player: Pomerium's status, and the rules version the house saw if it got in. */
+async function knockOnce(path: string, method: 'GET' | 'POST') {
   try {
     const response = await fetch(`${path}knock`, {
       method,
@@ -175,8 +178,31 @@ export async function knockYourself(path: string, method: 'GET' | 'POST'): Promi
       headers: { accept: 'application/json' },
     })
 
-    return response.type === 'opaqueredirect' ? 302 : response.status
+    if (response.type === 'opaqueredirect') return { status: 302, version: null }
+
+    // SAFETY: a house answers with its rules version (app/src/server/zones.ts); anything else has none.
+    const answer = (await response.json().catch(() => ({}))) as { version?: string | null }
+
+    return { status: response.status, version: answer.version ?? null }
   } catch {
-    return 0
+    return { status: 0, version: null }
+  }
+}
+
+/**
+ * The player at their own door: a real request with their own session, straight from the browser.
+ * Pomerium takes a moment to pick up saved rules, and until then the old rules (an older version) or no
+ * route at all (404) can answer, so it knocks again until the house's current rules do.
+ */
+export async function knockYourself(house: HouseState, method: 'GET' | 'POST'): Promise<number> {
+  const started = Date.now()
+
+  for (;;) {
+    const { status, version } = await knockOnce(house.path, method)
+    const current = status === 200 ? version === house.version : status !== 404
+
+    if (current || Date.now() - started > PICKUP_MS) return status
+
+    await new Promise((resolve) => setTimeout(resolve, 1_000))
   }
 }

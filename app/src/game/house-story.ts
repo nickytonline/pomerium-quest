@@ -208,7 +208,7 @@ async function knock(who: Caller, method: 'GET' | 'POST', house: HouseState): Pr
   const path = `${house.path}knock`
   let status = 0
 
-  if (who === 'you') status = await knockYourself(house.path, method)
+  if (who === 'you') status = await knockYourself(house, method)
   else {
     const answer = await knockAs(who, method)
     status = answer.ok ? answer.value.status : 0
