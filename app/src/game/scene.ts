@@ -1,4 +1,4 @@
-// The overworld: tile map, grid movement, sword, monsters. Talking, reading and gates are
+// The overworld: tile map, grid movement, sword, monsters. Talking, reading and asking guards are
 // delegated to story.ts; this file only moves things around and draws them.
 import * as Phaser from 'phaser'
 import { startPlayer } from './player-machine.ts'
@@ -20,6 +20,7 @@ import {
   writeLedger,
 } from './story.ts'
 import {
+  GUARD_FRAME,
   MAP_HEIGHT,
   MAP_WIDTH,
   NPC_FRAME,
@@ -31,6 +32,7 @@ import {
   isFountain,
   buildWorld,
   regionAt,
+  type Gate,
   type Point,
 } from './world.ts'
 
@@ -137,6 +139,17 @@ interface Monster {
   moving: boolean
 }
 
+/**
+ * A guard stands at `post`, the tile in front of its gate, until Pomerium allows the player; then they
+ * step aside and stand at `spot` until the player is through.
+ */
+interface Guard {
+  readonly gate: Gate
+  readonly post: Point
+  readonly sprite: Phaser.GameObjects.Sprite
+  spot: Point
+}
+
 /** A phish stands still, dressed as the Oracle; `index` is its place in the world's list. */
 interface Phish {
   readonly index: number
@@ -159,7 +172,8 @@ export class KingdomScene extends Phaser.Scene {
   private pos: Point = { x: 0, y: 0 }
   private dir: Dir = 'down'
   private readonly mode = startPlayer()
-  private openGate: Point | undefined
+  private openGate: Guard | undefined
+  private guards: Guard[] = []
   /** An item shown rising out of a chest until the player closes its dialog. */
   private shownItem: Phaser.GameObjects.Image | undefined
   private monsters: Monster[] = []
@@ -207,6 +221,22 @@ export class KingdomScene extends Phaser.Scene {
 
     for (const npc of this.world.npcs)
       this.add.sprite(center(npc.x), center(npc.y), 'npcs', NPC_FRAME[npc.npcId])
+
+    this.guards = this.world.gates.map((gate) => {
+      const post = this.postOf(gate)
+
+      return {
+        gate,
+        post,
+        spot: post,
+        sprite: this.add.sprite(center(post.x), center(post.y), 'npcs', GUARD_FRAME),
+      }
+    })
+
+    // A game saved mid-gateway resumes with that gate open and its guard already aside.
+    const passing = this.guards.find((guard) => same(guard.gate, this.pos) || same(guard.post, this.pos))
+
+    if (passing) this.letThrough(passing, false)
 
     for (const [kind, { frame }] of Object.entries(MONSTER))
       this.anims.create({
@@ -396,6 +426,7 @@ export class KingdomScene extends Phaser.Scene {
     return (
       this.world.npcs.some((npc) => same(npc, p)) ||
       this.monsters.some((monster) => same(monster, p)) ||
+      this.guards.some((guard) => same(guard.spot, p)) ||
       this.fish.some((fish) => same(fish, p)) ||
       this.phish.some((phish) => same(phish, p))
     )
@@ -415,6 +446,15 @@ export class KingdomScene extends Phaser.Scene {
 
     if (this.phish.some((phish) => same(phish, target))) return
 
+    const guard = this.guards.find((candidate) => same(candidate.spot, target))
+
+    if (guard) {
+      // Once a guard has stepped aside for the player, there's nothing more to ask them.
+      if (this.openGate !== guard) this.askGuard(guard, target)
+
+      return
+    }
+
     const fish = this.fish.find((candidate) => same(candidate, target))
 
     if (fish) {
@@ -432,22 +472,10 @@ export class KingdomScene extends Phaser.Scene {
     const tile = this.tileAt(target)
 
     if (tile === TILE.gateClosed) {
-      const gate = this.world.gates.find((candidate) => same(candidate, target))
+      // From inside, the gate itself stands between the player and the guard outside.
+      const gateGuard = this.guards.find((candidate) => same(candidate.gate, target))
 
-      if (!gate) return
-      this.mode.send({ type: 'GATE' })
-      void enterGate(gate.zoneId).then((allowed) => {
-        if (!allowed) {
-          this.mode.send({ type: 'GATE_DENIED' })
-
-          return
-        }
-
-        this.setTile(target, TILE.gateOpen)
-        sfx('gateOpen')
-        this.openGate = target
-        this.walk(target)
-      })
+      if (gateGuard) this.askGuard(gateGuard, target)
 
       return
     }
@@ -486,14 +514,97 @@ export class KingdomScene extends Phaser.Scene {
 
     if (leftWater) this.shakeOff()
 
-    if (this.openGate && !same(this.openGate, target)) {
-      this.setTile(this.openGate, TILE.gateClosed)
+    const passing = this.openGate
+
+    if (passing && !same(passing.gate, target) && !same(passing.post, target)) {
+      this.closeGate()
       sfx('gateClose')
-      this.openGate = undefined
     }
 
     quest.progress({ x: target.x, y: target.y, dir: this.dir })
     quest.setRegion(regionAt(target))
+  }
+
+  /** A guard's post is the tile in front of their gate, on the outside, where the gate's sign stands. */
+  private postOf(gate: Gate): Point {
+    const sign = this.world.signs.find((candidate) => candidate.signId === gate.zoneId) ?? gate
+    const roadRunsAcross = PLAYER_TERRAIN.has(this.tileAt({ x: gate.x - 1, y: gate.y }))
+
+    if (roadRunsAcross) return { x: sign.x < gate.x ? gate.x - 1 : gate.x + 1, y: gate.y }
+
+    return { x: gate.x, y: sign.y > gate.y ? gate.y + 1 : gate.y - 1 }
+  }
+
+  /**
+   * Where a guard steps to let the player by: to one side of their post, away from the sign so it stays
+   * in view, or the other side, or back along the road if the player is standing beside them.
+   */
+  private asideOf(guard: Guard): Point {
+    const { gate, post } = guard
+    const across = { x: post.y - gate.y, y: post.x - gate.x }
+    const sign = this.world.signs.find((candidate) => candidate.signId === gate.zoneId) ?? post
+    const awayFromSign = (sign.x - post.x) * across.x + (sign.y - post.y) * across.y > 0 ? -1 : 1
+
+    const choices = [
+      { x: post.x + across.x * awayFromSign, y: post.y + across.y * awayFromSign },
+      { x: post.x - across.x * awayFromSign, y: post.y - across.y * awayFromSign },
+      { x: post.x * 2 - gate.x, y: post.y * 2 - gate.y },
+    ]
+
+    const free = (p: Point) => WALKABLE.has(this.tileAt(p)) && !this.occupied(p) && !same(p, this.pos)
+
+    return choices.find(free) ?? post
+  }
+
+  /** Asks Pomerium on the player's behalf; if it allows them, the guard steps aside and they walk on. */
+  private askGuard(guard: Guard, target: Point) {
+    this.mode.send({ type: 'GATE' })
+    void enterGate(guard.gate.zoneId).then((allowed) => {
+      if (!allowed) {
+        this.mode.send({ type: 'GATE_DENIED' })
+
+        return
+      }
+
+      sfx('gateOpen')
+      const stepMs = this.letThrough(guard, true)
+      this.time.delayedCall(stepMs, () => this.walk(target))
+    })
+  }
+
+  /** Opens a gate and moves its guard aside; returns how long the guard takes to step out of the way. */
+  private letThrough(guard: Guard, animate: boolean) {
+    this.setTile(guard.gate, TILE.gateOpen)
+    this.openGate = guard
+
+    return this.moveGuard(guard, this.asideOf(guard), animate)
+  }
+
+  /** Closes the open gate behind the player, and its guard steps back to their post. */
+  private closeGate() {
+    const guard = this.openGate
+
+    if (!guard) return
+    this.openGate = undefined
+    this.setTile(guard.gate, TILE.gateClosed)
+    this.moveGuard(guard, guard.post, true)
+  }
+
+  /** A guard's short step, or a jump straight there when the player prefers less motion. */
+  private moveGuard(guard: Guard, to: Point, animate: boolean) {
+    guard.spot = to
+    this.tweens.killTweensOf(guard.sprite)
+    const motion = animate && matchMedia('(prefers-reduced-motion: no-preference)').matches
+
+    if (!motion) {
+      guard.sprite.setPosition(center(to.x), center(to.y))
+
+      return 0
+    }
+
+    this.tweens.add({ targets: guard.sprite, x: center(to.x), y: center(to.y), duration: STEP_MS })
+
+    return STEP_MS
   }
 
   private interact() {
@@ -530,10 +641,13 @@ export class KingdomScene extends Phaser.Scene {
       return
     }
 
-    const gate = this.world.gates.find((candidate) => same(candidate, target))
+    // Ask a guard (or face their gate from inside) and they recite the rule on the sign beside them.
+    const guard = this.guards.find(
+      (candidate) => same(candidate.spot, target) || same(candidate.gate, target),
+    )
 
-    if (gate) {
-      readSign(gate.zoneId)
+    if (guard) {
+      readSign(guard.gate.zoneId)
 
       return
     }
@@ -996,6 +1110,7 @@ export class KingdomScene extends Phaser.Scene {
   }
 
   private respawn() {
+    this.closeGate()
     this.pos = this.world.spawn
     this.player?.setPosition(center(this.pos.x), center(this.pos.y))
     this.swim(false)

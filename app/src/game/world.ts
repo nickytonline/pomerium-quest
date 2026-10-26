@@ -66,6 +66,9 @@ export const NPC_FRAME: Record<NpcId, number> = {
 /** Phish dress as the Oracle, so their frame in npcs.png follows the real NPCs'. */
 export const PHISH_FRAME = 7
 
+/** A guard stands in every gateway; the frame after the phish in npcs.png. */
+export const GUARD_FRAME = 8
+
 export interface Point {
   readonly x: number
   readonly y: number
