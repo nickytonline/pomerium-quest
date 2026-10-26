@@ -310,32 +310,6 @@ const WORKBENCH_COLORS = {
   S: '#4a2f18', // floor shadow
 }
 
-const CHAIR = [
-  '................',
-  '...KKK..........',
-  '...KBK..........',
-  '...KBK..........',
-  '...KbK..........',
-  '...KBK..........',
-  '...KBK..........',
-  '...KBKKKKKKKK...',
-  '...KBBBBBBBBBK..',
-  '...KbbbbbbbbbK..',
-  '...KKKKKKKKKKK..',
-  '...KbK.....KbK..',
-  '...KbK.....KbK..',
-  '...KbK.....KbK..',
-  '...KKK.....KKK..',
-  '...SSS.....SSS..',
-]
-
-const CHAIR_COLORS = {
-  K: '#241a2e', // outline
-  B: '#a87a45', // wood
-  b: '#6b4226', // shaded wood
-  S: '#4a2f18', // floor shadow
-}
-
 /** A small table on the floor: its top, front edge and legs. */
 const table = (rect) => {
   floor(rect)
@@ -344,6 +318,20 @@ const table = (rect) => {
   rect(1, 9, 14, 2, '#6b4226')
   rect(2, 11, 2, 4, '#4a2f18')
   rect(12, 11, 2, 4, '#4a2f18')
+}
+
+/**
+ * The table with what's left of the loaf: `inner` pixels of crust across, the last of them the pale cut
+ * end, and crumbs beside it.
+ */
+const eatenLoaf = (rect, inner) => {
+  table(rect)
+  rect(4, 4, inner + 2, 4, '#241a2e')
+  rect(5, 4, inner, 3, '#c98a3c')
+  rect(5, 4, inner, 1, '#e3b06a')
+  rect(4 + inner, 4, 1, 3, '#f4e3b8')
+  rect(inner + 7, 5, 1, 1, '#c98a3c')
+  rect(inner + 9, 7, 1, 1, '#e3b06a')
 }
 
 /** Paints a 16x16 grid of color keys; '.' leaves the pixel underneath. */
@@ -507,11 +495,8 @@ const painters = [
     rect(10, 7, 1, 1, '#e3b06a')
     rect(6, 4, 1, 1, '#e3b06a')
   },
-  // 33 a chair at the table, seen from the side, facing the table on its right
-  (rect) => {
-    floor(rect)
-    pixels(rect, CHAIR, CHAIR_COLORS)
-  },
+  // 33 the loaf, a quarter eaten
+  (rect) => eatenLoaf(rect, 5),
   // 34 writing desk, where the player writes their door rules
   (rect) => {
     floor(rect)
@@ -570,6 +555,10 @@ const painters = [
     for (const x of [5, 9]) rect(x, 2, 1, 14, '#5b3a22')
     rect(11, 8, 1, 2, '#241a2e')
   },
+  // 40 the loaf, half eaten
+  (rect) => eatenLoaf(rect, 3),
+  // 41 the heel of the loaf, nearly gone
+  (rect) => eatenLoaf(rect, 2),
 ]
 
 export const tiles = painters.map((paint) => {
