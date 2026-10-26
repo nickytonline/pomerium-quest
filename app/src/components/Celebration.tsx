@@ -280,7 +280,7 @@ function CelebrationScreen({ stats }: { readonly stats: string }) {
         <div className="grid justify-items-center gap-2">
           <img
             className="h-auto w-[min(260px,52vw)] drop-shadow-[0_12px_40px_rgb(255_79_184/0.45)]"
-            src="/assets/splash.png"
+            src={SHEETS.splash}
             alt="The Pomerium Pomeranian in aviators and a leather jacket"
           />
           <h2

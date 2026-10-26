@@ -660,7 +660,8 @@ const version = (name) =>
     .digest('hex')
     .slice(0, 10)
 
-const sheetUrls = ['dog', 'items', 'npcs', 'tiles'].map(
+// The splash isn't drawn here, but gets a hashed URL the same way.
+const sheetUrls = ['dog', 'items', 'npcs', 'tiles', 'splash'].map(
   (name) => `  ${name}: '/assets/${name}.png?v=${version(name)}',`,
 )
 
@@ -676,5 +677,5 @@ ${sheetUrls.join('\n')}
 writeFileSync(new URL('../app/public/favicon.svg', import.meta.url), faviconSvg())
 
 console.log(
-  `wrote ${assets}{dog,items,npcs,tiles}.png, app/public/favicon.svg, app/src/game/sheets.ts and art/out previews`,
+  `wrote ${assets}{dog,items,npcs,tiles}.png, the splash's URL, app/public/favicon.svg, app/src/game/sheets.ts and art/out previews`,
 )

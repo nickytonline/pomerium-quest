@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 import { probe } from '../game/access.ts'
+import { SHEETS } from '../game/sheets.ts'
 import { Celebration, playAgain } from './Celebration.tsx'
 import { HouseEditor, VisitsScreen } from './House.tsx'
 import { Phished } from './Phished.tsx'
@@ -258,7 +259,7 @@ function Splash() {
     >
       <img
         className="h-auto w-[min(360px,78vw)] drop-shadow-[0_12px_40px_rgb(255_79_184/0.35)]"
-        src="/assets/splash.png"
+        src={SHEETS.splash}
         alt="The Pomerium Pomeranian in aviators and a leather jacket"
       />
       <h1 className="sunset-text m-0 font-display text-[clamp(2.2rem,7vw,3.6rem)] font-bold tracking-[0.02em] text-balance">
