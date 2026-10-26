@@ -9,11 +9,13 @@ import {
 } from 'react'
 import { probe } from '../game/access.ts'
 import { Celebration, playAgain } from './Celebration.tsx'
+import { HouseEditor, VisitsScreen } from './House.tsx'
 import { Phished } from './Phished.tsx'
+import { PolicyLines } from './PolicyLines.tsx'
 import { INTRO, LESSONS, LESSON_ORDER, type Choice } from '../game/content.ts'
 import { KNIGHT_QUOTA, questMachine, type QuestStage } from '../game/quest-machine.ts'
 import { MAX_HP, SETTLE_MS, quest, useQuest, type DenyView, type Dir } from '../game/store.ts'
-import { decide, type EvalLine, type Identity } from '../game/ppl.ts'
+import { decide, type Identity } from '../game/ppl.ts'
 import { sound, startSound, useSound, type SoundSettings } from '../game/sound.ts'
 import { KINGDOM_DOMAIN, SIGNED_IN_MESSAGE, zoneById } from '../game/zones.ts'
 
@@ -126,10 +128,22 @@ function useDialogKeys() {
     const onKey = (event: KeyboardEvent) => {
       // A handled key (like the Enter that starts the game) must not also advance a dialog.
       if (event.repeat) return
-      const { celebrating, deny, dialog, finale, journalOpen, menuOpen, phished, signIn } = quest.get()
 
-      // The celebration and phished screens handle their own keys.
-      if (celebrating || phished) return
+      const {
+        celebrating,
+        deny,
+        dialog,
+        finale,
+        houseEditor,
+        journalOpen,
+        menuOpen,
+        phished,
+        signIn,
+        visits,
+      } = quest.get()
+
+      // The celebration and phished screens, and the house's desk and visitors, handle their own keys.
+      if (celebrating || phished || houseEditor || visits) return
       const journalKey = event.key === 'i' || event.key === 'I'
       const confirm = event.key === 'Enter' || event.key === ' ' || event.key === 'e' || event.key === 'E'
 
@@ -355,6 +369,8 @@ function Kingdom() {
             <Toast />
             <DialogBox />
             <DenyScreen />
+            <HouseEditor />
+            <VisitsScreen />
             <PauseMenu />
           </div>
           {touch ? (
@@ -847,27 +863,6 @@ function TabbedScreen({
 }
 
 const tabHint = 'm-0 text-right font-display text-[0.85rem]'
-
-/** The rule Pomerium evaluated, line by line; only criteria carry a ✓ or ✗. */
-function PolicyLines({ lines }: { readonly lines: readonly EvalLine[] }) {
-  return (
-    <div className="overflow-x-auto rounded bg-paper-tint px-2.5 py-2">
-      <p className="mb-1 text-[0.72rem] tracking-[0.08em] text-paper-muted uppercase">Policy evaluation</p>
-      {lines.map((line, i) => (
-        <div
-          key={i}
-          className={`grid grid-cols-[1.2em_max-content_1fr] items-baseline gap-2 text-[0.8rem] ${line.ok === false ? 'text-[#c2183a]' : ''}`}
-        >
-          <span className={line.ok ? 'text-[#15803d]' : ''}>
-            {line.ok === undefined ? '' : line.ok ? '✓' : '✗'}
-          </span>
-          <code className="whitespace-pre">{line.text}</code>
-          {line.actual && <span className="text-[0.75rem] text-paper-muted">{line.actual}</span>}
-        </div>
-      ))}
-    </div>
-  )
-}
 
 const groupsList = (groups: readonly string[]) => `groups: [${groups.join(', ')}]`
 
