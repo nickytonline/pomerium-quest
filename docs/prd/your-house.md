@@ -1,6 +1,51 @@
 # PRD: Your house, where you write the policy
 
-Status: not started. Planned for v2.
+Status: built. `./quest test` checks every letter against the real Pomerium. "As built" below records
+the load test and where the build differs from this plan.
+
+## As built
+
+### Load test
+
+`scripts/house-load-test.sh` runs the Pomerium Ingress Controller (branch 0-33-0, Pomerium v0.33.4)
+in its own k3d cluster, with house Ingresses pointing at an echo server:
+
+| Houses | All created                                                              | One edit applied | One delete | Cold start | Pomerium (CPU, memory) |
+| ------ | ------------------------------------------------------------------------ | ---------------- | ---------- | ---------- | ---------------------- |
+| 100    | 5.1 s                                                                    | 0.58 s (median)  | 0.08 s     | 19.4 s     | about 1 core, 228 MiB  |
+| 300    | 16.6 s                                                                   | 0.75 s (median)  | 0.34 s     | 20.1 s     | about 1 core, 419 MiB  |
+| 1,000  | Pomerium crash-looped and served 404 on every route, and never recovered |
+
+The cause is in the controller, not in Pomerium's routing. Every change validates the whole config by
+running Envoy against it. On startup it validates once per Ingress, against everything so far, so
+the work grows with the square of the number of houses. At 1,000 houses that outlasts the controller's
+cache-sync timeout, so it restarts, and a restarted controller serves no routes at all. That includes
+the main gates, since houses share the instance.
+
+So at most **100 houses** stand at once (`QUEST_HOUSE_LIMIT`), well inside the measured range. Hosted
+play with many players would need the controller fixed upstream, or houses on their own Pomerium.
+
+### Where the build differs from the plan
+
+- **Last visits are kept in the game server's memory**, not in a `quest/last-visited` annotation.
+  Every change to an Ingress makes the controller validate Pomerium's whole config, so touching it on
+  every visit would be expensive. After a restart, every standing house gets a fresh 30 minutes.
+- **A save waits for the controller.** It records an `Updated` event each time it applies an Ingress,
+  and Kubernetes folds repeats into one event with a count. The server waits (up to 25 seconds, under
+  Pomerium's 30 second route timeout) for the count to rise. Knocks also check `X-House-Version`, set
+  on each house with `set_request_headers`.
+- **A house only answers when Pomerium set `X-House-Version`.** Without a house route, a request to
+  `/zones/home/...` falls through to the public game route, and must not look like an open door.
+- **The townsfolk are imported at deploy**, with Keycloak's partial import, rather than made by the
+  game server. The realm's user profile only accepts kingdom addresses, even from the admin API, and the
+  traveler is from `outlands.net`. The import skips that check, and the game server needs no extra
+  Keycloak permissions.
+- **The deny letter keeps out the baker**, not the traveler. The traveler isn't a citizen, so an allow
+  rule for citizens already keeps them out, and the deny would do nothing.
+- **Slimes come from the fields**: a field slime that reaches the doorstep knocks with no session, at
+  most once every 15 seconds.
+- **The Ingress Controller has no `signout_redirect_url`**, so the game passes `pomerium_redirect_uri`
+  when it signs out to refresh claims.
 
 ## Why
 
@@ -56,7 +101,7 @@ Later letters build on that:
 | Letter                                                           | What it teaches                       | One answer                                                     |
 | ---------------------------------------------------------------- | ------------------------------------- | -------------------------------------------------------------- |
 | "Let in your friends from the Knights' Guild"                    | `claim/groups`                        | `allow: { or: [email: { is: <you> }, claim/groups: knights] }` |
-| "Any citizen may visit, except that traveler"                    | `deny` beats `allow`                  | allow `domain`, then `deny` the traveler's `email`             |
+| "Any citizen may visit, except the baker"                        | `deny` beats `allow`                  | allow `domain`, then `deny` the baker's `email`                |
 | "Friends may look in through the window (GET), not knock (POST)" | `http_method`, two rules on one route | as the library does                                            |
 
 A letter counts as solved when the real visits come out the way the brief asks: the visitors are the test
@@ -298,28 +343,33 @@ Each step stands on its own and is committed separately.
 
 ## New lessons
 
-| Lesson                                   | Taught when                       | Links to               |
-| ---------------------------------------- | --------------------------------- | ---------------------- |
-| A public route lets everyone in          | Finding the slimes in the house   | Public access          |
-| You write the policy                     | The first save                    | Route policy           |
-| `or` lets in anyone who passes one check | Letting the traveler stay         | PPL: logical operators |
-| A deny rule always beats an allow        | The "except that traveler" letter | PPL: allow and deny    |
+| Lesson                                   | Taught when                     | Links to               |
+| ---------------------------------------- | ------------------------------- | ---------------------- |
+| A public route lets everyone in          | Finding the slimes in the house | Public access          |
+| You write the policy                     | The first save                  | Route policy           |
+| `or` lets in anyone who passes one check | Letting the traveler stay       | PPL: logical operators |
+| A deny rule always beats an allow        | The "except the baker" letter   | PPL: allow and deny    |
 
 Removing the traveler (the second letter) teaches chapter one's "No matching allow rule means no entry"
 again, this time from the other side of the door, so it doesn't need a lesson of its own.
 
 ## Open questions
 
-- **Load test result:** does one Pomerium cope with houses churning, or do houses need their own?
-- **Ingress Controller version:** which release matches Pomerium core v0.33.4, and does anything in the
-  current config (the Keycloak routes, the public game shell) not map onto Ingress annotations?
-- **Can the public annotation and the policy be switched in one update** without a moment where the route
-  is neither? Check during the load test.
-- **`set_request_headers` on Ingress:** confirm the annotation name and format before relying on the
-  version header.
-- **Is 6 by 4 enough?** Play it with the traveler, a slime and the sword before adding more to the room.
-- **Hosted play:** this design is for the local k3d game. A public deployment would need the house limit
-  and clean-up tuned from the load test.
+Answered while building:
+
+- **Load test:** one Pomerium copes up to a few hundred houses; see "As built".
+- **Ingress Controller version:** branch 0-33-0 embeds Pomerium v0.33.4. Everything in the old config
+  maps onto annotations or the `Pomerium` resource except `signout_redirect_url` (see "As built").
+- **Switching from public to a policy:** one server-side apply removes the public annotation and adds
+  the policy. The end-to-end checks knock straight after the first save and see the slime refused.
+- **`set_request_headers` on Ingress:** `ingress.pomerium.io/set_request_headers`, a JSON map.
+
+Still open:
+
+- **Is 5 by 5 enough?** The room plays fine with the traveler, a slime and the sword in a browser
+  check, but nobody has played it for long.
+- **Hosted play:** a public deployment would need the controller's startup fixed upstream, or houses
+  on a Pomerium of their own, before raising the house limit.
 
 ## Done when
 
