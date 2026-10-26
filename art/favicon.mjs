@@ -6,9 +6,10 @@ const BACKGROUND = '#dddddd'
 
 // Keys are the sprite palette's (see PALETTE in sprites.mjs); '.' shows the background.
 const HEAD = [
-  '...KK......KK...',
-  '..KOSK....KSOK..',
-  '.KKOOSKKKKSOOKK.',
+  '..K..........K..',
+  '.KOK........KOK.',
+  '.KOLK......KLOK.',
+  '.KOLOKKKKKKOLOK.',
   'KUOOOOUUUUOOOOUK',
   'KOOQQQQQQQQQQOOK',
   'KOQQQWQOOQWQQQOK',
@@ -21,7 +22,6 @@ const HEAD = [
   '.KUUUOOKKOOUUUK.',
   '..KKUUUUUUUUKK..',
   '....KKKKKKKK....',
-  '................',
 ]
 
 /** One rect per run of same-colored pixels in a row, so the SVG stays small. */

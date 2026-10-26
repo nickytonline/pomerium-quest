@@ -7,4 +7,4 @@ export const SHEETS = {
   splash: '/assets/splash.png?v=40d2470162',
 } as const
 
-export const FAVICON = '/favicon.svg?v=585ad1c264'
+export const FAVICON = '/favicon.svg?v=edb5c6d397'
