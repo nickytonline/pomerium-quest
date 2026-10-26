@@ -9,7 +9,8 @@ Pomerium Pomeranian, and every gate in the kingdom is a real Pomerium route. The
 follows the route's real policy, and when a guard turns you away, the game shows you the exact policy rule
 that failed.
 
-Chapter one covers the fundamentals:
+Chapter one covers the fundamentals. (`kingdom.com` is the default citizens' domain; set
+`QUEST_KINGDOM_DOMAIN` to use your own, as described in [Settings](#settings).)
 
 | In the game                                                    | In Pomerium                                                              |
 | -------------------------------------------------------------- | ------------------------------------------------------------------------ |
@@ -124,16 +125,65 @@ signed in as themselves (or not at all), so you see what Pomerium does with your
 
 ## Play it on a real Pomerium (local k3d)
 
-You need Docker (Docker Desktop, OrbStack or Colima), [k3d](https://k3d.io),
-[kubectl](https://kubernetes.io/docs/tasks/tools/), [mkcert](https://github.com/FiloSottile/mkcert) and
-Node 24. On macOS:
+You need Docker, [k3d](https://k3d.io), [kubectl](https://kubernetes.io/docs/tasks/tools/),
+[mkcert](https://github.com/FiloSottile/mkcert) and Node 24. The repo pins Node in `mise.toml`, so with
+[mise](https://mise.jdx.dev), `mise install` gets the right version. `./quest` is a Bash script.
+
+### macOS
+
+Use Docker Desktop, OrbStack or Colima for Docker, then:
 
 ```sh
 brew install k3d kubectl mkcert node
 ./quest up
 ```
 
-Then open **https://game.localhost.pomerium.io**. Move with the arrow keys or the W, A, S and D keys, talk with E or Enter,
+### Linux
+
+Install [Docker Engine](https://docs.docker.com/engine/install/) (or Docker Desktop), and make sure you can
+run `docker` without `sudo`. Then install the rest. With [Homebrew on Linux](https://docs.brew.sh/Homebrew-on-Linux),
+the macOS line above works as is. Without it:
+
+```sh
+curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash   # k3d
+sudo apt install libnss3-tools   # lets mkcert add its certificate to Chrome and Firefox (Debian, Ubuntu)
+```
+
+Then install kubectl ([instructions](https://kubernetes.io/docs/tasks/tools/install-kubectl-linux/)), mkcert
+([instructions](https://github.com/FiloSottile/mkcert#linux)) and Node 24 (`mise install`), and run
+`./quest up`. Rootless Docker can't listen on port 443, so with it, run `QUEST_PORT=8443 ./quest up`.
+
+### Windows
+
+Run `./quest` inside [WSL 2](https://learn.microsoft.com/windows/wsl/install), and play in your usual
+Windows browser. (It may also run in Git Bash, but that hasn't been tried.)
+
+1. Install [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/) with the WSL 2
+   backend, and turn on WSL integration for your distribution (Settings → Resources → WSL integration).
+2. In PowerShell, install mkcert on Windows and trust its certificate authority, so Windows browsers
+   trust the game's certificate:
+
+   ```powershell
+   choco install mkcert   # or: scoop bucket add extras; scoop install mkcert
+   mkcert -install
+   ```
+
+3. In your WSL distribution, follow the Linux steps above (skip Docker Engine: Docker Desktop provides
+   `docker`). Before the first `./quest up`, point WSL's mkcert at the Windows certificate authority, so
+   the certificate it makes is one Windows trusts:
+
+   ```sh
+   export CAROOT="/mnt/c/Users/<your Windows user name>/AppData/Local/mkcert"
+   ./quest up
+   ```
+
+   Clone the repo inside WSL (say, `~/pomerium-quest`), not under `/mnt/c`: builds are much faster, and
+   `./quest dev` can see file changes. If you already ran `./quest up` without `CAROOT`, delete
+   `.quest/certs` and run it again.
+
+### Then
+
+Open **https://game.localhost.pomerium.io**. Move with the arrow keys or the W, A, S and D keys, talk with E or Enter,
 swing with Space or J, and press Esc for the menu (save, restart, quit to title, and turn music or sound effects on and off). `*.localhost.pomerium.io` resolves to `127.0.0.1`, so you
 don't need to edit `/etc/hosts`. mkcert creates a locally trusted certificate, and may ask for your
 password the first time.
@@ -151,6 +201,22 @@ password the first time.
 | `./quest down`          | Delete the cluster                                                                      |
 
 Port 443 already in use? Run `QUEST_PORT=8443 ./quest up` and open `https://game.localhost.pomerium.io:8443`.
+
+### Settings
+
+`./quest` reads these environment variables. Set them the same way for every command, since each deploy
+renders the config again:
+
+| Variable               | Default                 | What it sets                                                                            |
+| ---------------------- | ----------------------- | --------------------------------------------------------------------------------------- |
+| `QUEST_KINGDOM_DOMAIN` | `kingdom.com`           | The citizens' email domain: the sign-up form, every `domain` policy and the game's text |
+| `QUEST_PORT`           | `443`                   | The port Pomerium listens on                                                            |
+| `QUEST_DOMAIN`         | `localhost.pomerium.io` | The domain the game, the Oracle and Pomerium's sign-in live under                       |
+
+For example, `QUEST_KINGDOM_DOMAIN=example.org ./quest up` makes the town admit `example.org` citizens,
+and the townsfolk become `baker@example.org` and so on. Keycloak only imports its realm on first start,
+so after changing any of these on an existing cluster, run `./quest reset-oracle` too. After changing
+`QUEST_DOMAIN`, also delete `.quest/certs` so mkcert makes a certificate for the new domain.
 
 The game only plays behind Pomerium. Opened directly (say, `npm run dev -w app` on
 http://localhost:3000), it says so and won't start: use `./quest dev` for hot reload behind
