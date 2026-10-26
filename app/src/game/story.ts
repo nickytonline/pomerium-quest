@@ -206,15 +206,24 @@ function denyView(
   }
 }
 
-/** Sends a request, records it in the access log, and shows the denial screen when refused. */
-async function attempt(zone: Zone, method: 'GET' | 'POST', action: string): Promise<Outcome> {
+/**
+ * Sends a request, records it in the access log, and shows the denial screen when refused. `askSignIn`
+ * false skips the sign-in screen, for callers that handle a missing session themselves.
+ */
+async function attempt(
+  zone: Zone,
+  method: 'GET' | 'POST',
+  action: string,
+  askSignIn = true,
+): Promise<Outcome> {
   const id = identity()
   const path = `${zone.prefix}/${action}`
   const outcome = await requestZone(zone, method, action)
   const decision = LOG_DECISION[outcome.kind]
   quest.log({ decision, method, path, who: who(id) })
 
-  if (outcome.kind === 'signin') quest.showDeny(denyView(zone, method, path, id, true, outcome.requestId))
+  if (outcome.kind === 'signin' && askSignIn)
+    quest.showDeny(denyView(zone, method, path, id, true, outcome.requestId))
 
   if (outcome.kind === 'deny') {
     const view = denyView(zone, method, path, id, false, outcome.requestId)
@@ -232,13 +241,20 @@ async function attempt(zone: Zone, method: 'GET' | 'POST', action: string): Prom
   return outcome
 }
 
-/** Asks a gate's route to let the player through: a GET to enter, or for the scriptorium a POST to write. */
-export async function enterGate(zoneId: ZoneId, method: 'GET' | 'POST' = 'GET'): Promise<boolean> {
+/**
+ * Asks a gate's route to let the player through: a GET to enter, or for the scriptorium a POST to write.
+ * Leaving with no session at all means the game lost it, so the caller restarts the player instead.
+ */
+export async function enterGate(
+  zoneId: ZoneId,
+  method: 'GET' | 'POST',
+  leaving = false,
+): Promise<Outcome['kind']> {
   const zone = zoneById(zoneId)
   const action = method === 'POST' ? 'ledger' : 'enter'
-  const outcome = await attempt(zone, method, action)
+  const outcome = await attempt(zone, method, action, !leaving)
 
-  if (outcome.kind !== 'allow') return false
+  if (outcome.kind !== 'allow') return outcome.kind
   quest.toast(`ALLOW · ${method} ${zone.prefix}/${action}`, 'allow')
   learn('every')
   learn('route')
@@ -251,7 +267,7 @@ export async function enterGate(zoneId: ZoneId, method: 'GET' | 'POST' = 'GET'):
     quest.openFinale()
   }
 
-  return true
+  return 'allow'
 }
 
 const signPage = (signId: SignId, zone: Zone): Page => ({

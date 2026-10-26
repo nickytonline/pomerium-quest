@@ -81,6 +81,10 @@ const SWORD_ANGLE: Record<Dir, number> = { up: 0, right: 90, down: 180, left: 27
 /** Facing up or down, the sword pivots at its grip (row 14 of 16) and sweeps from the dog's side across the front. */
 const SWORD_GRIP = 14 / 16
 const SWING = { from: 100, to: -50, ms: 160 }
+
+/** What a player hears when the game has lost their session somewhere they could only be with one. */
+const LOST_SESSION = 'Something went wrong and your session was lost, so you start again in Hearth Village.'
+
 const ITEM = { swordWood: 0, swordSteel: 1 }
 
 /** Rows of the dog's frame left above the waterline while swimming: head and collar. */
@@ -477,7 +481,7 @@ export class KingdomScene extends Phaser.Scene {
       const gateGuard = this.guards.find((candidate) => same(candidate.gate, target))
       const beyond = gateGuard?.gate.exitZoneId
 
-      if (gateGuard && beyond) this.askGuard(gateGuard, target, { zoneId: beyond, method: 'GET' })
+      if (gateGuard && beyond) this.askGuard(gateGuard, target, { zoneId: beyond, method: 'GET' }, true)
       else if (gateGuard) this.letOut(gateGuard, target)
 
       return
@@ -560,11 +564,14 @@ export class KingdomScene extends Phaser.Scene {
   }
 
   /** Asks Pomerium on the player's behalf; if it allows them, the guard steps aside and they walk on. */
-  private askGuard(guard: Guard, target: Point, request: Pick<Gate, 'zoneId' | 'method'>) {
+  private askGuard(guard: Guard, target: Point, request: Pick<Gate, 'zoneId' | 'method'>, leaving = false) {
     this.mode.send({ type: 'GATE' })
-    void enterGate(request.zoneId, request.method).then((allowed) => {
-      if (!allowed) {
+    void enterGate(request.zoneId, request.method, leaving).then((outcome) => {
+      if (outcome !== 'allow') {
         this.mode.send({ type: 'GATE_DENIED' })
+
+        // Only a player who was let in can be inside, so having no session there means the game lost it.
+        if (leaving && outcome === 'signin') this.respawn(LOST_SESSION)
 
         return
       }
@@ -1120,7 +1127,7 @@ export class KingdomScene extends Phaser.Scene {
     else this.player?.setCrop()
   }
 
-  private respawn() {
+  private respawn(message = 'You wake up back in Hearth Village. Your identity and gear are still yours.') {
     this.closeGate()
     this.pos = this.world.spawn
     this.player?.setPosition(center(this.pos.x), center(this.pos.y))
@@ -1128,7 +1135,7 @@ export class KingdomScene extends Phaser.Scene {
     quest.setHp(MAX_HP)
     quest.progress({ x: this.pos.x, y: this.pos.y })
     quest.setRegion(regionAt(this.pos))
-    quest.toast('You wake up back in Hearth Village. Your identity and gear are still yours.', 'info')
+    quest.toast(message, 'info')
   }
 }
 
