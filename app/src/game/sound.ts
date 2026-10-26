@@ -9,6 +9,11 @@ export interface SoundSettings {
   readonly effects: boolean
 }
 
+export interface SoundState extends SoundSettings {
+  /** The browser is holding audio back until the player presses a key or taps. */
+  readonly blocked: boolean
+}
+
 export type Effect =
   | 'swing'
   | 'swingSteel'
@@ -77,6 +82,7 @@ interface Playing {
 
 let settings = loadSettings()
 let mixer: Mixer | undefined
+let state: SoundState = { ...settings, blocked: true }
 let playing: Playing | undefined
 const listeners = new Set<() => void>()
 
@@ -648,11 +654,14 @@ function stopTrack(mix: Mixer, current: Playing) {
   setTimeout(() => current.out.disconnect(), 600)
 }
 
-/** What should be playing: the overworld while exploring, a party at the end, silence otherwise. */
-function trackFor(state: QuestState): Track | undefined {
-  if (!state.started || state.phished || state.finale) return undefined
+/**
+ * What should be playing: the overworld on the title screen and while exploring (it carries on
+ * unbroken from one to the other), a party at the end, and silence after a phish or under the fanfare.
+ */
+function trackFor(game: QuestState): Track | undefined {
+  if (game.phished || game.finale) return undefined
 
-  return state.celebrating ? CELEBRATION : OVERWORLD
+  return game.celebrating ? CELEBRATION : OVERWORLD
 }
 
 function syncMusic() {
@@ -691,8 +700,20 @@ function syncDeny() {
 
 // ── Setup ───────────────────────────────────────────────────────────────────────────────────
 
-/** Browsers only let audio start after a key press or tap, so the mixer is built on the first one. */
-function unlock() {
+/** Tells the UI whether the browser is still holding audio back. */
+function notify() {
+  const blocked = 'AudioContext' in globalThis && mixer?.ctx.state !== 'running'
+
+  state = { ...settings, blocked }
+
+  for (const listener of listeners) listener()
+}
+
+/**
+ * Builds the mixer. Browsers that allow autoplay start it straight away; the rest keep it suspended
+ * until the player presses a key or taps (see unlock).
+ */
+function createMixer() {
   if (!mixer) {
     if (!('AudioContext' in globalThis)) return
     const ctx = new AudioContext()
@@ -722,10 +743,17 @@ function unlock() {
     effects.connect(master)
     master.connect(limiter).connect(ctx.destination)
     mixer = { ctx, music, effects, noise }
+    ctx.addEventListener('statechange', notify)
   }
 
-  if (mixer.ctx.state === 'suspended' && document.visibilityState === 'visible') void mixer.ctx.resume()
   syncMusic()
+}
+
+/** Starts audio on a key press or tap, which every browser accepts. */
+function unlock() {
+  createMixer()
+
+  if (mixer?.ctx.state === 'suspended' && document.visibilityState === 'visible') void mixer.ctx.resume()
 }
 
 /** Plays a sound effect, if effects are on and the player has pressed something yet. */
@@ -755,6 +783,9 @@ export function startSound() {
     syncDeny()
   })
 
+  createMixer()
+  notify()
+
   return () => {
     for (const gesture of gestures) removeEventListener(gesture, unlock, { capture: true })
     document.removeEventListener('visibilitychange', onVisibility)
@@ -763,7 +794,7 @@ export function startSound() {
 }
 
 export const sound = {
-  get: () => settings,
+  get: () => state,
   subscribe: (listener: () => void) => {
     listeners.add(listener)
 
@@ -781,11 +812,12 @@ export const sound = {
     }
 
     syncMusic()
-
-    for (const listener of listeners) listener()
+    notify()
   },
+  /** For a "play music" button: the click itself is the gesture the browser waits for. */
+  unlock,
 }
 
-export function useSound(): SoundSettings {
+export function useSound(): SoundState {
   return useSyncExternalStore(sound.subscribe, sound.get, sound.get)
 }
