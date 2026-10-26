@@ -75,11 +75,16 @@ export interface Point {
   readonly y: number
 }
 
-/** A gate asks its zone's route with `method`; its guard follows the rules on sign `signId`. */
-export interface Gate extends Point {
+/** What a guard asks Pomerium: `method` on the path `action` under the zone's route. */
+export interface GateRequest {
   readonly zoneId: ZoneId
-  readonly signId: SignId
   readonly method: 'GET' | 'POST'
+  readonly action: 'enter' | 'ledger'
+}
+
+/** A gate asks its zone's route to let the player in; its guard follows the rules on sign `signId`. */
+export interface Gate extends Point, GateRequest {
+  readonly signId: SignId
   /** The zone outside the gate, whose route is asked with a GET on the way out. Unguarded ground has none. */
   readonly exitZoneId?: ZoneId
 }
@@ -265,15 +270,19 @@ export function buildWorld(): World {
 
   // Leaving through a gate puts the player back in the zone they passed to reach it, so its guard checks
   // that zone's rule again. The fields open onto Hearth Village, which no route guards.
+  // Most guards ask with a GET to /enter. Going into the scriptorium means writing in the ledger, so its
+  // guard asks with a POST to /ledger.
+  const enter = { method: 'GET', action: 'enter' } as const
+  const write = { method: 'POST', action: 'ledger' } as const
+
   const gates: Gate[] = [
-    { x: 8, y: 17, zoneId: 'fields', signId: 'fields', method: 'GET' },
-    { x: 16, y: 12, zoneId: 'town', signId: 'town', method: 'GET', exitZoneId: 'fields' },
-    { x: 21, y: 7, zoneId: 'guild', signId: 'guild', method: 'GET', exitZoneId: 'town' },
-    { x: 33, y: 7, zoneId: 'armory', signId: 'armory', method: 'GET', exitZoneId: 'town' },
-    { x: 33, y: 20, zoneId: 'library', signId: 'library', method: 'GET', exitZoneId: 'town' },
-    // Going into the scriptorium means writing in the ledger, so its guard asks with a POST.
-    { x: 29, y: 24, zoneId: 'library', signId: 'scriptorium', method: 'POST', exitZoneId: 'library' },
-    { x: 21, y: 29, zoneId: 'keep', signId: 'keep', method: 'GET', exitZoneId: 'town' },
+    { x: 8, y: 17, zoneId: 'fields', signId: 'fields', ...enter },
+    { x: 16, y: 12, zoneId: 'town', signId: 'town', ...enter, exitZoneId: 'fields' },
+    { x: 21, y: 7, zoneId: 'guild', signId: 'guild', ...enter, exitZoneId: 'town' },
+    { x: 33, y: 7, zoneId: 'armory', signId: 'armory', ...enter, exitZoneId: 'town' },
+    { x: 33, y: 20, zoneId: 'library', signId: 'library', ...enter, exitZoneId: 'town' },
+    { x: 29, y: 24, zoneId: 'library', signId: 'scriptorium', ...write, exitZoneId: 'library' },
+    { x: 21, y: 29, zoneId: 'keep', signId: 'keep', ...enter, exitZoneId: 'town' },
   ]
 
   for (const gate of gates) set(gate.x, gate.y, TILE.gateClosed)

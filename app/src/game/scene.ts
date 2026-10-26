@@ -32,6 +32,7 @@ import {
   buildWorld,
   regionAt,
   type Gate,
+  type GateRequest,
   type Point,
 } from './world.ts'
 
@@ -480,7 +481,8 @@ export class KingdomScene extends Phaser.Scene {
       const gateGuard = this.guards.find((candidate) => same(candidate.gate, target))
       const beyond = gateGuard?.gate.exitZoneId
 
-      if (gateGuard && beyond) this.askGuard(gateGuard, target, { zoneId: beyond, method: 'GET' }, true)
+      if (gateGuard && beyond)
+        this.askGuard(gateGuard, target, { zoneId: beyond, method: 'GET', action: 'enter' }, true)
       else if (gateGuard) this.letOut(gateGuard, target)
 
       return
@@ -563,9 +565,9 @@ export class KingdomScene extends Phaser.Scene {
   }
 
   /** Asks Pomerium on the player's behalf; if it allows them, the guard steps aside and they walk on. */
-  private askGuard(guard: Guard, target: Point, request: Pick<Gate, 'zoneId' | 'method'>, leaving = false) {
+  private askGuard(guard: Guard, target: Point, request: GateRequest, leaving = false) {
     this.mode.send({ type: 'GATE' })
-    void enterGate(request.zoneId, request.method, leaving).then((outcome) => {
+    void enterGate(request, leaving).then((outcome) => {
       if (outcome !== 'allow') {
         this.mode.send({ type: 'GATE_DENIED' })
 

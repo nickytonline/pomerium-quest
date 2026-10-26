@@ -19,8 +19,8 @@ import { decide, routeYaml, type Identity } from './ppl.ts'
 import { KNIGHT_QUOTA, hasSteel, isAtLeast, stage, type QuestStage } from './quest-machine.ts'
 import { sfx } from './sound.ts'
 import { MAX_HP, quest, type DenyView, type LogEntry } from './store.ts'
-import type { NpcId } from './world.ts'
-import { KINGDOM_DOMAIN, zoneById, type Zone, type ZoneId } from './zones.ts'
+import type { GateRequest, NpcId } from './world.ts'
+import { KINGDOM_DOMAIN, zoneById, type Zone } from './zones.ts'
 
 const UPSTREAM = 'http://quest.quest.svc.cluster.local:3000'
 
@@ -246,12 +246,10 @@ async function attempt(
  * Leaving with no session at all means the game lost it, so the caller restarts the player instead.
  */
 export async function enterGate(
-  zoneId: ZoneId,
-  method: 'GET' | 'POST',
+  { zoneId, method, action }: GateRequest,
   leaving = false,
 ): Promise<Outcome['kind']> {
   const zone = zoneById(zoneId)
-  const action = method === 'POST' ? 'ledger' : 'enter'
   const outcome = await attempt(zone, method, action, !leaving)
 
   if (outcome.kind !== 'allow') return outcome.kind
