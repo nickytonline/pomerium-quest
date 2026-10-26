@@ -33,6 +33,18 @@ policy. The [README](README.md) explains how it fits together; this file is how 
   `./quest reset-oracle`, since Keycloak only imports the realm on its first start.
 - There are no unit tests yet. Check a change by playing it in the browser, and say so if you couldn't.
 
+## Checking cheaply
+
+- Redeploy only when something the cluster reads changed: a policy in `zones.ts`, `render.ts`, or the
+  Keycloak realm. A change under `app/src/` needs no `./quest deploy`; `./quest dev` already reloads it.
+- In the browser, read state as text (a script or page snapshot) before taking a screenshot. Use a
+  screenshot only for what is visual: layout, art and animation.
+- `./quest logs` follows forever, so don't pipe it. Use
+  `kubectl --context k3d-quest -n quest logs deployment/<name> --tail=50 | grep <what you need>`
+  (the Pomerium namespace is `pomerium`).
+- If a check is stuck after a few tries (for example Keycloak is down or a pod won't start), stop and
+  tell the user rather than retrying in a long chain.
+
 ## Code
 
 - Match the code around you: its naming, idioms and comment density. Formatting is no semicolons,
