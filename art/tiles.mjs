@@ -310,6 +310,16 @@ const WORKBENCH_COLORS = {
   S: '#4a2f18', // floor shadow
 }
 
+/** A small table on the floor: its top, front edge and legs. */
+const table = (rect) => {
+  floor(rect)
+  rect(0, 2, 16, 10, '#241a2e')
+  rect(1, 3, 14, 6, '#a87a45')
+  rect(1, 9, 14, 2, '#6b4226')
+  rect(2, 11, 2, 4, '#4a2f18')
+  rect(12, 11, 2, 4, '#4a2f18')
+}
+
 /** Paints a 16x16 grid of color keys; '.' leaves the pixel underneath. */
 const pixels = (rect, rows, colors) => {
   rows.forEach((row, y) => {
@@ -453,6 +463,79 @@ const painters = [
   (rect) => {
     floor(rect)
     pixels(rect, WORKBENCH, WORKBENCH_COLORS)
+  },
+  // 31 the player's table with a loaf of bread
+  (rect) => {
+    table(rect)
+    rect(4, 4, 8, 4, '#241a2e')
+    rect(5, 4, 6, 3, '#c98a3c')
+    rect(6, 4, 4, 1, '#e3b06a')
+    rect(7, 5, 1, 1, '#8a5a24')
+    rect(9, 5, 1, 1, '#8a5a24')
+  },
+  // 32 the same table, crumbs where the bread was
+  (rect) => {
+    table(rect)
+    rect(5, 6, 1, 1, '#c98a3c')
+    rect(8, 5, 1, 1, '#c98a3c')
+    rect(10, 7, 1, 1, '#e3b06a')
+    rect(6, 4, 1, 1, '#e3b06a')
+  },
+  // 33 the other end of the table, with a cup
+  (rect) => {
+    table(rect)
+    rect(6, 3, 4, 5, '#241a2e')
+    rect(7, 4, 2, 3, '#d9dde6')
+    rect(9, 5, 1, 1, '#d9dde6')
+  },
+  // 34 writing desk, where the player writes their door rules
+  (rect) => {
+    floor(rect)
+    rect(1, 6, 14, 9, '#241a2e')
+    rect(2, 7, 12, 3, '#a87a45')
+    rect(2, 10, 12, 4, '#6b4226')
+    rect(2, 14, 2, 2, '#4a2f18')
+    rect(12, 14, 2, 2, '#4a2f18')
+    rect(4, 4, 6, 4, '#f4ecd8')
+    rect(5, 5, 4, 1, '#8b8597')
+    rect(11, 1, 1, 6, '#f4f0ff')
+    rect(12, 2, 1, 3, '#d9dde6')
+  },
+  // 35 the house's door, open to its owner
+  (rect) => {
+    floor(rect)
+    rect(0, 0, 2, 16, '#5b3a22')
+    rect(14, 0, 2, 16, '#5b3a22')
+    rect(0, 0, 16, 2, '#7a5126')
+  },
+  // 36 the house's door, locked until the sage hands over the deed
+  (rect) => {
+    floor(rect)
+    rect(0, 0, 16, 16, '#5b3a22')
+    rect(2, 2, 12, 14, '#7a5126')
+
+    for (const x of [5, 9]) rect(x, 2, 1, 14, '#5b3a22')
+    rect(11, 8, 2, 2, '#e3b341')
+  },
+  // 37 doormat, where letters arrive
+  (rect) => {
+    floor(rect)
+    rect(1, 4, 14, 9, '#8b2e2e')
+    rect(2, 5, 12, 7, '#b5483b')
+    rect(4, 7, 8, 3, '#f4ecd8')
+    rect(5, 8, 6, 1, '#8b8597')
+  },
+  // 38 bell beside the door, to invite visitors
+  (rect) => {
+    floor(rect)
+    rect(7, 0, 2, 4, '#5b3a22')
+    rect(4, 3, 8, 2, '#241a2e')
+    rect(3, 5, 10, 7, '#241a2e')
+    rect(4, 4, 8, 7, '#e3b341')
+    rect(5, 5, 2, 4, '#f6d97a')
+    rect(2, 11, 12, 2, '#241a2e')
+    rect(3, 11, 10, 1, '#c99a2e')
+    rect(7, 13, 2, 2, '#241a2e')
   },
 ]
 
