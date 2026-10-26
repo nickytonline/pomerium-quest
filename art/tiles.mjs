@@ -481,12 +481,15 @@ const painters = [
     rect(10, 7, 1, 1, '#e3b06a')
     rect(6, 4, 1, 1, '#e3b06a')
   },
-  // 33 the other end of the table, with a cup
+  // 33 a chair at the table, its back toward the room, for whoever sits down to eat
   (rect) => {
-    table(rect)
-    rect(6, 3, 4, 5, '#241a2e')
-    rect(7, 4, 2, 3, '#d9dde6')
-    rect(9, 5, 1, 1, '#d9dde6')
+    floor(rect)
+    rect(2, 2, 12, 9, '#241a2e')
+    rect(3, 3, 10, 6, '#a87a45')
+    rect(2, 9, 12, 4, '#241a2e')
+    rect(3, 10, 10, 2, '#6b4226')
+    rect(3, 13, 2, 2, '#4a2f18')
+    rect(11, 13, 2, 2, '#4a2f18')
   },
   // 34 writing desk, where the player writes their door rules
   (rect) => {
@@ -536,6 +539,15 @@ const painters = [
     rect(2, 11, 12, 2, '#241a2e')
     rect(3, 11, 10, 1, '#c99a2e')
     rect(7, 13, 2, 2, '#241a2e')
+  },
+  // 39 the house's door, shut: it opens for whoever walks through, and closes behind them
+  (rect) => {
+    floor(rect)
+    rect(0, 0, 16, 16, '#5b3a22')
+    rect(2, 2, 12, 14, '#7a5126')
+
+    for (const x of [5, 9]) rect(x, 2, 1, 14, '#5b3a22')
+    rect(11, 8, 1, 2, '#241a2e')
   },
 ]
 

@@ -37,6 +37,9 @@ export type Effect =
   | 'dialogNext'
   | 'smash'
   | 'bell'
+  | 'doorOpen'
+  | 'doorClose'
+  | 'munch'
 
 const STORAGE_KEY = 'pomerium-quest/sound/v1'
 
@@ -522,6 +525,26 @@ const EFFECTS: Record<Effect, (mix: Mixer, out: AudioNode, at: number) => void> 
     ] as const)
       for (const freq of [147, 156])
         tone(out, at + start, { wave: 'square', freq, dur, peak: 0.07, hold: true })
+  },
+  /** The house's door swinging open: a short wooden creak. */
+  doorOpen: (mix, out, at) => {
+    tone(out, at, { wave: 'sawtooth', freq: 180, to: 260, dur: 0.18, peak: 0.04 })
+    hiss(mix, out, at, { filter: 'bandpass', freq: 900, to: 1400, q: 3, attack: 0.03, dur: 0.18, peak: 0.12 })
+  },
+  /** The door falling shut: a soft thud and the latch clicking. */
+  doorClose: (mix, out, at) => {
+    tone(out, at, { wave: 'sine', freq: 110, to: 55, dur: 0.12, peak: 0.25 })
+    hiss(mix, out, at, { filter: 'lowpass', freq: 600, dur: 0.08, peak: 0.2 })
+    tone(out, at + 0.07, { wave: 'square', freq: 1900, dur: 0.02, peak: 0.04 })
+  },
+  /** Someone else eating: two small crunches, never quite the same twice, quieter than the player's chomp. */
+  munch: (mix, out, at) => {
+    for (const bite of [0, 0.14 + Math.random() * 0.05]) {
+      const freq = 1200 + Math.random() * 800
+
+      hiss(mix, out, at + bite, { filter: 'bandpass', freq, to: freq / 2, q: 1.2, dur: 0.06, peak: 0.3 })
+      tone(out, at + bite, { wave: 'square', freq: 190, to: 120, dur: 0.05, peak: 0.04 })
+    }
   },
   clang: (_mix, out, at) => {
     tone(out, at, { wave: 'square', freq: 1180, dur: 0.25, peak: 0.05 })
