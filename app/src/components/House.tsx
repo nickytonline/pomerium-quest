@@ -1,13 +1,13 @@
 // The player's house (docs/prd/your-house.md): the desk where they write their door rules, and the
 // results of ringing the bell. The rules become a real Pomerium route; nothing here decides access.
 import { useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
-import { LESSONS, link } from '../game/content.ts'
+import { LESSONS, link, type LessonId } from '../game/content.ts'
 import { HOUSE_LIMITS, HOUSE_VALUE, VISITORS, type HouseCriterion, type HouseRule } from '../game/house.ts'
 import { callerName, currentLetter, houseRouteYaml, saveDoorRules } from '../game/house-story.ts'
-import { policyYaml } from '../game/ppl.ts'
 import { quest, useQuest, type VisitResult } from '../game/store.ts'
 import { KINGDOM_DOMAIN } from '../game/zones.ts'
 import { PolicyLines } from './PolicyLines.tsx'
+import { TabbedScreen, switchTab } from './TabbedScreen.tsx'
 
 type Kind = HouseCriterion['kind']
 
@@ -95,6 +95,9 @@ const smallButton =
 const overlay =
   'absolute inset-0 grid items-start justify-items-center overflow-auto bg-[rgb(10_7_22/0.9)] p-3.5'
 
+/** What the desk's Pomerium tab links to: writing a policy, and the open door it replaces. */
+const DESK_DOCS: readonly LessonId[] = ['writePolicy', 'publicRoute']
+
 /** The desk: build door rules from blocks, see the PPL they make, and put them on the door. */
 export function HouseEditor() {
   const open = useQuest((s) => s.houseEditor)
@@ -137,97 +140,134 @@ function Editor() {
     if (event.key === 'Escape') quest.closeHouseEditor()
   }
 
-  return (
-    <div
-      className={overlay}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="house-editor-title"
-      onKeyDown={onKeyDown}
-    >
-      <div className="flex w-[min(640px,100%)] flex-col gap-3 rounded-md border-3 border-ink bg-night-deep px-4 py-3.5">
-        <h2 className="m-0 font-display text-[1.4rem] text-sun" id="house-editor-title">
-          Your door rules
-        </h2>
-        {letter && (
-          <p className="m-0 rounded border border-panel-edge bg-panel px-3 py-2 text-[0.9rem]">
-            <span className="font-display text-sun">{letter.title}</span> {letter.text}
-          </p>
-        )}
-        <p className="m-0 text-[0.85rem] text-muted">
-          Pomerium lets a request in when any allow rule matches and no deny rule does. Visitors:{' '}
-          {Object.values(VISITORS)
-            .map(
-              (visitor) =>
-                `${visitor.name} (${visitor.email}${visitor.groups.length ? `, ${visitor.groups.join(', ')}` : ''})`,
-            )
-            .join(' · ')}
-          .
+  const actions = (
+    <div className="mt-auto flex flex-wrap justify-end gap-2 pt-1">
+      <button className={smallButton} type="button" onClick={() => quest.closeHouseEditor()}>
+        Close
+      </button>
+      <button
+        className={`${smallButton} border-lens`}
+        type="button"
+        disabled={saving || !valid(rules)}
+        onClick={() => void save()}
+      >
+        {saving ? 'The builders are at work…' : 'Put these rules on the door'}
+      </button>
+    </div>
+  )
+
+  const problems = (
+    <>
+      {!valid(rules) && (
+        <p className="m-0 text-[0.85rem] text-deny" role="alert">
+          Fill in every check. Emails, domains and groups may only use letters, numbers and @ . _ -
         </p>
-        {rules.map((rule, index) => (
-          <RuleCard
-            key={index}
-            rule={rule}
-            index={index}
-            email={email}
-            onChange={(next) => setRule(index, next)}
-            onRemove={rules.length > 1 ? () => setRules(rules.filter((_, i) => i !== index)) : undefined}
-          />
-        ))}
-        <div>
-          <button
-            className={smallButton}
-            type="button"
-            disabled={rules.length >= HOUSE_LIMITS.rules}
-            onClick={() =>
-              setRules([
-                ...rules,
-                { action: 'allow', match: 'and', criteria: [blank('authenticated_user', email)] },
-              ])
-            }
-          >
-            + Add a rule
-          </button>
-        </div>
-        <div>
-          <p className="mb-1 text-[0.72rem] tracking-[0.08em] text-muted uppercase">
-            The policy Pomerium will get
-          </p>
-          <pre className="m-0 overflow-x-auto rounded border border-panel-edge bg-code-bg px-3 py-2.5 text-[0.8rem] leading-[1.45] text-lens">
-            {policyYaml(rules, 0).join('\n')}
-          </pre>
-          <p className="mt-1.5 mb-0 text-[0.8rem] text-muted">
-            The game writes this into a real route for your house:{' '}
-            <code className="wrap-anywhere">{house?.path ?? '/zones/home/…'}</code>.{' '}
-            <a href={link('writePolicy').href} target="_blank" rel="noreferrer">
-              Docs: {LESSONS.writePolicy.link.label} ↗
-            </a>
-          </p>
-        </div>
-        {!valid(rules) && (
-          <p className="m-0 text-[0.85rem] text-deny" role="alert">
-            Fill in every check. Emails, domains and groups may only use letters, numbers and @ . _ -
-          </p>
-        )}
-        {status && (
-          <p className="m-0 text-[0.85rem] text-deny" role="alert">
-            {status}
-          </p>
-        )}
-        <div className="flex flex-wrap justify-end gap-2">
-          <button className={smallButton} type="button" onClick={() => quest.closeHouseEditor()}>
-            Close
-          </button>
-          <button
-            className={`${smallButton} border-lens`}
-            type="button"
-            disabled={saving || !valid(rules)}
-            onClick={() => void save()}
-          >
-            {saving ? 'The builders are at work…' : 'Put these rules on the door'}
-          </button>
-        </div>
+      )}
+      {status && (
+        <p className="m-0 text-[0.85rem] text-deny" role="alert">
+          {status}
+        </p>
+      )}
+    </>
+  )
+
+  const kingdom = (
+    <div className="flex flex-col gap-3 rounded-tr-lg rounded-b-lg border-3 border-ink bg-night-deep px-4 py-3.5">
+      <h2 className="m-0 font-display text-[1.4rem] text-sun" id="desk-title-kingdom">
+        Your door rules
+      </h2>
+      {letter && (
+        <p className="m-0 rounded border border-panel-edge bg-panel px-3 py-2 text-[0.9rem]">
+          <span className="font-display text-sun">{letter.title}</span> {letter.text}
+        </p>
+      )}
+      <p className="m-0 text-[0.85rem] text-muted">
+        Your door lets someone in when any allow rule matches them and no deny rule does. Who might knock:{' '}
+        {Object.values(VISITORS)
+          .map(
+            (visitor) =>
+              `${visitor.name} (${visitor.email}${visitor.groups.length ? `, ${visitor.groups.join(', ')}` : ''})`,
+          )
+          .join(' · ')}
+        , and slimes, who never sign in.
+      </p>
+      {rules.map((rule, index) => (
+        <RuleCard
+          key={index}
+          rule={rule}
+          index={index}
+          email={email}
+          onChange={(next) => setRule(index, next)}
+          onRemove={rules.length > 1 ? () => setRules(rules.filter((_, i) => i !== index)) : undefined}
+        />
+      ))}
+      <div>
+        <button
+          className={smallButton}
+          type="button"
+          disabled={rules.length >= HOUSE_LIMITS.rules}
+          onClick={() =>
+            setRules([
+              ...rules,
+              { action: 'allow', match: 'and', criteria: [blank('authenticated_user', email)] },
+            ])
+          }
+        >
+          + Add a rule
+        </button>
       </div>
+      {problems}
+      <p className="m-0 text-[0.85rem] text-muted">
+        These rules become a real Pomerium route. See it on the{' '}
+        <button className="border-0 bg-transparent p-0 text-lens underline" type="button" onClick={switchTab}>
+          In Pomerium
+        </button>{' '}
+        tab.
+      </p>
+      {actions}
+    </div>
+  )
+
+  const pomerium = (
+    <div className="flex flex-col gap-2.5 rounded-tr-lg rounded-b-lg border-t-6 border-lens bg-paper px-5 py-[18px] text-paper-ink [&_a]:text-paper-link">
+      <h2 className="m-0 text-[1.25rem] font-bold" id="desk-title-pomerium">
+        Your house is a route
+      </h2>
+      <p className="m-0 text-[0.9rem]">
+        The game writes your rules into a real route for your house, as its policy. Pomerium lets a request in
+        when any allow rule matches and no deny rule does. If no allow rule matches, it says no.
+      </p>
+      <p className="m-0 text-[0.72rem] tracking-[0.08em] text-paper-muted uppercase">
+        The route Pomerium will get
+      </p>
+      <pre className="m-0 overflow-x-auto rounded bg-paper-tint px-3 py-2.5 text-[0.8rem] leading-[1.45]">
+        {houseRouteYaml(house, rules)}
+      </pre>
+      {problems}
+      <ul className="m-0 flex list-none flex-wrap gap-x-3.5 gap-y-1.5 p-0 text-[0.85rem]">
+        {DESK_DOCS.map((lesson) => (
+          <li key={lesson}>
+            <a href={link(lesson).href} target="_blank" rel="noreferrer">
+              Docs: {LESSONS[lesson].link.label} ↗
+            </a>
+          </li>
+        ))}
+      </ul>
+      {actions}
+    </div>
+  )
+
+  return (
+    <div className="contents" onKeyDown={onKeyDown}>
+      <TabbedScreen
+        name="desk"
+        label="Your door rules"
+        showing="desk"
+        overlay={overlay}
+        role="dialog"
+        kingdom={kingdom}
+        pomerium={pomerium}
+      />
     </div>
   )
 }
