@@ -5,7 +5,7 @@ import { startPlayer } from './player-machine.ts'
 import { SHEETS } from './sheets.ts'
 import { sfx } from './sound.ts'
 import { KNIGHT_QUOTA, defeated, hasSteel, type MonsterKind } from './quest-machine.ts'
-import { houseStage } from './house-machine.ts'
+import { houseStage, type HouseStage } from './house-machine.ts'
 import {
   enterHouse,
   readHouseSign,
@@ -140,15 +140,45 @@ const TRAVELER = {
   /** The first visit comes soon after the game starts; after that, one a minute, counted from setting out. */
   firstVisitMs: 15_000,
   visitMs: 60_000,
-  eatMs: 9_000,
   biteMs: 1_200,
+  /** Bites to finish each quarter of the loaf. */
+  bitesPerPiece: 2,
+  /** How long the traveler looks at an empty table before giving up. */
+  emptyTableMs: 1_500,
   /** How many times a blocked step is tried again before the traveler finds another way. */
   patience: 4,
 }
 
-/** Bread crumbs: crust, crumb and the pale inside of the loaf. */
-const CRUMB_COLORS = [0xc98a3c, 0x8a5a24, 0xe3b06a]
+/** The table as the loaf goes, by how many quarters are left. */
+const LOAF: readonly number[] = [
+  TILE.tableCrumbs,
+  TILE.tableHeel,
+  TILE.tableHalf,
+  TILE.tableBitten,
+  TILE.tableBread,
+]
+
+const WHOLE_LOAF = LOAF.length - 1
+
+/**
+ * Crumbs in the loaf's colors: 1 crust, 2 crumb, 3 the pale inside. Each is a chunky pixel shape, so
+ * they read as bread at the game's scale.
+ */
+const CRUMBS: readonly (readonly string[])[] = [['32', '21'], ['3', '2'], ['23'], ['.3', '21'], ['2']]
+
+const CRUMB_PALETTE = new Map([
+  ['1', '#8a5a24'],
+  ['2', '#c98a3c'],
+  ['3', '#e3b06a'],
+])
+
 const CRUMB_LINGER_MS = 4_000
+
+/** How long after the last of the loaf is eaten until a fresh one is on the table. */
+const NEW_LOAF_MS = 90_000
+
+/** A crumb hops out and falls in this many jerky steps, like a sprite on old hardware. */
+const CRUMB_FRAMES = 5
 
 /** Each kind's first frame in items.png (two frames each), hit points and name. */
 const MONSTER: Record<MonsterKind, { readonly frame: number; readonly hp: number; readonly name: string }> = {
@@ -157,7 +187,7 @@ const MONSTER: Record<MonsterKind, { readonly frame: number; readonly hp: number
 
 /**
  * What the traveler is doing: roaming the fields, walking to the doorstep, asking Pomerium to let them
- * in, walking to the chair, eating, or walking back out.
+ * in, walking to the table, eating, or walking back out.
  */
 type TravelerPlan = 'roam' | 'visit' | 'knock' | 'enter' | 'eat' | 'leave'
 
@@ -169,8 +199,8 @@ interface Traveler {
   nextMoveAt: number
   /** Unset until the first frame, since the scene's clock doesn't start at zero. */
   nextVisitAt: number | undefined
-  doneEatingAt: number
   nextBiteAt: number
+  bites: number
   blocked: number
 }
 
@@ -228,9 +258,12 @@ const inFields = (p: Point) => p.x >= FIELDS.x0 && p.x <= FIELDS.x1 && p.y >= FI
 const isDoorstep = (p: Point) => same(p, HOUSE.doorstep)
 const isSeat = (p: Point) => same(p, HOUSE.seat)
 
-/** Where the traveler eats: the chair, or failing that any tile beside the table. */
+/** Where the traveler eats: their spot above the table, or failing that any tile beside it. */
 const atTable = (p: Point) =>
   inHouse(p) && (same(p, HOUSE.seat) || Math.abs(p.x - HOUSE.table.x) + Math.abs(p.y - HOUSE.table.y) === 1)
+
+/** A new game's loaf is whole, unless the bread letter has already said the traveler ate it. */
+const loafFor = (stage: HouseStage) => (stage === 'unowned' || stage === 'slimes' ? WHOLE_LOAF : 0)
 
 interface NpcSprite {
   readonly npcId: NpcId
@@ -271,10 +304,14 @@ export class KingdomScene extends Phaser.Scene {
     moving: false,
     nextMoveAt: 0,
     nextVisitAt: undefined,
-    doneEatingAt: 0,
     nextBiteAt: 0,
+    bites: 0,
     blocked: 0,
   }
+  /** Quarters of the loaf left on the table. */
+  private bread = 0
+  /** When a fresh loaf turns up, once the last one is gone. */
+  private newLoafAt: number | undefined
   /** The tile the player is stepping onto, until they arrive. */
   private walkingTo: Point | undefined
   /** A slime is asking Pomerium to let it into the player's house, or did so recently. */
@@ -317,9 +354,11 @@ export class KingdomScene extends Phaser.Scene {
 
     this.npcs = this.world.npcs.map((npc) => ({
       ...npc,
-      sprite: this.add.sprite(center(npc.x), center(npc.y), 'npcs', NPC_FRAME[npc.npcId]),
+      // Above the crumbs on the floor.
+      sprite: this.add.sprite(center(npc.x), center(npc.y), 'npcs', NPC_FRAME[npc.npcId]).setDepth(1),
     }))
 
+    this.bread = loafFor(houseStage())
     this.dressHouse()
 
     this.guards = this.world.gates.map((gate) => {
@@ -451,6 +490,7 @@ export class KingdomScene extends Phaser.Scene {
 
     this.updateMonsters(time)
     this.updateTraveler(time)
+    this.bakeBread(time)
     this.updateFish(time)
     this.callOutPhish(time)
     this.dismissItem()
@@ -826,7 +866,7 @@ export class KingdomScene extends Phaser.Scene {
 
     if (tile === TILE.bell) void ringBell()
 
-    if (tile === TILE.tableBread || tile === TILE.tableCrumbs) readTable()
+    if (LOAF.includes(tile)) readTable(this.bread, WHOLE_LOAF)
 
     if (tile === TILE.doormat) readLetter()
 
@@ -1079,11 +1119,11 @@ export class KingdomScene extends Phaser.Scene {
 
   /**
    * The house as its story stands: locked until the deed, then shut unless someone is in the doorway,
-   * and the bread gone once the traveler ate it.
+   * and as much of the loaf as is left.
    */
   private dressHouse() {
     const stage = houseStage()
-    const bread = stage === 'unowned' || stage === 'slimes' ? TILE.tableBread : TILE.tableCrumbs
+    const bread = LOAF[this.bread] ?? TILE.tableCrumbs
     let door: number = this.inDoorway() ? TILE.door : TILE.doorClosed
 
     if (stage === 'unowned') door = TILE.doorLocked
@@ -1136,6 +1176,9 @@ export class KingdomScene extends Phaser.Scene {
 
       if (next.houseStage !== stage) {
         stage = next.houseStage
+
+        // The bread letter says the traveler ate the loaf, so it's gone when the letter arrives.
+        if (stage === 'bread') this.bread = 0
         this.dressHouse()
       }
 
@@ -1260,8 +1303,8 @@ export class KingdomScene extends Phaser.Scene {
 
     if (plan === 'enter') {
       this.planTraveler('eat')
-      this.traveler.doneEatingAt = time + TRAVELER.eatMs
-      this.traveler.nextBiteAt = time
+      this.traveler.bites = 0
+      this.traveler.nextBiteAt = time + (this.bread > 0 ? 0 : TRAVELER.emptyTableMs)
     }
 
     if (plan === 'leave') this.planTraveler('roam')
@@ -1306,61 +1349,128 @@ export class KingdomScene extends Phaser.Scene {
       quest.toast('No rule lets the traveler in any more. They put down the bread and head out.', 'allow')
   }
 
-  /** At the table, a bite every so often: a munch, and crumbs falling to the floor. */
+  /**
+   * At the table, a bite every so often: a munch, and crumbs falling to the floor. The loaf gets
+   * smaller every few bites, and once it's gone (or if it already was) the traveler leaves.
+   */
   private eatBread(traveler: Point, time: number) {
     const plan = this.traveler
 
-    if (time >= plan.doneEatingAt) {
+    if (time < plan.nextBiteAt) return
+
+    if (this.bread === 0) {
       this.planTraveler('leave', this.pathFor(traveler, isDoorstep, { throughDoor: true }))
 
       return
     }
 
-    if (time < plan.nextBiteAt) return
     plan.nextBiteAt = time + TRAVELER.biteMs * (0.8 + Math.random() * 0.4)
+    plan.bites++
+
+    if (plan.bites % TRAVELER.bitesPerPiece === 0) {
+      this.bread--
+      this.dressHouse()
+    }
 
     if (!this.canSee(traveler)) return
     sfx('munch')
     this.dropCrumbs(traveler)
   }
 
-  /** A few crumbs fall from the traveler's mouth, lie on the floor a while, then are gone. */
+  /** Once the loaf is gone, a fresh one turns up on the table a while later. */
+  private bakeBread(time: number) {
+    if (this.bread > 0 || houseStage() === 'unowned') {
+      this.newLoafAt = undefined
+
+      return
+    }
+
+    this.newLoafAt ??= time + NEW_LOAF_MS
+
+    if (time < this.newLoafAt) return
+    this.bread = WHOLE_LOAF
+    this.dressHouse()
+
+    if (inHouse(this.pos)) quest.toast('A fresh loaf of bread is on your table.', 'info')
+  }
+
+  /** Makes the crumb textures, once: each a few pixels in the loaf's colors. */
+  private crumbTextures() {
+    return CRUMBS.map((rows, i) => {
+      const key = `crumb-${i}`
+
+      if (this.textures.exists(key)) return key
+      const width = Math.max(...rows.map((row) => row.length))
+      const canvas = this.textures.createCanvas(key, width, rows.length)
+      const ctx = canvas?.getContext()
+
+      rows.forEach((row, y) => {
+        for (let x = 0; x < row.length; x++) {
+          const color = CRUMB_PALETTE.get(row.charAt(x))
+
+          if (!ctx || !color) continue
+          ctx.fillStyle = color
+          ctx.fillRect(x, y, 1, 1)
+        }
+      })
+      canvas?.refresh()
+
+      return key
+    })
+  }
+
+  /**
+   * A few crumbs fall from the traveler's mouth in jerky steps, lie on the floor a while, then blink
+   * out, the way an old console would show them.
+   */
   private dropCrumbs(at: Point) {
     const motion = matchMedia('(prefers-reduced-motion: no-preference)').matches
+    const keys = this.crumbTextures()
 
-    for (let i = 0; i < Phaser.Math.Between(2, 4); i++) {
-      const color = CRUMB_COLORS[i % CRUMB_COLORS.length] ?? 0xc98a3c
+    for (let i = 0; i < Phaser.Math.Between(2, 3); i++) {
+      const key = keys[Phaser.Math.Between(0, keys.length - 1)] ?? 'crumb-0'
       const x = center(at.x) + Phaser.Math.Between(-2, 2)
       const y = center(at.y) - 3
       const landX = x + Phaser.Math.Between(-6, 6)
       const landY = center(at.y) + Phaser.Math.Between(5, 7)
-      const size = Phaser.Math.Between(1, 2)
-      const crumb = this.add.rectangle(motion ? x : landX, motion ? y : landY, size, size, color).setDepth(11)
+      const crumb = this.add.image(motion ? x : landX, motion ? y : landY, key).setDepth(11)
       const linger = CRUMB_LINGER_MS + Phaser.Math.Between(0, 1_000)
 
       if (!motion) {
+        crumb.setDepth(0.5)
         this.time.delayedCall(linger, () => crumb.destroy())
         continue
       }
 
-      // y(t) = (1 + lift)t² − lift·t: a little hop out of the mouth, then down to the floor.
+      // y(t) = (1 + lift)t² − lift·t: a little hop out of the mouth, then down to the floor, drawn in
+      // a few whole steps rather than smoothly.
       const lift = Phaser.Math.FloatBetween(0.3, 0.8)
+      const step = (t: number) => Math.round(t * CRUMB_FRAMES) / CRUMB_FRAMES
 
       this.tweens.add({
         targets: crumb,
-        x: { value: landX, ease: 'Quad.easeOut' },
-        y: { value: landY, ease: (t: number) => (1 + lift) * t * t - lift * t },
-        duration: Phaser.Math.Between(220, 320),
-        onComplete: () =>
-          this.tweens.add({
-            targets: crumb,
-            alpha: 0,
-            delay: linger,
-            duration: 400,
-            onComplete: () => crumb.destroy(),
-          }),
+        x: { value: landX, ease: (t: number) => step(t) },
+        y: { value: landY, ease: (t: number) => (1 + lift) * step(t) ** 2 - lift * step(t) },
+        duration: Phaser.Math.Between(240, 320),
+        onComplete: () => {
+          // On the floor now, so whoever stands there is drawn over it.
+          crumb.setDepth(0.5)
+          this.blinkOut(crumb, linger)
+        },
       })
     }
+  }
+
+  /** After a while, blinks a crumb a few times and removes it. */
+  private blinkOut(crumb: Phaser.GameObjects.Image, after: number) {
+    this.time.delayedCall(after, () =>
+      this.time.addEvent({
+        delay: 90,
+        repeat: 5,
+        callback: () => crumb.setVisible(!crumb.visible),
+      }),
+    )
+    this.time.delayedCall(after + 90 * 7, () => crumb.destroy())
   }
 
   private stepTraveler(traveler: NpcSprite, to: Point) {

@@ -135,17 +135,15 @@ export function readHouseSign() {
   ])
 }
 
-export function readTable() {
-  const crumbs = houseStage() !== 'unowned' && houseStage() !== 'slimes'
+/** The table, by how much of the loaf is left. */
+export function readTable(left: number, whole: number) {
+  let text = 'What’s left of a loaf. Someone has clearly been at it.'
 
-  quest.say([
-    {
-      who: 'Table',
-      text: crumbs
-        ? 'Crumbs. The traveler was thorough.'
-        : 'A fresh loaf, though someone has clearly started on it.',
-    },
-  ])
+  if (left === whole) text = 'A fresh loaf of bread.'
+
+  if (left === 0) text = 'Crumbs. The traveler was thorough.'
+
+  quest.say([{ who: 'Table', text }])
 }
 
 /** Puts the player's door rules up as the house's policy. */
