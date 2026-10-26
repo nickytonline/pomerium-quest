@@ -358,6 +358,10 @@ export class KingdomScene extends Phaser.Scene {
   /** The guard who shows unwelcome visitors out of the house, and waits by the nearest gate between times. */
   private houseGuard: Body | undefined
   private escorting = false
+  /** New rules came in while the guard was busy, so they check the house again once they're done. */
+  private recheckAgain = false
+  /** The next check asks about the player too: Pomerium only answers them by the new rules once it enforces them. */
+  private recheckPlayer = false
   /** The Captain, a knight, drops by when new door rules let knights in: at the guild, on the way, or in. */
   private captain: 'guild' | 'visiting' | 'inside' | 'shownOut' = 'guild'
   /** Whether the door let the Captain in last time the house checked, so they only visit when that changes. */
@@ -1276,13 +1280,14 @@ export class KingdomScene extends Phaser.Scene {
       }
 
       // Once Pomerium enforces new rules, the player finds out whether their own door still lets them in.
+      // The rules the game loaded with only matter if the player is already inside.
       const nowLive = next.house?.live ? next.house.version : undefined
 
       if (nowLive && nowLive !== live) {
         const first = live === undefined
         live = nowLive
 
-        if (!first && next.progress.houseRules) void this.recheckYou()
+        if (next.progress.houseRules && (!first || inHouse(this.pos))) void this.recheckHouse(true)
       }
     })
   }
@@ -1428,12 +1433,33 @@ export class KingdomScene extends Phaser.Scene {
   }
 
   /**
-   * New door rules: whoever is already inside finds out whether they're still welcome, by knocking as
-   * them. A guard shows out anyone the door no longer lets in.
+   * New door rules: the guard checks everyone in the house, the player too once Pomerium enforces the
+   * rules, and shows out whoever Pomerium turns away. Rules that change mid-check get a check of their own.
    */
-  private async recheckHouse() {
-    if (this.escorting) return
+  private async recheckHouse(player = false) {
+    this.recheckPlayer ||= player
+
+    if (this.escorting) {
+      this.recheckAgain = true
+
+      return
+    }
+
     this.escorting = true
+
+    do {
+      this.recheckAgain = false
+      const withPlayer = this.recheckPlayer
+
+      this.recheckPlayer = false
+      await this.clearHouse(withPlayer)
+    } while (this.recheckAgain)
+
+    this.escorting = false
+  }
+
+  /** Knocks as whoever is inside, through Pomerium, and the guard shows out anyone it refuses. */
+  private async clearHouse(withPlayer: boolean) {
     const intruders: Intruder[] = []
     const slimes = this.monsters.filter((monster) => monster.home === 'house')
 
@@ -1488,8 +1514,15 @@ export class KingdomScene extends Phaser.Scene {
 
     for (const intruder of intruders) await this.showOut(intruder)
 
+    // The player last, so the house is clear by the time the guard explains.
+    if (withPlayer && (await youRefused())) {
+      if (inHouse(this.pos) || same(this.pos, HOUSE.door)) {
+        await this.showPlayerOut()
+        lockedOut(true)
+      } else lockedOut(false)
+    }
+
     await this.guardGoesBack()
-    this.escorting = false
 
     // Door rules of the player's own now let knights in: the Captain comes to say hello.
     const ownRules = quest.get().progress.houseRules !== null
@@ -1498,28 +1531,6 @@ export class KingdomScene extends Phaser.Scene {
       void this.captainVisits(captain)
 
     this.captainWasWelcome = captainWelcome
-  }
-
-  /**
-   * New rules that turn the player away from their own door: a guard shows them out if they're inside,
-   * and either way they hear who the door lets in now. It's a lesson, not the end of the game.
-   */
-  private async recheckYou() {
-    if (!(await youRefused())) return
-
-    while (this.escorting) await this.pause(200)
-
-    if (!inHouse(this.pos) && !same(this.pos, HOUSE.door)) {
-      lockedOut(false)
-
-      return
-    }
-
-    this.escorting = true
-    await this.showPlayerOut()
-    lockedOut(true)
-    await this.guardGoesBack()
-    this.escorting = false
   }
 
   /** The guard leads the dog out of the house; the player can't move until they're outside. */
