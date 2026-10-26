@@ -11,9 +11,6 @@ import { json } from './runtime.ts'
 
 const currentPlayer = (request: Request) =>
   Effect.gen(function* () {
-    const config = yield* QuestConfig
-
-    if (config.mode === 'simulated') return undefined
     const identity = yield* PomeriumIdentity
 
     return yield* identity.verify(request)
@@ -26,8 +23,7 @@ const signedInFrame = (origin: string) =>
     { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } },
   )
 
-const greeting = (zoneName: string, player: Player | undefined) =>
-  player ? `${zoneName} welcomes ${player.email}.` : `${zoneName} welcomes you (simulated mode).`
+const greeting = (zoneName: string, player: Player) => `${zoneName} welcomes ${player.email}.`
 
 export const handleZone = (request: Request, splat: string) =>
   Effect.gen(function* () {
@@ -39,33 +35,29 @@ export const handleZone = (request: Request, splat: string) =>
     if (!zone) return json(404, { error: 'unknown zone', path: splat })
 
     const player = yield* currentPlayer(request)
-    const verifiedBy = player ? 'pomerium-jwt' : 'none (simulated)'
+    const verifiedBy = 'pomerium-jwt'
 
     switch (`${request.method} ${zone.id}/${action}`) {
       case 'GET oracle/':
-        return json(200, { mode: config.mode, player: player ?? null })
+        return json(200, { player })
       case 'GET oracle/signin':
         // Pomerium redirects back here after sign-in, inside the game's frame or as a full page.
         return request.headers.get('sec-fetch-dest') === 'iframe'
           ? signedInFrame(new URL(config.publicOrigin).origin)
           : Response.redirect(new URL('/?signedin=1', config.publicOrigin), 302)
       case 'POST guild/knight': {
-        if (player) {
-          const oracle = yield* OracleAdmin
-          yield* oracle.grant(player.email, 'knights')
-        }
+        const oracle = yield* OracleAdmin
+        yield* oracle.grant(player.email, 'knights')
 
-        return json(200, { granted: 'knights', refreshRequired: Boolean(player), verifiedBy })
+        return json(200, { granted: 'knights', refreshRequired: true, verifiedBy })
       }
 
       // The Librarian writes to the Oracle, like the Captain, once the player has read every book.
       case 'POST oracle/scholar': {
-        if (player) {
-          const oracle = yield* OracleAdmin
-          yield* oracle.grant(player.email, 'scholars')
-        }
+        const oracle = yield* OracleAdmin
+        yield* oracle.grant(player.email, 'scholars')
 
-        return json(200, { granted: 'scholars', refreshRequired: Boolean(player), verifiedBy })
+        return json(200, { granted: 'scholars', refreshRequired: true, verifiedBy })
       }
 
       case 'POST library/ledger':
@@ -74,14 +66,15 @@ export const handleZone = (request: Request, splat: string) =>
         return json(200, {
           zone: zone.id,
           message: greeting(zone.name, player),
-          servedTo: player?.email ?? null,
+          servedTo: player.email,
           verifiedBy,
         })
     }
   }).pipe(
     Effect.catchTags({
+      // 421 Misdirected Request, not 401: signing in can't fix a request that skipped Pomerium.
       MissingAssertion: () =>
-        Effect.succeed(json(401, { error: 'no Pomerium JWT: this request did not come through Pomerium' })),
+        Effect.succeed(json(421, { error: 'no Pomerium JWT: this request did not come through Pomerium' })),
       InvalidAssertion: (error) =>
         Effect.succeed(json(401, { error: 'invalid Pomerium JWT', reason: error.reason })),
       OracleUnavailable: (error) =>

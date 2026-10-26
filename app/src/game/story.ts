@@ -1,6 +1,6 @@
 // What happens when the player talks, reads or walks into a gate. The scene handles
 // movement and drawing; this module handles the conversation with Pomerium.
-import { probe, refreshClaimsUrl, requestZone, signInUrl, simulatedIdentity, type Outcome } from './access.ts'
+import { probe, refreshClaimsUrl, requestZone, signInUrl, type Outcome } from './access.ts'
 import {
   BOOKS,
   LESSONS,
@@ -183,10 +183,9 @@ function denyView(
 
 /** Sends a request, records it in the access log, and shows the denial screen when refused. */
 async function attempt(zone: Zone, method: 'GET' | 'POST', action: string): Promise<Outcome> {
-  const { mode } = quest.get()
   const id = identity()
   const path = `${zone.prefix}/${action}`
-  const outcome = await requestZone(mode, id, zone, method, action)
+  const outcome = await requestZone(zone, method, action)
   const decision = LOG_DECISION[outcome.kind]
   quest.log({ decision, method, path, who: who(id) })
 
@@ -243,7 +242,7 @@ function signInWithPomerium(url: string, onSignedIn: (next: Identity) => void, o
   quest.openSignIn(
     url,
     () => {
-      void probe(quest.get().progress).then(({ identity: next }) => {
+      void probe().then(({ identity: next }) => {
         if (!next.authenticated) {
           quest.toast('The Oracle did not sign you in', 'deny')
 
@@ -283,25 +282,14 @@ const staleGroups = () => vouchedGroups().filter((group) => !identity().groups.i
 
 /** Signs the player in again so their session carries the groups the Oracle has added since. */
 function refreshClaims(onDone: () => void) {
-  if (quest.get().mode === 'pomerium') {
-    signInWithPomerium(
-      refreshClaimsUrl(),
-      (next) => welcomeBack(next, onDone),
-      () => {
-        onDone()
-        quest.toast("You can sign in again at the Oracle's temple", 'info')
-      },
-    )
-
-    return
-  }
-
-  const sim = quest.get().progress.sim
-  quest.progress({ sim: { ...sim, groups: [...sim.groups, ...sim.pendingGroups], pendingGroups: [] } })
-  const next = simulatedIdentity(quest.get().progress)
-  quest.setIdentity(next)
-  quest.send({ type: 'SIGNED_IN', groups: next.groups })
-  welcomeBack(next, onDone)
+  signInWithPomerium(
+    refreshClaimsUrl(),
+    (next) => welcomeBack(next, onDone),
+    () => {
+      onDone()
+      quest.toast("You can sign in again at the Oracle's temple", 'info')
+    },
+  )
 }
 
 const refreshPage = (): Page => ({
@@ -321,7 +309,6 @@ function oracleArrives(letter: string) {
 }
 
 function oracle() {
-  const { mode, progress } = quest.get()
   const id = identity()
 
   if (!id.authenticated) {
@@ -334,32 +321,19 @@ function oracle() {
       },
     ]
 
-    if (mode === 'pomerium') {
-      quest.say(
-        [
-          ...intro,
-          {
-            who: 'Oracle',
-            text: `Step into the light and tell me who you are. New here? Introduce yourself with your ${KINGDOM_DOMAIN} email and a password. I only know citizens of ${KINGDOM_DOMAIN}.`,
-          },
-        ],
-        () => {
-          learn('idp')
-          signInWithPomerium(signInUrl(), welcome)
+    quest.say(
+      [
+        ...intro,
+        {
+          who: 'Oracle',
+          text: `Step into the light and tell me who you are. New here? Introduce yourself with your ${KINGDOM_DOMAIN} email and a password. I only know citizens of ${KINGDOM_DOMAIN}.`,
         },
-      )
-
-      return
-    }
-
-    quest.say(intro, () => {
-      quest.progress({ sim: { ...progress.sim, signedIn: true } })
-      const next = simulatedIdentity(quest.get().progress)
-      quest.setIdentity(next)
-      quest.send({ type: 'SIGNED_IN', groups: next.groups })
-      learn('idp')
-      welcome(next)
-    })
+      ],
+      () => {
+        learn('idp')
+        signInWithPomerium(signInUrl(), welcome)
+      },
+    )
 
     return
   }
@@ -382,7 +356,7 @@ function oracle() {
 }
 
 async function captain() {
-  const { defeated, mode } = quest.get()
+  const { defeated } = quest.get()
 
   if (isAtLeast('knighted')) {
     quest.say([
@@ -418,11 +392,6 @@ async function captain() {
 
   if (outcome.kind !== 'allow') return
   quest.send({ type: 'KNIGHTED' })
-
-  if (mode === 'simulated') {
-    const sim = quest.get().progress.sim
-    quest.progress({ sim: { ...sim, pendingGroups: ['knights'] } })
-  }
 
   quest.say(
     [
@@ -604,7 +573,7 @@ const LIBRARIAN_INTRO: Page[] = [
 ]
 
 async function librarian() {
-  const { mode, progress } = quest.get()
+  const { progress } = quest.get()
 
   if (progress.scholar) {
     quest.say([
@@ -638,11 +607,6 @@ async function librarian() {
 
   if (outcome.kind !== 'allow') return
   quest.progress({ scholar: true })
-
-  if (mode === 'simulated') {
-    const sim = quest.get().progress.sim
-    quest.progress({ sim: { ...sim, pendingGroups: [...sim.pendingGroups, 'scholars'] } })
-  }
 
   quest.say(
     [

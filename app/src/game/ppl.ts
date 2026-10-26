@@ -1,6 +1,5 @@
-// A small PPL evaluator for the criteria the game uses. In Pomerium mode the real decision
-// comes from Pomerium; this evaluator only explains it (which line passed, which failed).
-// In simulated mode it is the decision.
+// A small PPL evaluator for the criteria the game uses. The real decision comes from
+// Pomerium; this evaluator only explains it (which line passed, which failed).
 import type { AllowRule, Criterion, Zone } from './zones.ts'
 
 export interface Identity {

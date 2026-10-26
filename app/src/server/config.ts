@@ -1,12 +1,8 @@
 import { Config, Context, Effect, Layer, Redacted } from 'effect'
 
-export type QuestMode = 'pomerium' | 'simulated'
-
 export class QuestConfig extends Context.Service<
   QuestConfig,
   {
-    /** pomerium: requests must carry a valid Pomerium JWT. simulated: local dev without Pomerium. */
-    readonly mode: QuestMode
     /** Public origin of the game route, e.g. https://game.localhost.pomerium.io */
     readonly publicOrigin: string
     /** In-cluster address of Keycloak (the Oracle), for its admin API. */
@@ -21,10 +17,6 @@ export class QuestConfig extends Context.Service<
 export const QuestConfigLive = Layer.effect(
   QuestConfig,
   Effect.gen(function* () {
-    const mode = yield* Config.Literals(['pomerium', 'simulated'], 'QUEST_MODE').pipe(
-      Config.withDefault('simulated'),
-    )
-
     const publicOrigin = yield* Config.String('QUEST_PUBLIC_ORIGIN').pipe(
       Config.withDefault('http://localhost:3000'),
     )
@@ -40,6 +32,6 @@ export const QuestConfigLive = Layer.effect(
       Config.withDefault(Redacted.make('dev-only-client-secret')),
     )
 
-    return { mode, publicOrigin, keycloakUrl, keycloakRealm, keycloakClientId, keycloakClientSecret }
+    return { publicOrigin, keycloakUrl, keycloakRealm, keycloakClientId, keycloakClientSecret }
   }),
 )

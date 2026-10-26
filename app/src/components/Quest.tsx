@@ -105,7 +105,7 @@ function useBoot() {
     const returning = url.searchParams.has('signedin')
 
     if (returning) history.replaceState(null, '', url.pathname)
-    void probe(quest.get().progress).then(({ mode, identity }) => {
+    void probe().then(({ mode, identity }) => {
       quest.setMode(mode, identity)
 
       if (identity.authenticated) quest.send({ type: 'SIGNED_IN', groups: identity.groups })
@@ -205,6 +205,8 @@ export function Quest() {
 const hasSave = () => quest.get().progress.playedBefore
 
 const begin = () => {
+  // Every gate is a request through Pomerium: without it there's no game to play.
+  if (quest.get().mode !== 'pomerium') return
   const firstTime = !quest.get().progress.playedBefore
 
   quest.progress({ playedBefore: true })
@@ -247,34 +249,39 @@ function Splash() {
         Pomerium Quest
       </h1>
       <p className="m-0 max-w-[36ch] text-muted">Every gate checks you, every time.</p>
-      <button
-        className="mt-2 motion-safe:animate-blink rounded border-3 border-night-deep bg-lime px-[22px] py-3 font-display text-[1.15rem] text-night-deep shadow-[4px_4px_0_var(--color-night-deep)]"
-        type="button"
-        onClick={begin}
-        autoFocus
-      >
-        {saved ? 'Press Enter to continue' : 'Press Enter to start'}
-      </button>
-      {saved &&
-        (confirmingNew ? (
-          <p className="m-0 text-[0.9rem]">
-            Start a new game? Your lessons and progress are cleared.{' '}
-            <button className={linkButton} type="button" onClick={playAgain}>
-              Yes, start over
-            </button>{' '}
-            <button className={linkButton} type="button" onClick={() => setConfirmingNew(false)}>
-              Keep my save
-            </button>
-          </p>
-        ) : (
-          <button className={linkButton} type="button" onClick={() => setConfirmingNew(true)}>
-            New game
+      {mode !== 'unreachable' && (
+        <>
+          <button
+            className="mt-2 motion-safe:animate-blink rounded border-3 border-night-deep bg-lime px-[22px] py-3 font-display text-[1.15rem] text-night-deep shadow-[4px_4px_0_var(--color-night-deep)]"
+            type="button"
+            onClick={begin}
+            autoFocus
+          >
+            {saved ? 'Press Enter to continue' : 'Press Enter to start'}
           </button>
-        ))}
+          {saved &&
+            (confirmingNew ? (
+              <p className="m-0 text-[0.9rem]">
+                Start a new game? Your lessons and progress are cleared.{' '}
+                <button className={linkButton} type="button" onClick={playAgain}>
+                  Yes, start over
+                </button>{' '}
+                <button className={linkButton} type="button" onClick={() => setConfirmingNew(false)}>
+                  Keep my save
+                </button>
+              </p>
+            ) : (
+              <button className={linkButton} type="button" onClick={() => setConfirmingNew(true)}>
+                New game
+              </button>
+            ))}
+        </>
+      )}
       <p className="m-0 text-[0.85rem] text-muted">
         {mode === 'loading' && 'Looking for Pomerium…'}
         {mode === 'pomerium' && 'Connected to a real Pomerium. Every gate is a live route.'}
-        {mode === 'simulated' && 'Simulated mode: no Pomerium detected, so policies run in your browser.'}
+        {mode === 'unreachable' &&
+          "No Pomerium in front of this game, so there's nothing to play. Run ./quest dev and open the URL it prints."}
       </p>
     </main>
   )
@@ -1124,7 +1131,6 @@ function DPad() {
 
 function IdentityPanel() {
   const identity = useQuest((s) => s.identity)
-  const mode = useQuest((s) => s.mode)
   const stage = useQuest((s) => s.stage)
 
   const claims = identity.authenticated
@@ -1134,11 +1140,6 @@ function IdentityPanel() {
   return (
     <section className={panel}>
       <h2 className={panelTitle}>Your identity</h2>
-      {mode === 'simulated' && (
-        <p className="mb-1.5 inline-block rounded-full border border-current px-2 text-xs tracking-[0.06em] text-lens uppercase">
-          Simulated
-        </p>
-      )}
       {claims ? (
         <pre className={`mt-1 ${codeBlock}`}>{claims}</pre>
       ) : (

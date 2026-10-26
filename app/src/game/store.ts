@@ -14,7 +14,8 @@ import {
 
 export type Dir = 'down' | 'up' | 'right' | 'left'
 
-export type Mode = 'loading' | 'pomerium' | 'simulated'
+/** unreachable: the game was opened without Pomerium in front of it, so nothing can be played. */
+export type Mode = 'loading' | 'pomerium' | 'unreachable'
 
 export interface Progress {
   readonly x: number
@@ -34,12 +35,6 @@ export interface Progress {
   readonly scholar: boolean
   /** True once a game has been started, so the title screen offers Continue. */
   readonly playedBefore: boolean
-  /** Simulated-mode identity; in Pomerium mode the identity comes from the session. */
-  readonly sim: {
-    readonly signedIn: boolean
-    readonly groups: readonly string[]
-    readonly pendingGroups: readonly string[]
-  }
 }
 
 export interface DenyView {
@@ -141,7 +136,6 @@ const freshProgress = (): Progress => ({
   booksRead: [],
   scholar: false,
   playedBefore: false,
-  sim: { signedIn: false, groups: [], pendingGroups: [] },
 })
 
 function loadProgress(): Progress {

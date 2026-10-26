@@ -392,7 +392,6 @@ function manifests(secrets: Secrets): Yaml[] {
       3000,
       {
         env: [
-          { name: 'QUEST_MODE', value: 'pomerium' },
           { name: 'QUEST_KINGDOM_DOMAIN', value: KINGDOM_DOMAIN },
           { name: 'QUEST_PUBLIC_ORIGIN', value: publicUrl('game') },
           { name: 'KEYCLOAK_URL', value: svc('keycloak', 8080) },

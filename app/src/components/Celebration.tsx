@@ -229,11 +229,11 @@ function CastList({ hidden = false }: { readonly hidden?: boolean }) {
 
 /** Clears progress and signs out of the Oracle, so the next game starts as a stranger. */
 export const playAgain = () => {
-  const { mode, identity } = quest.get()
+  const { identity } = quest.get()
 
   quest.resetProgress()
 
-  if (mode === 'pomerium' && identity.authenticated) location.assign(signOutUrl())
+  if (identity.authenticated) location.assign(signOutUrl())
   else location.reload()
 }
 

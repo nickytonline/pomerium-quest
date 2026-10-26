@@ -47,16 +47,9 @@ password the first time.
 
 Port 443 already in use? Run `QUEST_PORT=8443 ./quest up` and open `https://game.localhost.pomerium.io:8443`.
 
-## Play it without Pomerium (simulated mode)
-
-```sh
-npm install
-npm run dev -w app
-```
-
-Open http://localhost:3000. With no Pomerium in front, the game evaluates the same policies in your
-browser, and the Oracle signs you in without leaving the game. This is handy for quick UI work, but
-`./quest dev` is the real thing: the same hot reload, behind Pomerium and Keycloak.
+The game only plays behind Pomerium. Opened directly (say, `npm run dev -w app` on
+http://localhost:3000), it says so and won't start: use `./quest dev` for hot reload behind
+Pomerium and Keycloak.
 
 ## How it fits together
 
