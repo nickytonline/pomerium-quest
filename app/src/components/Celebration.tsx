@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react'
 import { signOutUrl } from '../game/access.ts'
 import { SHEETS } from '../game/sheets.ts'
 import { quest, useQuest } from '../game/store.ts'
+import { NPC_FRAME, PHISH_FRAME } from '../game/world.ts'
 
 /** The game's sunset palette, so the sky matches the kingdom. */
 const SPARKS = ['#ffd86b', '#ff9a5a', '#ff4fb8', '#3fe3f2', '#c6f432', '#f3ecff']
@@ -154,17 +155,15 @@ function useFireworks(canvas: React.RefObject<HTMLCanvasElement | null>) {
   }, [canvas])
 }
 
-/** One frame of a 16px sprite sheet, drawn at `scale` (3x by default) without smoothing. */
+/** One frame of a 16px-tall sprite sheet, drawn at `scale` (3x by default) without smoothing. */
 export function Sprite({
   sheet,
   frame,
-  frames,
   scale = 3,
   className = '',
 }: {
   readonly sheet: string
   readonly frame: number
-  readonly frames: number
   readonly scale?: number
   readonly className?: string
 }) {
@@ -177,7 +176,8 @@ export function Sprite({
         width: size,
         height: size,
         backgroundImage: `url(${sheet})`,
-        backgroundSize: `${frames * size}px ${size}px`,
+        // Scale by height alone, so the sheet's width (and so its frame count) never has to be known here
+        backgroundSize: `auto ${size}px`,
         backgroundPosition: `-${frame * size}px 0`,
       }}
       aria-hidden="true"
@@ -185,27 +185,47 @@ export function Sprite({
   )
 }
 
-export const NPCS = { sheet: SHEETS.npcs, frames: 8 }
-const ITEMS = { sheet: SHEETS.items, frames: 7 }
-const DOG = { sheet: SHEETS.dog, frames: 12 }
+export const NPCS = SHEETS.npcs
+const ITEMS = SHEETS.items
+const DOG = SHEETS.dog
 
-/** Who played whom. Frames match NPC_FRAME and PHISH_FRAME in world.ts and the item and dog sheets. */
+/** Who played whom. The slime's and dog's frames match the item and dog sheets. */
 const CAST: readonly {
   readonly name: string
   readonly role: string
-  readonly sheet: { readonly sheet: string; readonly frames: number }
+  readonly sheet: string
   readonly frame: number
 }[] = [
   { name: 'You, the Pomerium Pomeranian', role: 'the user', sheet: DOG, frame: 0 },
-  { name: 'The Oracle', role: 'your identity provider', sheet: NPCS, frame: 1 },
-  { name: 'The Sage', role: 'your guide to zero trust', sheet: NPCS, frame: 0 },
-  { name: 'The Traveler', role: 'a signed-in user the policy turns away', sheet: NPCS, frame: 2 },
-  { name: 'The Baker', role: 'a user the same policy lets in', sheet: NPCS, frame: 6 },
-  { name: 'The Captain', role: 'the admin who adds you to the knights group', sheet: NPCS, frame: 3 },
-  { name: 'The Librarian', role: 'the admin who adds you to the scholars group', sheet: NPCS, frame: 5 },
-  { name: 'The Armorer', role: 'an app behind a route, leaving access to Pomerium', sheet: NPCS, frame: 4 },
+  { name: 'The Oracle', role: 'your identity provider', sheet: NPCS, frame: NPC_FRAME.oracle },
+  { name: 'The Sage', role: 'your guide to zero trust', sheet: NPCS, frame: NPC_FRAME.sage },
+  {
+    name: 'The Traveler',
+    role: 'a signed-in user the policy turns away',
+    sheet: NPCS,
+    frame: NPC_FRAME.traveler,
+  },
+  { name: 'The Baker', role: 'a user the same policy lets in', sheet: NPCS, frame: NPC_FRAME.baker },
+  {
+    name: 'The Captain',
+    role: 'the admin who adds you to the knights group',
+    sheet: NPCS,
+    frame: NPC_FRAME.captain,
+  },
+  {
+    name: 'The Librarian',
+    role: 'the admin who adds you to the scholars group',
+    sheet: NPCS,
+    frame: NPC_FRAME.librarian,
+  },
+  {
+    name: 'The Armorer',
+    role: 'an app behind a route, leaving access to Pomerium',
+    sheet: NPCS,
+    frame: NPC_FRAME.armorer,
+  },
   { name: 'Bot slimes', role: 'automated bots hammering every gate', sheet: ITEMS, frame: 3 },
-  { name: 'Phish', role: 'phishing: a fake Oracle after your sign-in', sheet: NPCS, frame: 7 },
+  { name: 'Phish', role: 'phishing: a fake Oracle after your sign-in', sheet: NPCS, frame: PHISH_FRAME },
 ]
 
 function CastList({ hidden = false }: { readonly hidden?: boolean }) {
@@ -214,7 +234,7 @@ function CastList({ hidden = false }: { readonly hidden?: boolean }) {
       <li className="font-display text-[1.1rem] text-sun">Starring</li>
       {CAST.map(({ name, role, sheet, frame }) => (
         <li key={name} className="flex items-center gap-3 text-left">
-          <Sprite sheet={sheet.sheet} frame={frame} frames={sheet.frames} />
+          <Sprite sheet={sheet} frame={frame} />
           <span>
             <strong className="block font-display text-ink">{name}</strong>
             <span className="text-[0.9rem] text-muted">as {role}</span>

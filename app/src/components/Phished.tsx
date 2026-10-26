@@ -33,13 +33,7 @@ function PhishedScreen() {
         <div className="relative grid place-items-center">
           {/* The lure's glow, behind the phish's lamp. */}
           <span className="absolute top-[58%] size-28 rounded-full bg-sun/25 blur-2xl" aria-hidden="true" />
-          <Sprite
-            sheet={NPCS.sheet}
-            frame={PHISH_FRAME}
-            frames={NPCS.frames}
-            scale={9}
-            className="relative motion-safe:animate-bob"
-          />
+          <Sprite sheet={NPCS} frame={PHISH_FRAME} scale={9} className="relative motion-safe:animate-bob" />
         </div>
         <h2
           id="phished-title"
