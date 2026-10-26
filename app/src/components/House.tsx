@@ -128,6 +128,9 @@ function Editor() {
   const [rules, setRules] = useState<readonly HouseRule[]>(() => saved ?? [])
   const locksYouOut = turnsAwayOwner(rules, identity)
 
+  // A house still public with no rules written has nothing to put on the door yet.
+  const changed = saved !== null || rules.length > 0
+
   const [status, setStatus] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const letter = currentLetter()
@@ -171,7 +174,7 @@ function Editor() {
       <button
         className={`${smallButton} border-lens`}
         type="button"
-        disabled={saving || !valid(rules) || locksYouOut}
+        disabled={saving || !changed || !valid(rules) || locksYouOut}
         onClick={() => void save()}
       >
         {saving ? 'The builders are at work…' : 'Put these rules on the door'}
@@ -281,17 +284,21 @@ function Editor() {
             {houseRouteYaml(house, null)}
           </pre>
           <p className="m-0 text-[0.9rem]">
-            It's public: no policy, so Pomerium lets in every request, signed in or not. Saving replaces it
-            with the route below.
+            It's public: no policy, so Pomerium lets in every request, signed in or not. Add a rule at the
+            desk and the route Pomerium will get appears below.
           </p>
         </>
       )}
-      <p className="m-0 text-[0.72rem] tracking-[0.08em] text-paper-muted uppercase">
-        The route Pomerium will get
-      </p>
-      <pre className="m-0 overflow-x-auto rounded bg-paper-tint px-3 py-2.5 text-[0.8rem] leading-[1.45]">
-        {houseRouteYaml(house, rules)}
-      </pre>
+      {changed && (
+        <>
+          <p className="m-0 text-[0.72rem] tracking-[0.08em] text-paper-muted uppercase">
+            The route Pomerium will get
+          </p>
+          <pre className="m-0 overflow-x-auto rounded bg-paper-tint px-3 py-2.5 text-[0.8rem] leading-[1.45]">
+            {houseRouteYaml(house, rules)}
+          </pre>
+        </>
+      )}
       {problems}
       <ul className="m-0 flex list-none flex-wrap gap-x-3.5 gap-y-1.5 p-0 text-[0.85rem]">
         {DESK_DOCS.map((lesson) => (
