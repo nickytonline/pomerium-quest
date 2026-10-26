@@ -1,0 +1,257 @@
+# PRD: Your house, where you write the policy
+
+Status: not started. Planned for v2.
+
+## Why
+
+Chapter one teaches players to read policy. Every sign shows a route's YAML, and every refusal marks the
+check that failed. But players never write a policy, so they can't test what they think a rule means.
+
+The house fixes that. The player owns a house in Hearth Village, writes the policy on its door, and
+watches real visitors get let in or turned away by Pomerium. It's also the natural place to teach what
+chapter one doesn't: public routes, `deny` rules (which always beat `allow`), and the `or` and `not`
+operators.
+
+## What the player does
+
+1. The sage gives the player the deed to the empty house next to theirs.
+2. **The house starts open to everyone.** Its route is public
+   (`allow_public_unauthenticated_access`), so Pomerium lets every request through, signed in or not.
+   When the player arrives, slime bots are bouncing around inside and the traveler is at the table eating
+   the bread. Each one got in with a real request: the bots with no session at all, the traveler with
+   their own. The access log shows them all as ALLOW.
+3. Inside, a writing desk opens the **door rules** editor. The player builds rules from blocks (who, what
+   check, allow or deny). The editor shows the PPL it will produce as they go.
+4. The player saves. A builder NPC says the work takes a moment while Pomerium picks up the new route.
+5. The player rings a bell to **invite visitors**. The baker, the traveler, the captain and the librarian
+   each knock. Each visit is a real request through Pomerium, and each shows up in the access log as an
+   ALLOW or DENY. A refused visitor gets the same denial screen as the player does at a gate.
+6. Puzzles come as letters on the doormat, each one a small brief:
+
+The first two letters tell one story:
+
+1. **"Get the slimes out, but your friend the traveler is welcome."** The player writes their first
+   policy: themselves or the traveler. The bots have no session, so no rule can match them and they
+   bounce out. The traveler's visit is still an ALLOW.
+
+   ```yaml
+   - allow:
+       or:
+         - email: { is: <you> }
+         - email: { is: wanderer@outlands.net }
+   ```
+
+2. **"The traveler ate all your bread."** The player deletes the traveler's line, leaving only
+   themselves. They don't add anything to keep the traveler out: once no rule matches them, Pomerium
+   denies them. That's default deny, learned by removing a line rather than adding one.
+
+   ```yaml
+   - allow:
+       or:
+         - email: { is: <you> }
+   ```
+
+Later letters build on that:
+
+| Letter                                                           | What it teaches                       | One answer                                                     |
+| ---------------------------------------------------------------- | ------------------------------------- | -------------------------------------------------------------- |
+| "Let in your friends from the Knights' Guild"                    | `claim/groups`                        | `allow: { or: [email: { is: <you> }, claim/groups: knights] }` |
+| "Any citizen may visit, except that traveler"                    | `deny` beats `allow`                  | allow `domain`, then `deny` the traveler's `email`             |
+| "Friends may look in through the window (GET), not knock (POST)" | `http_method`, two rules on one route | as the library does                                            |
+
+A letter counts as solved when the real visits come out the way the brief asks: the visitors are the test
+cases.
+
+## How it works
+
+### The three layers that keep houses apart
+
+Players never talk to Kubernetes. Three layers each guard something different:
+
+```
+player ──HTTP──► Pomerium ──► game server ──Kubernetes API──► Ingress in namespace quest-houses
+          (1) PPL on the         (2) owner comes from          (3) the server's role can only
+          builder route              the verified JWT              touch quest-houses
+```
+
+1. **Pomerium (PPL)** decides which requests reach the game. Saving door rules is a POST to a new zone,
+   `/zones/builder`, defined in `zones.ts` like any other (signed-in citizens only).
+2. **The game server** decides which house a request may change. It takes the owner from Pomerium's
+   verified JWT, never from the request body, and only ever writes that player's own house. This is what
+   stops Alice changing Bob's house.
+3. **Kubernetes permissions** decide what the game server may change. Its ServiceAccount has a Role that
+   allows creating, updating, listing and deleting Ingresses in the `quest-houses` namespace, and nothing
+   else. A bug or a compromised game server can make or remove houses, but can't touch the armory, the
+   keep or the Oracle.
+
+An earlier idea put an owner-only `deny` on each house route as well. It's left out on purpose: saving
+never goes through the house route, so there's nothing for it to guard. Also, the PPL docs allow several
+operators in one rule (`and` with `not`) but don't say how they combine, so we shouldn't depend on it.
+
+### Each house is a real route
+
+The game server writes one Ingress per house, read by the
+[Pomerium Ingress Controller](https://www.pomerium.com/docs/deploy/k8s/ingress):
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: house-3f9a1c2b7d4e # a hash of the owner's email: DNS-safe, and keeps the email out of URLs
+  namespace: quest-houses
+  labels: { app.kubernetes.io/part-of: quest, quest/house: '3f9a1c2b7d4e' }
+  annotations:
+    ingress.pomerium.io/pass_identity_headers: 'true'
+    ingress.pomerium.io/set_request_headers: '{"X-House-Version": "<hash of the policy>"}'
+    ingress.pomerium.io/policy: |
+      - allow:
+          or:
+            - email: { is: alice@kingdom.com }
+            - claim/groups: knights
+    quest/last-visited: '2026-10-25T18:00:00Z'
+spec:
+  ingressClassName: pomerium
+  rules:
+    - host: game.localhost.pomerium.io
+      http:
+        paths:
+          - path: /zones/home/3f9a1c2b7d4e
+            pathType: Prefix
+            backend: { service: { name: quest, port: { number: 3000 } } }
+```
+
+`X-House-Version` tells the game server which policy Pomerium enforced on a visit. A visit that arrives
+with an older version means Pomerium hasn't picked up the save yet, so the server waits and tries again
+rather than reporting a stale result.
+
+### Moving every route to the Ingress Controller
+
+Today Pomerium reads its routes from a `config.yaml` that `render.ts` writes into a Secret. The game
+server must not get write access to that file: it holds Pomerium's secrets and every other route.
+
+The Ingress docs describe routes as Ingress resources and global settings as a `Pomerium` custom resource.
+They don't say whether a routes file can be used at the same time. So the plan moves everything to the
+Ingress Controller:
+
+- `render.ts` writes the `Pomerium` resource (identity provider, cookie and signing keys) and one Ingress
+  per zone in `zones.ts`, in the `quest` namespace.
+- `zones.ts` stays the single source of truth for every fixed gate. Houses are the one exception: their
+  policy comes from the player.
+- `./quest test` must pass unchanged before any house work starts.
+
+### Rules are built from blocks, never typed as YAML
+
+The editor sends rules as JSON in the same shape as `zones.ts`, extended with `deny` and more operators:
+
+```ts
+interface HouseRule {
+  readonly action: 'allow' | 'deny'
+  readonly match: 'and' | 'or' | 'not' // one operator per rule, as the PPL docs recommend
+  readonly criteria: readonly Criterion[]
+}
+```
+
+The server checks them with an Effect Schema before writing anything:
+
+- **Criteria:** only `authenticated_user`, `domain`, `email`, `claim/groups` and `http_method`. All of them
+  work in open-source Pomerium.
+- **Values:** emails, domains and group names must match a strict pattern (letters, digits, `@ . _ -`).
+  No quotes, colons, newlines or spaces can reach the YAML.
+- **Size:** at most 6 rules with 6 criteria each.
+
+The server then renders the PPL with the same `policyYaml` code the signs use, extended for `deny`.
+Players' text is never passed through as YAML. That's the main security property of the feature: if
+anything raw could reach the annotation, a player could write policy for routes that aren't theirs.
+
+### The house starts public
+
+A new house's Ingress has `ingress.pomerium.io/allow_public_unauthenticated_access: 'true'` and no
+policy. Pomerium doesn't allow a public route to also have a policy, so the first save removes the public
+annotation and adds the player's rules. A player can't go back to public: the editor has no block for it,
+and the server never writes the annotation for a saved house.
+
+### Visitors are real people with real sessions
+
+Checking visitors with `ppl.ts` in the browser would fake Pomerium, which the game doesn't do. Instead:
+
+- `render.ts` adds the visitors to the Keycloak realm as real users with fixed groups: the baker (a
+  citizen), the traveler (from `outlands.net`), the captain (a knight) and the librarian (a scholar and a
+  scribe). Their passwords come from the generated secrets.
+- The game server signs each one in through Pomerium, the way `scripts/e2e.sh` does with curl, and keeps
+  their session cookies.
+- **Slime bots** are requests with no session at all. The server sends them with no cookie, so they're
+  as real as the named visitors, and Pomerium turns them away as soon as the route has any policy.
+- **Invite visitors** makes the server send a GET (or a POST, for the knocking letter) to the house as each
+  visitor, through Pomerium, and returns each status code with the visitor's identity. The browser shows
+  the explanation from `ppl.ts`, as it does today, next to Pomerium's real answer.
+- The server reaches Pomerium through the existing CoreDNS rewrite. The NetworkPolicies need a new egress
+  rule from the game to Pomerium, and to the Kubernetes API.
+
+### Houses only exist while someone is home
+
+A route per player forever doesn't scale and mostly piles up dead config. So:
+
+- The player's rules are saved with the rest of their progress in the browser.
+- Saving, or walking into the house, creates or updates the Ingress.
+- A clean-up loop in the game server deletes houses that haven't been visited for 30 minutes
+  (`quest/last-visited`). Walking back in recreates it from the saved rules.
+- Each player can save at most once every 10 seconds.
+- At most a set number of houses (start with 500) can be open at once. Past that, the builder says
+  they're busy, and the player can try again shortly.
+
+The route count then follows how many people are playing right now, and Pomerium reloads only on
+deliberate saves.
+
+## Build order
+
+Each step stands on its own and is committed separately.
+
+1. **Load test first.** In k3d, run the Ingress Controller and a script that creates, edits and deletes
+   100, 1,000 and 3,000 house Ingresses. Measure how long a change takes to apply, and Pomerium's memory
+   and CPU use. This decides whether the design above holds, or houses need their own Pomerium instance
+   so their churn can't slow the main gates.
+2. **Move to the Ingress Controller.** `render.ts` writes the `Pomerium` resource and Ingresses; the
+   config file goes away. `./quest test` passes unchanged.
+3. **The builder API.** The `/zones/builder` zone, the `quest-houses` namespace, the ServiceAccount and
+   Role, rule checking, Ingress writes, clean-up, limits.
+4. **Visitors.** Realm users in `render.ts`, server-side sign-in and visits, the NetworkPolicy changes.
+5. **The house in the game.** The map, the deed from the sage, the desk and editor, the bell, the letters,
+   the new lessons, signs and README updates.
+6. **End-to-end checks** in `scripts/e2e.sh`:
+   - each letter's answer gives the expected visits;
+   - Alice can't change Bob's house;
+   - rules with quotes, newlines or unknown criteria are rejected;
+   - an idle house is removed and comes back.
+
+## New lessons
+
+| Lesson                                   | Taught when                       | Links to               |
+| ---------------------------------------- | --------------------------------- | ---------------------- |
+| A public route lets everyone in          | Finding the slimes in the house   | Public access          |
+| You write the policy                     | The first save                    | Route policy           |
+| `or` lets in anyone who passes one check | Letting the traveler stay         | PPL: logical operators |
+| A deny rule always beats an allow        | The "except that traveler" letter | PPL: allow and deny    |
+
+Removing the traveler (the second letter) teaches chapter one's "No matching allow rule means no entry"
+again, this time from the other side of the door, so it doesn't need a lesson of its own.
+
+## Open questions
+
+- **Load test result:** does one Pomerium cope with houses churning, or do houses need their own?
+- **Ingress Controller version:** which release matches Pomerium core v0.33.4, and does anything in the
+  current config (the Keycloak routes, the public game shell) not map onto Ingress annotations?
+- **Can the public annotation and the policy be switched in one update** without a moment where the route
+  is neither? Check during the load test.
+- **`set_request_headers` on Ingress:** confirm the annotation name and format before relying on the
+  version header.
+- **Where the house goes:** next to the sage's house in Hearth Village, so it's on the way out at the start.
+- **Hosted play:** this design is for the local k3d game. A public deployment would need the house limit
+  and clean-up tuned from the load test.
+
+## Done when
+
+- A player can write door rules in the game, save them, and see real visitors let in or refused by Pomerium.
+- Every letter can be solved, and the solution is checked by real visits.
+- No player can change another player's house, and no rule a player writes can reach outside their own
+  route. The end-to-end checks prove both.
+- Idle houses are removed, and the number of open houses stays under the limit.
