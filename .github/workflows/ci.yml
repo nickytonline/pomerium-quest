@@ -22,3 +22,31 @@ jobs:
       - run: npm run build -w app
       - run: npm run check
       - run: npm test
+
+  # Plays every gate on a real Pomerium: a k3d cluster with Keycloak, then ./quest test with curl.
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.22.1
+          cache: npm
+      - run: npm ci
+      - name: Install k3d and mkcert
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/k3d-io/k3d/v5.9.0/install.sh | TAG=v5.9.0 bash
+          sudo curl -fsSL -o /usr/local/bin/mkcert https://github.com/FiloSottile/mkcert/releases/download/v1.4.4/mkcert-v1.4.4-linux-amd64
+          sudo chmod +x /usr/local/bin/mkcert
+          sudo apt-get install -y libnss3-tools
+      # *.localhost.pomerium.io resolves to 127.0.0.1, so the runner reaches the cluster on port 443.
+      - run: ./quest up
+      - run: ./quest test
+      - name: Show the cluster when something failed
+        if: failure()
+        run: |
+          kubectl --context k3d-quest get pods -A
+          kubectl --context k3d-quest -n pomerium logs deployment/pomerium --tail=100
+          kubectl --context k3d-quest -n quest logs deployment/quest --tail=100
+          kubectl --context k3d-quest -n quest logs deployment/keycloak --tail=100
