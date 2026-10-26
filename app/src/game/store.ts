@@ -51,6 +51,12 @@ export interface DenyView {
   readonly links: readonly DocLink[]
   /** Pomerium's request ID for this decision, when it came from a real Pomerium. */
   readonly requestId?: string
+  /**
+   * Set when Pomerium refused a session whose claims qualify: its authorize step merged them with
+   * the user record it cached, whose groups are older. cached is null when the game can't tell
+   * what they were (the page was reloaded since signing in again).
+   */
+  readonly cachedClaims?: { readonly session: readonly string[]; readonly cached: readonly string[] | null }
 }
 
 export interface LogEntry {

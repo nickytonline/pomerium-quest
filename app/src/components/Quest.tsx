@@ -820,6 +820,40 @@ function PolicyLines({ lines }: { readonly lines: readonly EvalLine[] }) {
   )
 }
 
+const groupsList = (groups: readonly string[]) => `groups: [${groups.join(', ')}]`
+
+/** Where the claims in a stale decision came from: the new session, and the user record Pomerium cached. */
+function CachedClaims({ claims }: { readonly claims: NonNullable<DenyView['cachedClaims']> }) {
+  const rows = [
+    { source: 'Session (you just signed in)', groups: groupsList(claims.session), wins: false },
+    {
+      source: 'User record (cached up to 1 min)',
+      groups: claims.cached ? groupsList(claims.cached) : 'groups from before you signed in again',
+      wins: true,
+    },
+  ]
+
+  return (
+    <div className="mb-2.5 overflow-x-auto rounded bg-paper-tint px-2.5 py-2">
+      <p className="mb-1 text-[0.72rem] tracking-[0.08em] text-paper-muted uppercase">
+        Claims Pomerium merged
+      </p>
+      {rows.map((row) => (
+        <div
+          key={row.source}
+          className="grid grid-cols-[minmax(12em,max-content)_1fr] items-baseline gap-2 text-[0.8rem]"
+        >
+          <span className="text-paper-muted">{row.source}</span>
+          <code className={row.wins ? 'font-bold' : 'line-through'}>{row.groups}</code>
+        </div>
+      ))}
+      <p className="mt-1 mb-0 text-[0.75rem] text-paper-muted">
+        The user record wins, so the policy below sees the old groups.
+      </p>
+    </div>
+  )
+}
+
 const enterKeep =
   'motion-safe:animate-blink rounded border-3 border-night-deep bg-lime px-[18px] py-2.5 font-display text-[1.05rem] text-night-deep shadow-[4px_4px_0_var(--color-night-deep)]'
 
@@ -1003,6 +1037,7 @@ function DenyPomerium({ deny }: { readonly deny: DenyView }) {
         <code>{deny.requestLine}</code>
       </p>
       <p className="mt-0.5 mb-2.5 text-[0.85rem] text-paper-muted">as {deny.who}</p>
+      {deny.cachedClaims && <CachedClaims claims={deny.cachedClaims} />}
       {deny.lines.length > 0 && <PolicyLines lines={deny.lines} />}
       <p className="mt-3">{deny.hint}</p>
       {deny.requestId && (

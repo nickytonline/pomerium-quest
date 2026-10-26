@@ -33,6 +33,9 @@ const BAKER: Identity = {
 
 const learn = (lesson: LessonId) => quest.learn(lesson, LESSONS[lesson].title)
 const identity = () => quest.get().identity
+
+/** The groups the player's session carried before they last signed in again, while known. */
+let groupsBeforeSignIn: readonly string[] | null = null
 const who = (id: Identity) => (id.authenticated ? id.email : 'anonymous')
 
 const claimsCode = (id: Identity) =>
@@ -160,6 +163,10 @@ function denyView(
   // the new claims. If Pomerium still says no, its authorize step is deciding with what it cached
   // about the user (for up to a minute), not with the papers the player now holds.
   const stale = decision.allow
+  // What Pomerium most likely decided with: the groups from before the player signed in again.
+  const cached = stale && groupsBeforeSignIn ? { ...id, groups: groupsBeforeSignIn } : null
+  const lines = cached ? decide(zone, cached, { method, path }).lines : decision.lines
+  const fromCache = stale ? { cachedClaims: { session: id.groups, cached: groupsBeforeSignIn } } : {}
 
   const { story, hint } = stale
     ? {
@@ -173,7 +180,7 @@ function denyView(
                 title: 'The ink is still wet',
                 text: 'The guard peers at your papers. "A scholar, is it? Then you\'ll know the first rule of scholarship: let the ink dry before you wave it about. Give it a minute."',
               },
-        hint: 'Pomerium said no, yet the claims in your new session say you qualify. Pomerium caches what it knows about a user for up to a minute, and the claim check merges that cached record with your session. Until the cache expires, the old groups win. Try again shortly.',
+        hint: "Your new session's claims qualify, but Pomerium's authorize step keeps a copy of each user record for up to a minute. A claim check merges the session's claims with the user record's, and where both have groups, the user record wins. So until that copy expires, Pomerium decides with your old groups. Try again shortly.",
       }
     : refusal(zone, method, id)
 
@@ -183,10 +190,11 @@ function denyView(
     story,
     requestLine,
     who: who(id),
-    lines: decision.lines,
+    lines,
     hint,
     links: stale ? [link('refresh'), link('claims')] : [link('authz'), link('defaultDeny')],
     ...fromPomerium,
+    ...fromCache,
   }
 }
 
@@ -258,6 +266,7 @@ function signInWithPomerium(url: string, onSignedIn: (next: Identity) => void, o
           return
         }
 
+        groupsBeforeSignIn = identity().authenticated ? identity().groups : null
         quest.setIdentity(next)
         quest.send({ type: 'SIGNED_IN', groups: next.groups })
         onSignedIn(next)
