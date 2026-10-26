@@ -210,6 +210,7 @@ case "${1:-up}" in
     # Re-apply the last render (dev or not) to recreate the volume and start Keycloak again.
     kc apply -f deploy/.generated/manifests.yaml >/dev/null
     kc -n "$NAMESPACE" rollout status deployment/keycloak --timeout=300s
+    townsfolk
     say "Ready: $(url)"
     ;;
   *)
