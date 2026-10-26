@@ -9,12 +9,14 @@ import { houseStage, type HouseStage } from './house-machine.ts'
 import {
   currentLetter,
   enterHouse,
+  lockedOut,
   readHouseSign,
   readLetter,
   readTable,
   slimeKnocks,
   travelerWelcome,
   visitorWelcome,
+  youRefused,
 } from './house-story.ts'
 import { MAX_HP, buzz, quest, type Dir } from './store.ts'
 import {
@@ -284,9 +286,11 @@ interface Body {
 interface Intruder {
   readonly body: Body
   readonly name: string
-  /** How the guard's toast refers to them. */
-  readonly pronoun: 'it' | 'them'
+  /** How the guard's toast refers to them; the player hears it from the guard instead. */
+  readonly pronoun: 'it' | 'them' | 'you'
   readonly release: () => void
+  /** Called before each step they're led, to face and animate it. */
+  readonly stepping?: (to: Point) => void
 }
 
 /** How long the Captain stays when they drop by. */
@@ -689,6 +693,13 @@ export class KingdomScene extends Phaser.Scene {
       return
     }
 
+    // From outside, the house's own rules decide whether its door opens for the player.
+    if (same(target, HOUSE.door) && !inHouse(this.pos) && quest.get().progress.houseRules) {
+      this.askDoor(target)
+
+      return
+    }
+
     if (tile === TILE.doorClosed) {
       this.openDoor()
       this.walk(target)
@@ -789,6 +800,22 @@ export class KingdomScene extends Phaser.Scene {
       sfx('gateOpen')
       const stepMs = this.letThrough(guard, true)
       this.time.delayedCall(stepMs, () => this.walk(target))
+    })
+  }
+
+  /** Knocks on the player's own door as them; Pomerium either opens it or turns them away. */
+  private askDoor(target: Point) {
+    this.mode.send({ type: 'GATE' })
+    void youRefused().then((refused) => {
+      if (refused) {
+        this.mode.send({ type: 'GATE_DENIED' })
+        lockedOut(false)
+
+        return
+      }
+
+      this.openDoor()
+      this.walk(target)
     })
   }
 
@@ -1214,6 +1241,7 @@ export class KingdomScene extends Phaser.Scene {
   private watchHouse() {
     let { houseStage: stage, progress, letterRead } = quest.get()
     let rules = progress.houseRules
+    let live = quest.get().house?.live ? quest.get().house?.version : undefined
 
     return quest.subscribe(() => {
       const next = quest.get()
@@ -1235,6 +1263,16 @@ export class KingdomScene extends Phaser.Scene {
       if (next.progress.houseRules !== rules) {
         rules = next.progress.houseRules
         void this.recheckHouse()
+      }
+
+      // Once Pomerium enforces new rules, the player finds out whether their own door still lets them in.
+      const nowLive = next.house?.live ? next.house.version : undefined
+
+      if (nowLive && nowLive !== live) {
+        const first = live === undefined
+        live = nowLive
+
+        if (!first && next.progress.houseRules) void this.recheckYou()
       }
     })
   }
@@ -1452,6 +1490,79 @@ export class KingdomScene extends Phaser.Scene {
     this.captainWasWelcome = captainWelcome
   }
 
+  /**
+   * New rules that turn the player away from their own door: a guard shows them out if they're inside,
+   * and either way they hear who the door lets in now. It's a lesson, not the end of the game.
+   */
+  private async recheckYou() {
+    if (!(await youRefused())) return
+
+    while (this.escorting) await this.pause(200)
+
+    if (!inHouse(this.pos) && !same(this.pos, HOUSE.door)) {
+      lockedOut(false)
+
+      return
+    }
+
+    this.escorting = true
+    await this.showPlayerOut()
+    lockedOut(true)
+    await this.guardGoesBack()
+    this.escorting = false
+  }
+
+  /** The guard leads the dog out of the house; the player can't move until they're outside. */
+  private async showPlayerOut() {
+    const player = this.player
+
+    if (!player) return
+
+    while (!this.mode.idle()) await this.pause(100)
+    this.mode.send({ type: 'GATE' })
+
+    const at = () => this.pos
+
+    const moveTo = (p: Partial<Point>) => {
+      this.pos = { ...this.pos, ...p }
+    }
+
+    const body: Body = {
+      get x() {
+        return at().x
+      },
+      set x(x: number) {
+        moveTo({ x })
+      },
+      get y() {
+        return at().y
+      },
+      set y(y: number) {
+        moveTo({ y })
+      },
+      sprite: player,
+    }
+
+    await this.showOut({
+      body,
+      name: 'you',
+      pronoun: 'you',
+      release: () => {},
+      stepping: (to) => {
+        this.dir =
+          DIRS.find((dir) => same(STEP[dir], { x: to.x - this.pos.x, y: to.y - this.pos.y })) ?? this.dir
+        player.anims.play(`walk-${this.dir}`, true)
+      },
+    })
+
+    player.anims.stop()
+    player.setFrame(DOG_FRAME[this.dir])
+    this.previous = this.pos
+    quest.progress({ x: this.pos.x, y: this.pos.y, dir: this.dir })
+    quest.setRegion(regionAt(this.pos))
+    this.mode.send({ type: 'GATE_DENIED' })
+  }
+
   /** The Captain appears on the path outside, comes in, says hello, and goes back to the guild in a while. */
   private async captainVisits(captain: NpcSprite) {
     this.captain = 'visiting'
@@ -1551,7 +1662,7 @@ export class KingdomScene extends Phaser.Scene {
       await this.walkBody(guard, step)
     }
 
-    if (this.near(HOUSE.door))
+    if (this.near(HOUSE.door) && intruder.pronoun !== 'you')
       quest.toast(
         `A guard shows ${intruder.name} out. Your new door rules don't let ${intruder.pronoun} in.`,
         'allow',
@@ -1562,6 +1673,7 @@ export class KingdomScene extends Phaser.Scene {
       await this.waitUntilFree(step)
       const behind = { x: guard.x, y: guard.y }
 
+      intruder.stepping?.(behind)
       await Promise.all([this.walkBody(guard, step), this.walkBody(body, behind)])
     }
 

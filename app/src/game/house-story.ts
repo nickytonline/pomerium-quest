@@ -3,9 +3,9 @@
 // door rules, and the explanations below come from the same rules.
 import { houseStatus, knockAs, knockYourself, openHouse, saveHouse } from './access.ts'
 import { LESSONS, LETTERS, link, type Caller, type LessonId, type Letter } from './content.ts'
-import { VISITORS, type HouseRule, type HouseState, type VisitorId } from './house.ts'
+import { VISITOR_IDS, VISITORS, type HouseRule, type HouseState, type VisitorId } from './house.ts'
 import { houseStage, type LetterStage } from './house-machine.ts'
-import { policyYaml, type Identity } from './ppl.ts'
+import { decide, policyYaml, type Identity } from './ppl.ts'
 import { sfx } from './sound.ts'
 import { ANONYMOUS, quest } from './store.ts'
 
@@ -246,6 +246,68 @@ export async function visitorWelcome(who: VisitorId): Promise<boolean> {
 
 export const travelerWelcome = () => visitorWelcome('traveler')
 
+/**
+ * Whether Pomerium turns the player away from their own door: a real knock with their own session. Only
+ * a 403 counts, so a lost session or a builders' hiccup never locks them out.
+ */
+export async function youRefused(): Promise<boolean> {
+  let { house } = quest.get()
+
+  if (!rules()) return false
+
+  if (!house) {
+    const built = await openHouse(rules())
+
+    if (!built.ok) return false
+    quest.setHouse(built.value)
+    house = built.value
+  }
+
+  return (await knock('you', 'GET', house)).status === 403
+}
+
+/** Who the door rules let in, of the folk the player knows, as the explainer reads them. */
+function welcomeNow() {
+  const policy = rules() ?? []
+
+  const lets = (who: VisitorId | 'slime') =>
+    decide({ policy }, identityOf(who), { method: 'GET', path: '/' }, 'their').allow
+
+  const names = VISITOR_IDS.filter(lets).map((id) => `${VISITORS[id].name} (${VISITORS[id].email})`)
+
+  if (lets('slime')) names.push('slimes with no session at all')
+
+  if (names.length === 0) return 'Right now they let in no one at all.'
+
+  const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names.join('')
+
+  return `Right now they let in ${list}, but not you.`
+}
+
+/**
+ * The player's own door turned them away: whoever tells them (a guard showing them out, or the door
+ * itself) says who it lets in now, then the desk opens so they can fix it from the doorstep.
+ */
+export function lockedOut(shownOut: boolean) {
+  const who = shownOut ? 'Guard' : 'Your door'
+
+  const first = shownOut
+    ? "Sorry, I know it's your house. But your new door rules don't let you in, so out you go."
+    : "Your door won't open for you. Your door rules don't let you in."
+
+  quest.say(
+    [
+      { who, text: `${first} ${welcomeNow()}` },
+      {
+        who,
+        text: "Pomerium doesn't know whose house this is. It checks each request against the route's rules, and no allow rule matches you. Luckily the builders' office is a route of its own, so you can fix your door rules from right here.",
+        links: [link('writePolicy')],
+      },
+    ],
+    () => quest.openHouseEditor(),
+  )
+}
+
 /** What one visit should have done but didn't, as the house tells it. */
 function missed(result: Visit & { readonly wanted: boolean }) {
   const visit = result.method === 'POST' ? ' knocking (a POST)' : ''
@@ -276,6 +338,10 @@ async function checkLetter() {
   if (currentLetter() !== letter || quest.get().house?.version !== house.version) return
 
   const wrong = results.filter((result) => (result.status === 200) !== result.wanted)
+
+  // The player's own door turned them away: the house tells them that story instead (lockedOut).
+  if (results.some((result) => result.who === 'you' && result.status === 403) && quest.get().house?.live)
+    return
   const usesDeny = rules()?.some((rule) => rule.action === 'deny') ?? false
   const who = `Letter · ${letter.title}`
 
