@@ -417,6 +417,7 @@ allowed it.
 npm install
 npx vp check      # oxfmt + oxlint (with the vendored anti-slop rules) + type checks
 node art/sprites.mjs   # regenerate sprite sheets from the pixel grids in art/
+node art/og.ts         # redraw the repo's social preview (needs Chrome); upload it in Settings
 ```
 
 Node is pinned with [mise](https://mise.jdx.dev) (`mise.toml`). Lint and format run through
