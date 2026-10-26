@@ -1,7 +1,7 @@
 // The player's house: the deed, the letters, the desk, the bell and the visitors (docs/prd/your-house.md).
 // Every knock is a real request through Pomerium; the server writes the house's route from the player's
 // door rules, and the explanations below come from the same rules.
-import { knockAs, knockYourself, openHouse, saveHouse } from './access.ts'
+import { houseStatus, knockAs, knockYourself, openHouse, saveHouse } from './access.ts'
 import { LESSONS, LETTERS, link, type Caller, type LessonId, type Letter } from './content.ts'
 import { VISITORS, type HouseRule, type HouseState, type Knocker } from './house.ts'
 import { houseStage, type LetterStage } from './house-machine.ts'
@@ -169,10 +169,44 @@ export async function saveDoorRules(next: readonly HouseRule[]) {
   quest.progress({ houseRules: next })
   quest.setHouse(built.value)
   sfx('gateClose')
-  quest.toast('Your door has its new rules. Ring the bell to see who gets in.', 'allow')
   learn('writePolicy')
 
+  if (built.value.live) quest.toast(TOOK_HOLD, 'allow')
+  else {
+    quest.toast('Your rules are on the route. Waiting for Pomerium to take them up…', 'info')
+    void watchForPomerium(built.value.version)
+  }
+
   return built
+}
+
+const TOOK_HOLD = 'Pomerium is enforcing your new door rules. Ring the bell to see who gets in.'
+
+/** How often, and for how long, the game asks whether Pomerium has taken up a save yet. */
+const STATUS_EVERY_MS = 1_000
+const STATUS_FOR_MS = 3 * 60_000
+
+/** Asks the builders until Pomerium enforces this version of the rules, then says so. */
+async function watchForPomerium(version: string) {
+  for (let waited = 0; waited < STATUS_FOR_MS; waited += STATUS_EVERY_MS) {
+    await new Promise((resolve) => setTimeout(resolve, STATUS_EVERY_MS))
+    const status = await houseStatus()
+
+    // A newer save has its own watch.
+    if (status.ok && status.value.version !== version) return
+
+    if (status.ok && status.value.live) {
+      quest.setHouse(status.value)
+      quest.toast(TOOK_HOLD, 'allow')
+
+      return
+    }
+  }
+
+  quest.toast(
+    "Pomerium hasn't confirmed your new rules yet. Ring the bell: each knock waits for them.",
+    'info',
+  )
 }
 
 /** One knock, through Pomerium: the server knocks as a townsperson or slime; the player knocks as themselves. */

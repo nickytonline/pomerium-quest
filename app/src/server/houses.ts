@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, Schedule, Schema } from 'effect'
+import { Context, Effect, Layer, Option, Schedule, Schema } from 'effect'
 import { createHash } from 'node:crypto'
 import { HOUSE_LIMITS, HOUSE_PREFIX, HOUSE_VALUE, type HouseRule, type HouseState } from '../game/house.ts'
 import { policyDocument } from '../game/ppl.ts'
@@ -63,6 +63,9 @@ const EventList = Schema.Struct({
  */
 const PICKUP_MS = 25_000
 
+/** After a save has answered, how much longer to keep watching for Pomerium to take up the rules. */
+const WATCH_MS = 3 * 60_000
+
 const VersionHeader = Schema.fromJsonString(Schema.Struct({ 'X-House-Version': Schema.String }))
 
 const hash = (text: string) => createHash('sha256').update(text).digest('hex').slice(0, 12)
@@ -108,6 +111,10 @@ export const HousesLive = Layer.effect(
     // a fresh IDLE_MS.
     const lastVisited = new Map<string, number>()
     const startedAt = Date.now()
+
+    // Houses whose latest rules Pomerium hasn't taken up yet: the house's id, and the version waiting.
+    const pending = new Map<string, string>()
+    const live = (id: string, version: string) => pending.get(id) !== version
 
     const failed = ({ status, body }: KubeResponse) =>
       new KubeUnavailable({ reason: `Kubernetes answered ${status}: ${JSON.stringify(body).slice(0, 300)}` })
@@ -206,14 +213,26 @@ export const HousesLive = Layer.effect(
         )
 
         if (response.status !== 200 && response.status !== 201) return yield* failed(response)
+        pending.set(id, version)
 
-        // Wait until Pomerium enforces the new rules, so nobody knocks on the old ones.
-        yield* updates(id).pipe(
+        // Pomerium has the new rules once the controller records another update to the Ingress.
+        const pickedUp = updates(id).pipe(
           Effect.repeat({ schedule: Schedule.spaced('500 millis'), until: (count) => count > before }),
-          Effect.timeoutOption(PICKUP_MS),
+          Effect.tap(() =>
+            Effect.sync(() => {
+              if (pending.get(id) === version) pending.delete(id)
+            }),
+          ),
         )
 
-        return { id, path: `${HOUSE_PREFIX}/${id}/`, version }
+        // Wait a while, so nobody knocks on the old rules. If Pomerium is slower than that, answer anyway
+        // and keep watching in the background, so the game can say when the rules take hold.
+        const tookHold = yield* pickedUp.pipe(Effect.timeoutOption(PICKUP_MS))
+
+        if (Option.isNone(tookHold))
+          yield* pickedUp.pipe(Effect.timeoutOption(WATCH_MS), Effect.ignore, Effect.forkDetach)
+
+        return { id, path: `${HOUSE_PREFIX}/${id}/`, version, live: live(id, version) }
       })
 
     /** Puts up the house with these rules, unless it already stands with them. */
@@ -224,7 +243,8 @@ export const HousesLive = Layer.effect(
         const current = yield* standing(id)
         lastVisited.set(id, Date.now())
 
-        if (current === version) return { id, path: `${HOUSE_PREFIX}/${id}/`, version }
+        if (current === version)
+          return { id, path: `${HOUSE_PREFIX}/${id}/`, version, live: live(id, version) }
 
         // Houses already standing are always rebuilt; a new one waits once the limit is reached.
         if (current === null) {
@@ -281,7 +301,9 @@ export const HousesLive = Layer.effect(
         const version = yield* standing(id)
         lastVisited.set(id, Date.now())
 
-        return version === null ? null : { id, path: `${HOUSE_PREFIX}/${id}/`, version }
+        return version === null
+          ? null
+          : { id, path: `${HOUSE_PREFIX}/${id}/`, version, live: live(id, version) }
       })
 
     return { open: build, save, state, sweep }

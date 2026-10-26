@@ -122,6 +122,7 @@ export type Built<T> =
 /** What the Builders' Yard accepts: the door rules, or who should knock and how. */
 type BuilderRequest =
   | { readonly rules: readonly HouseRule[] | null }
+  | Record<string, never>
   | { readonly knocker: Knocker; readonly method: 'GET' | 'POST' }
 
 interface BuilderError {
@@ -158,6 +159,9 @@ async function builder<T>(action: string, body: BuilderRequest): Promise<Built<T
 
 export const openHouse = (rules: readonly HouseRule[] | null) => builder<HouseState>('open', { rules })
 export const saveHouse = (rules: readonly HouseRule[]) => builder<HouseState>('save', { rules })
+
+/** The house as it stands, and whether Pomerium has taken up its latest rules. */
+export const houseStatus = () => builder<HouseState>('status', {})
 
 export const knockAs = (knocker: Knocker, method: 'GET' | 'POST') =>
   builder<Knock>('knock', { knocker, method })

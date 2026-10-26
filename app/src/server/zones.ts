@@ -127,6 +127,14 @@ export const handleZone = (request: Request, splat: string) =>
         return json(200, yield* houses.save(player.email, rules))
       }
 
+      // Whether Pomerium has taken up the house's latest rules yet.
+      case 'POST builder/status': {
+        const houses = yield* Houses
+        const house = yield* houses.state(player.email)
+
+        return house ? json(200, house) : json(404, { error: 'no house is standing; open it first' })
+      }
+
       case 'POST builder/knock': {
         const houses = yield* Houses
         const visitors = yield* Visitors

@@ -125,6 +125,14 @@ builder_status() {
 field() { node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{console.log(JSON.parse(s)[process.argv[1]])}catch{console.log("")}})' "$1"; }
 knock() { builder "$1" knock "{\"knocker\":\"$2\",\"method\":\"${3:-GET}\"}" | field status; }
 rules() { printf '{"rules":%s}' "$1"; }
+# Asks the builders once a second until Pomerium has taken up the house's latest rules; prints true or false.
+live_within() {
+  for _ in $(seq 1 "$2"); do
+    [ "$(builder "$1" status '{}' | field live)" = true ] && { echo true; return; }
+    sleep 1
+  done
+  echo false
+}
 email_is() { printf '{"kind":"email","is":"%s"}' "$1"; }
 
 owner="house-${RUN}@${KINGDOM}"
@@ -142,6 +150,7 @@ check "letter 1: save you or the traveler" 200 "$(builder_status "$home" save "$
 check "letter 1: the slime is turned away" 401 "$(knock "$home" slime)"
 check "letter 1: the traveler is let in" 200 "$(knock "$home" traveler)"
 check "letter 1: you are let in" 200 "$(status "$home" "${path}knock")"
+check "the builders say Pomerium has taken up the rules" true "$(live_within "$home" 60)"
 check "saving again straight away waits for the builders" 503 "$(builder_status "$home" save "$first")"
 sleep 11
 
@@ -186,6 +195,14 @@ check "a neighbor's house is their own, whatever they claim" yes "$([ -n "$neigh
 check "the neighbor's public house doesn't open yours" 401 \
   "$(curl -s -o /dev/null -w '%{http_code}' -H "$JSON" "${GAME}${path}knock")"
 check "only citizens reach the Builders' Yard" 401 "$(builder_status "$anon" open '{"rules":null}')"
+
+# Last of the saves, since it leaves the house open to anyone.
+sleep 11
+anyone="$(rules '[{"action":"allow","match":"or","criteria":[{"kind":"accept"}]}]')"
+check "accept: save a door open to anyone" 200 "$(builder_status "$home" save "$anyone")"
+accept_knock="$(builder "$home" knock "{\"knocker\":\"slime\",\"method\":\"GET\"}")"
+check "accept: a slime (no session) is let in" 200 "$(printf "%s" "$accept_knock" | field status)"
+[ "$(printf "%s" "$accept_knock" | field status)" = 200 ] || echo "    knock answered: $accept_knock"
 
 echo "Idle houses"
 house_id="$(printf '%s' "$path" | cut -d/ -f4)"

@@ -65,4 +65,6 @@ export type HouseState = {
   readonly path: string
   /** A short hash of the rules, or "public" before the first save. */
   readonly version: string
+  /** Whether Pomerium is enforcing this version yet: it takes up a change a little after it's saved. */
+  readonly live: boolean
 }
