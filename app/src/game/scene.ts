@@ -137,9 +137,9 @@ const TRAVELER = {
   stepMs: 300,
   /** Roaming, a pause of between one and two of these before each step. */
   roamMs: 900,
-  /** The first visit comes soon after the game starts; later ones about this far apart. */
+  /** The first visit comes soon after the game starts; after that, one a minute, counted from setting out. */
   firstVisitMs: 15_000,
-  visitMs: 45_000,
+  visitMs: 60_000,
   eatMs: 9_000,
   biteMs: 1_200,
   /** How many times a blocked step is tried again before the traveler finds another way. */
@@ -1187,11 +1187,10 @@ export class KingdomScene extends Phaser.Scene {
     plan.nextMoveAt = time + (plan.plan === 'roam' ? TRAVELER.roamMs * (1 + Math.random()) : 0)
 
     // The house has to be up as a route before there's a door to knock on.
-    if (plan.plan === 'roam' && time >= plan.nextVisitAt && houseStage() !== 'unowned' && quest.get().house)
-      this.planTraveler(
-        'visit',
-        this.pathFor(traveler, (p) => same(p, HOUSE.doorstep)),
-      )
+    if (plan.plan === 'roam' && time >= plan.nextVisitAt && houseStage() !== 'unowned' && quest.get().house) {
+      plan.nextVisitAt = time + TRAVELER.visitMs
+      this.planTraveler('visit', this.pathFor(traveler, isDoorstep))
+    }
 
     if (plan.plan === 'roam') {
       this.roam(traveler)
@@ -1251,12 +1250,7 @@ export class KingdomScene extends Phaser.Scene {
     // Nowhere to sit: they leave rather than stand in the player's way.
     else if (plan.plan === 'enter')
       this.planTraveler('leave', this.pathFor(traveler, isDoorstep, { throughDoor }))
-    else if (plan.plan === 'visit') this.giveUpVisit(time)
-  }
-
-  private giveUpVisit(time: number) {
-    this.planTraveler('roam')
-    this.traveler.nextVisitAt = time + TRAVELER.visitMs * (0.75 + Math.random() / 2)
+    else if (plan.plan === 'visit') this.planTraveler('roam')
   }
 
   private travelerArrived(time: number) {
@@ -1270,7 +1264,7 @@ export class KingdomScene extends Phaser.Scene {
       this.traveler.nextBiteAt = time
     }
 
-    if (plan === 'leave') this.giveUpVisit(time)
+    if (plan === 'leave') this.planTraveler('roam')
   }
 
   /** On the doorstep, the traveler knocks: Pomerium decides whether they come in. */
@@ -1287,7 +1281,7 @@ export class KingdomScene extends Phaser.Scene {
       return
     }
 
-    this.giveUpVisit(this.time.now)
+    this.planTraveler('roam')
 
     if (this.near(HOUSE.door))
       quest.toast(
