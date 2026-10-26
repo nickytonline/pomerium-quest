@@ -1254,10 +1254,6 @@ function GearPanel() {
           <span className={panelMuted}>{steel ? 'breaks rock' : 'starter'}</span>
         </li>
         <li>
-          <span>Wooden shield</span>
-          <span className={panelMuted}>starter</span>
-        </li>
-        <li>
           <span>Bot slimes defeated</span>
           <span className="tabular-nums">
             {defeated.bot}
