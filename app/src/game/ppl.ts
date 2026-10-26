@@ -142,15 +142,6 @@ export function decide(zone: Policed, id: Identity, req: RequestInfo, whose: Vie
   return { allow: matched('allow') && !matched('deny'), lines: rules.flatMap((rule) => rule.lines) }
 }
 
-/** For each allow rule in order, the criteria the request fails, labelled as on the denial screen. */
-export function failedChecks(zone: Policed, id: Identity, req: RequestInfo): string[][] {
-  return zone.policy
-    .filter((rule) => rule.action === 'allow')
-    .map((rule) =>
-      rule.criteria.filter((criterion) => !check(criterion, id, req, 'your').ok).map(criterionLabel),
-    )
-}
-
 /** A criterion as the structure Pomerium reads; JSON is YAML, so it can go straight into a config. */
 function criterionDocument(node: Criterion) {
   switch (node.kind) {

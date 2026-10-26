@@ -3,11 +3,8 @@ import type { Knocker } from './house.ts'
 import type { LetterStage } from './house-machine.ts'
 import { KINGDOM_DOMAIN, type ZoneId } from './zones.ts'
 
-/** Every gate has a sign. Most are named for their zone; the scriptorium's door is the library's second rule. */
-export type SignId = ZoneId | 'scriptorium'
-
-/** A sign's heading, where it isn't its zone's name. */
-export const SIGN_NAME: Partial<Record<SignId, string>> = { scriptorium: 'Scriptorium' }
+/** Every gate has a sign, named for the zone whose route it guards. */
+export type SignId = ZoneId
 
 const DOCS = 'https://www.pomerium.com/docs'
 
@@ -129,9 +126,9 @@ export const SIGN_TEXT: Partial<Record<SignId, string>> = {
   guild: "The Knights' Guild hall. Any citizen may enter.",
   armory: 'Only knights. The guard reads the groups claim your identity provider put in your session.',
   library:
-    'Two allow rules on one route, shown below. Pomerium allows a request when any one of them matches. This guard asks with a GET to let readers in; the guard at the scriptorium asks with a POST to let writers in.',
+    "The Royal Library. Citizens may read here, and that's all: the rule below checks the request's method as well as who sent it, so it allows a GET and nothing else.",
   scriptorium:
-    "The scriptorium, where the Royal Ledger is written. Going in means writing, so this guard asks the library's route with a POST. Read each rule below as if the request were a POST, and see which ones could still match.",
+    "The scriptorium, where the Royal Ledger is written. Its path is inside the library's, but it's a route of its own with its own policy. Pomerium picks the route whose path matches most closely, so the library's rule doesn't apply here: only scribes may enter.",
   keep: 'The Royal Keep. One rule, three checks: a citizen who is both a knight and a scholar. In an and rule, every check must pass.',
 }
 
@@ -150,8 +147,11 @@ export const SIGN_DOCS: Partial<Record<SignId, readonly DocLink[]>> = {
   town: [{ label: 'The domain criterion', href: `${DOCS}/internals/ppl#supported-ppl-criteria` }],
   guild: [link('route')],
   armory: [link('claims'), link('refresh')],
-  library: [link('request'), { label: 'Path matching', href: `${DOCS}/reference/routes/path-matching` }],
-  scriptorium: [link('request'), link('defaultDeny')],
+  library: [link('request')],
+  scriptorium: [
+    { label: 'Path matching', href: `${DOCS}/reference/routes/path-matching` },
+    link('defaultDeny'),
+  ],
   keep: [link('allOf'), link('claims')],
 }
 

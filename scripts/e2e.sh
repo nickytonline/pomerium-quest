@@ -78,7 +78,9 @@ check "fields" 200 "$(status "$citizen" /zones/fields/enter)"
 check "town (domain is ${KINGDOM})" 200 "$(status "$citizen" /zones/town/enter)"
 check "armory without knights" 403 "$(status "$citizen" /zones/armory/enter)"
 check "library read (GET)" 200 "$(status "$citizen" /zones/library/books/0)"
-check "scriptorium door is a write (POST)" 403 "$(status "$citizen" /zones/library/ledger POST)"
+check "library refuses a write (POST)" 403 "$(status "$citizen" /zones/library/books/0 POST)"
+# The library's rule would allow this GET; a 403 means Pomerium matched the scriptorium's own route.
+check "scriptorium is its own route, scribes only" 403 "$(status "$citizen" /zones/library/scriptorium/enter)"
 
 echo "Knighthood"
 check "Captain knights the player" 200 "$(status "$citizen" /zones/guild/knight POST)"

@@ -99,8 +99,8 @@ export const same = (a: Point, b: Point) => a.x === b.x && a.y === b.y
 /** What a guard asks Pomerium: `method` on the path `action` under the zone's route. */
 export interface GateRequest {
   readonly zoneId: ZoneId
-  readonly method: 'GET' | 'POST'
-  readonly action: 'enter' | 'ledger'
+  readonly method: 'GET'
+  readonly action: 'enter'
 }
 
 /** A gate asks its zone's route to let the player in; its guard follows the rules on sign `signId`. */
@@ -324,10 +324,8 @@ export function buildWorld(): World {
 
   // Leaving through a gate puts the player back in the zone they passed to reach it, so its guard checks
   // that zone's rule again. The fields open onto Hearth Village, which no route guards.
-  // Most guards ask with a GET to /enter. Going into the scriptorium means writing in the ledger, so its
-  // guard asks with a POST to /ledger.
+  // Every guard asks with a GET to /enter.
   const enter = { method: 'GET', action: 'enter' } as const
-  const write = { method: 'POST', action: 'ledger' } as const
 
   const gates: Gate[] = [
     { x: 8, y: 17, zoneId: 'fields', signId: 'fields', ...enter },
@@ -335,7 +333,7 @@ export function buildWorld(): World {
     { x: 21, y: 7, zoneId: 'guild', signId: 'guild', ...enter, exitZoneId: 'town' },
     { x: 33, y: 7, zoneId: 'armory', signId: 'armory', ...enter, exitZoneId: 'town' },
     { x: 33, y: 20, zoneId: 'library', signId: 'library', ...enter, exitZoneId: 'town' },
-    { x: 29, y: 24, zoneId: 'library', signId: 'scriptorium', ...write, exitZoneId: 'library' },
+    { x: 29, y: 24, zoneId: 'scriptorium', signId: 'scriptorium', ...enter, exitZoneId: 'library' },
     { x: 21, y: 29, zoneId: 'keep', signId: 'keep', ...enter, exitZoneId: 'town' },
   ]
 

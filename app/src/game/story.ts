@@ -6,7 +6,6 @@ import {
   LESSONS,
   LESSON_ORDER,
   SIGN_DOCS,
-  SIGN_NAME,
   STALE_DOCS,
   SIGN_TEXT,
   link,
@@ -14,7 +13,7 @@ import {
   type Page,
   type SignId,
 } from './content.ts'
-import { decide, failedChecks, routeYaml, type Identity, type RequestInfo } from './ppl.ts'
+import { decide, routeYaml, type Identity } from './ppl.ts'
 import { VISITORS, type VisitorId } from './house.ts'
 import { houseStage } from './house-machine.ts'
 import { giveDeed } from './house-story.ts'
@@ -89,7 +88,7 @@ interface Refusal {
   readonly hint: string
 }
 
-function refusal(zone: Zone, req: RequestInfo, id: Identity): Refusal {
+function refusal(zone: Zone, id: Identity): Refusal {
   const citizensOnly = (place: string): Refusal => ({
     story: {
       title: 'Citizens only',
@@ -113,23 +112,18 @@ function refusal(zone: Zone, req: RequestInfo, id: Identity): Refusal {
       }
     case 'keep':
       return keepRefusal(id)
-    case 'library': {
-      const room = req.method === 'POST' ? 'The scriptorium' : 'The library'
-
-      if (domainOf(id) !== KINGDOM_DOMAIN || req.method === 'GET') return citizensOnly(room)
-
-      const fails = failedChecks(zone, id, req)
-        .map((failed, i) => `rule ${i + 1} fails ${failed.join(' and ')}`)
-        .join('; ')
+    case 'library':
+      return citizensOnly('The library')
+    case 'scriptorium':
+      if (domainOf(id) !== KINGDOM_DOMAIN) return citizensOnly('The scriptorium')
 
       return {
         story: {
           title: 'Scribes only',
-          text: 'The scriptorium guard bars the door. "This room is for writing in the Royal Ledger, and my orders say only scribes may write. Your papers say you may read, not write."',
+          text: 'The scriptorium guard bars the door. "This room is for writing in the Royal Ledger, and my orders say only scribes may come in. Your papers say you may read, not write."',
         },
-        hint: `Going in to write is a POST to the library's route. Against a POST, ${fails}. No rule matched, so Pomerium denied it. This denial is the lesson.`,
+        hint: `The scriptorium's path, ${zone.prefix}, is inside the library's, so Pomerium matched this more specific route and checked its policy instead. Its only rule needs claim/groups: scribes, and the groups claim in your session doesn't include scribes. No rule matched, so Pomerium denied it. This denial is the lesson.`,
       }
-    }
 
     default:
       return {
@@ -198,7 +192,7 @@ function denyView(
               },
         hint: 'Try again in a moment. Once the cached copy expires, Pomerium reads your updated user record and the guard lets you through.',
       }
-    : refusal(zone, { method, path }, id)
+    : refusal(zone, id)
 
   return {
     status: 403,
@@ -250,7 +244,7 @@ async function attempt(
 }
 
 /**
- * Asks a gate's route to let the player through: a GET to enter, or for the scriptorium a POST to write.
+ * Asks a gate's route to let the player through with a GET to enter.
  * Leaving with no session at all means the game lost it, so the caller restarts the player instead.
  */
 export async function enterGate(
@@ -277,7 +271,7 @@ export async function enterGate(
 }
 
 const signPage = (signId: SignId, zone: Zone): Page => ({
-  who: `Sign · ${SIGN_NAME[signId] ?? zone.name}`,
+  who: `Sign · ${zone.name}`,
   text: SIGN_TEXT[signId] ?? '',
   code: routeYaml(zone, location.host, UPSTREAM),
   links: SIGN_DOCS[signId] ?? [],
@@ -630,8 +624,12 @@ const LIBRARIAN_INTRO: Page[] = [
   },
   {
     who: 'Librarian',
-    text: "The Royal Ledger is next door, in the scriptorium, and that room has a guard of its own. Going in means writing, so that guard asks Pomerium with a POST, and the library's rules only let scribes do that. Go ahead and try: the denial will show you which rule failed.",
+    text: "My shelves are for reading only. The library's rule lets citizens send a GET, which reads, and nothing else. A rule can check the request itself, not just who sent it.",
     links: [link('request')],
+  },
+  {
+    who: 'Librarian',
+    text: "The Royal Ledger is next door, in the scriptorium. Its path is inside the library's, but it's a route of its own, with a guard who follows its own rule: scribes only. Go ahead and try: the denial will show you which rule failed.",
   },
   {
     who: 'Librarian',

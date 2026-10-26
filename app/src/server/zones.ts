@@ -72,17 +72,25 @@ const answerHouse = (request: Request, id: string) => {
   )
 }
 
+/** The zone whose route Pomerium matched: the longest prefix, so the scriptorium wins over the library. */
+const zoneAt = (path: string) =>
+  ZONES.filter((zone) => path === zone.prefix || path.startsWith(`${zone.prefix}/`)).sort(
+    (a, b) => b.prefix.length - a.prefix.length,
+  )[0]
+
 export const handleZone = (request: Request, splat: string) =>
   Effect.gen(function* () {
     const config = yield* QuestConfig
     const [zoneId = '', ...rest] = splat.split('/')
-    const action = rest.join('/')
-    const zone = ZONES.find((candidate) => candidate.id === zoneId)
 
     // Houses aren't in ZONES: each is a route the player wrote (see houses.ts).
     if (zoneId === 'home') return yield* answerHouse(request, rest[0] ?? '')
 
+    const zone = zoneAt(`/zones/${splat}`)
+
     if (!zone) return json(404, { error: 'unknown zone', path: splat })
+
+    const action = `/zones/${splat}`.slice(zone.prefix.length + 1)
 
     const player = yield* currentPlayer(request)
     const verifiedBy = 'pomerium-jwt'
@@ -146,8 +154,6 @@ export const handleZone = (request: Request, splat: string) =>
         return json(200, yield* visitors.knock(house.path, knocker, method, house.version))
       }
 
-      case 'POST library/ledger':
-        return json(200, { written: true, verifiedBy })
       default:
         return json(200, {
           zone: zone.id,

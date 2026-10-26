@@ -29,7 +29,16 @@ export interface PolicyRule {
 
 export type ClaimName = 'groups' | 'email'
 
-export type ZoneId = 'oracle' | 'fields' | 'town' | 'guild' | 'armory' | 'library' | 'keep' | 'builder'
+export type ZoneId =
+  | 'oracle'
+  | 'fields'
+  | 'town'
+  | 'guild'
+  | 'armory'
+  | 'scriptorium'
+  | 'library'
+  | 'keep'
+  | 'builder'
 
 export interface Zone {
   readonly id: ZoneId
@@ -62,12 +71,20 @@ export const ZONES: readonly Zone[] = [
   { id: 'town', name: 'Town Gate', prefix: '/zones/town', policy: [all(citizen)] },
   { id: 'guild', name: "Knights' Guild", prefix: '/zones/guild', policy: [all(citizen)] },
   { id: 'armory', name: 'Armory', prefix: '/zones/armory', policy: [all(inGroup('knights'))] },
+  // The scriptorium's path sits inside the library's, so its route is the more specific match and Pomerium
+  // checks its policy instead of the library's.
+  {
+    id: 'scriptorium',
+    name: 'Scriptorium',
+    prefix: '/zones/library/scriptorium',
+    policy: [all(citizen, inGroup('scribes'))],
+  },
+  // Citizens may read (GET) and nothing more.
   {
     id: 'library',
     name: 'Royal Library',
     prefix: '/zones/library',
-    // Citizens may read (GET); scribes may also write (POST). Each rule has its own guard in the game.
-    policy: [all(citizen, { kind: 'http_method', is: 'GET' }), all(citizen, inGroup('scribes'))],
+    policy: [all(citizen, { kind: 'http_method', is: 'GET' })],
   },
   // Where players save their own house's door rules (docs/prd/your-house.md). The game server only ever
   // writes the house of the player Pomerium signed in.
