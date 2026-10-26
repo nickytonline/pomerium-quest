@@ -28,6 +28,9 @@ const ANY_TOUCH = '(any-pointer: coarse)'
 
 const STAGE_LABEL: Record<QuestStage, string> = {
   anonymous: 'Anonymous',
+  newcomer: 'Newcomer',
+  invited: 'Invited',
+  granted: 'Citizen (stale claims)',
   citizen: 'Citizen',
   proven: 'Proven',
   knighted: 'Knighted (stale claims)',

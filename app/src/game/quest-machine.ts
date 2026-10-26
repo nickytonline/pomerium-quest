@@ -1,7 +1,11 @@
 // Chapter one's progression as a statechart. Each state is a step in how the player's
 // identity changes, which is what the chapter teaches:
 //
-//   anonymous → citizen → proven → knighted → knight → armed
+//   anonymous → newcomer → invited → granted → citizen → proven → knighted → knight → armed
+//
+// A newcomer is signed in but isn't a citizen yet: the sage tells them they're entitled to citizenship and
+// a house, and the Oracle grants both. Like `knighted`, `granted` is a stale session: the Oracle has put
+// the player in the citizen group, but their Pomerium session still holds the claims from sign-in.
 //
 // `knighted` is the important one: the Oracle (identity provider) now lists the player
 // in the knights group, but their Pomerium session still holds the claims from sign-in,
@@ -23,6 +27,8 @@ export const isProven = (defeated: Defeated) => MONSTER_KINDS.every((kind) => de
 export type QuestEvent =
   | { readonly type: 'SIGNED_IN'; readonly groups: readonly string[] }
   | { readonly type: 'SIGNED_OUT' }
+  | { readonly type: 'SAGE_SPOKE' }
+  | { readonly type: 'CITIZEN_GRANTED' }
   | { readonly type: 'MONSTER_DEFEATED'; readonly kind: MonsterKind }
   | { readonly type: 'KNIGHTED' }
   | { readonly type: 'STEEL_TAKEN' }
@@ -40,6 +46,8 @@ export const questMachine = setup({
   },
   guards: {
     proven: ({ context }) => isProven(context.defeated),
+    hasCitizenClaim: ({ event }) => event.type === 'SIGNED_IN' && event.groups.includes('citizen'),
+    lacksCitizenClaim: ({ event }) => event.type === 'SIGNED_IN' && !event.groups.includes('citizen'),
     hasKnightsClaim: ({ event }) => event.type === 'SIGNED_IN' && event.groups.includes('knights'),
   },
 }).createMachine({
@@ -59,12 +67,45 @@ export const questMachine = setup({
   states: {
     anonymous: {
       description: 'No session. Every guard sends you to the identity provider.',
-      on: { SIGNED_IN: 'citizen' },
+      on: {
+        SIGNED_IN: [
+          { guard: 'hasCitizenClaim', target: 'citizen' },
+          { guard: 'lacksCitizenClaim', target: 'newcomer' },
+        ],
+      },
+    },
+    newcomer: {
+      description: 'Signed in, but the session has no citizen claim. The sage has news for you.',
+      on: {
+        SAGE_SPOKE: 'invited',
+        SIGNED_IN: { guard: 'hasCitizenClaim', target: 'citizen' },
+        SIGNED_OUT: 'anonymous',
+      },
+    },
+    invited: {
+      description:
+        'The sage told you that you are entitled to citizenship and a house. The Oracle grants them.',
+      on: {
+        CITIZEN_GRANTED: 'granted',
+        SIGNED_IN: { guard: 'hasCitizenClaim', target: 'citizen' },
+        SIGNED_OUT: 'anonymous',
+      },
+    },
+    granted: {
+      description: "The identity provider lists 'citizen', but the Pomerium session holds older claims.",
+      on: {
+        SIGNED_IN: { guard: 'hasCitizenClaim', target: 'citizen' },
+        SIGNED_OUT: 'anonymous',
+      },
     },
     citizen: {
       description: 'Signed in with the citizen claim; no other groups yet.',
       always: { guard: 'proven', target: 'proven' },
-      on: { SIGNED_OUT: 'anonymous' },
+      on: {
+        // A session from before citizens were a claim: the Oracle grants it the next time they visit.
+        SIGNED_IN: { guard: 'lacksCitizenClaim', target: 'invited' },
+        SIGNED_OUT: 'anonymous',
+      },
     },
     proven: {
       description: 'Has defeated enough bot slimes for the Captain to vouch for them.',
@@ -140,7 +181,17 @@ export const defeated = () => questActor.getSnapshot().context.defeated
 export const hasSteel = () => stage() === 'armed'
 
 export const isAtLeast = (target: QuestStage) => {
-  const order: readonly QuestStage[] = ['anonymous', 'citizen', 'proven', 'knighted', 'knight', 'armed']
+  const order: readonly QuestStage[] = [
+    'anonymous',
+    'newcomer',
+    'invited',
+    'granted',
+    'citizen',
+    'proven',
+    'knighted',
+    'knight',
+    'armed',
+  ]
 
   return order.indexOf(stage()) >= order.indexOf(target)
 }

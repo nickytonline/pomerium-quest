@@ -59,16 +59,16 @@ export function houseRouteYaml(house: HouseState | null, saved: readonly HouseRu
   ].join('\n')
 }
 
-/** What the Oracle says when he grants the deed: every citizen is entitled to a house outside the walls. */
-export const deedPages = (): Page[] => [
+/** What the Oracle says when he grants citizenship and the deed: every newcomer is entitled to both. */
+export const citizenshipPages = (): Page[] => [
   {
     who: 'Oracle',
-    text: 'One more thing. Every citizen of the kingdom is entitled to a house outside the walls. Yours is in the Slime Fields, just below the pond. I have added its deed to your claims.',
+    text: 'The sage told you. Every newcomer is entitled to be a citizen, and a citizen to a house outside the walls. Yours is in the Slime Fields, just below the pond. I have added two claims to your papers: the group citizen, and the deed to your house.',
     links: [link('claims')],
   },
   {
     who: 'Oracle',
-    text: 'Its door is a Pomerium route like every gate in the kingdom, but you write its rules, and whoever holds the deed always gets in. The builders left it wide open, with allow_public_unauthenticated_access: everyone gets in, even with no session at all. I hear the slimes have noticed.',
+    text: 'The guards in town check for citizen. Your house door is a Pomerium route like every gate in the kingdom, but you write its rules, and whoever holds the deed always gets in. The builders left it wide open, with allow_public_unauthenticated_access: everyone gets in, even with no session at all. I hear the slimes have noticed.',
     links: [link('publicRoute')],
   },
 ]

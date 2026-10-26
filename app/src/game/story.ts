@@ -15,8 +15,7 @@ import {
 } from './content.ts'
 import { decide, routeYaml, type Identity } from './ppl.ts'
 import { VISITORS, type VisitorId } from './house.ts'
-import { houseStage } from './house-machine.ts'
-import { addDeed, deedClaim, deedPages } from './house-story.ts'
+import { addDeed, deedClaim, citizenshipPages } from './house-story.ts'
 import { KNIGHT_QUOTA, hasSteel, isAtLeast, stage, type QuestStage } from './quest-machine.ts'
 import { sfx } from './sound.ts'
 import { MAX_HP, quest, type DenyView, type LogEntry } from './store.ts'
@@ -305,15 +304,20 @@ function signInWithPomerium(url: string, onSignedIn: (next: Identity) => void, o
   )
 }
 
-/** The Oracle grants the deed to a citizen's house, then signs them in again so their session carries it. */
-const grantDeed = (before: Page[] = []) =>
+/** What the Oracle says to a newcomer who has signed in: the sage has news. */
+const SAGE_HINT: Page = {
+  who: 'Oracle',
+  text: 'Before you go anywhere, speak with the sage. They have news for you.',
+}
+
+/** The Oracle makes an invited newcomer a citizen and grants their deed, then signs them in again to carry both. */
+const grantCitizenship = () =>
   quest.say(
     [
-      ...before,
-      ...deedPages(),
+      ...citizenshipPages(),
       {
         who: 'Oracle',
-        text: 'Your session still holds the claims I gave you a moment ago, so let me sign you in again. Then it will carry your deed.',
+        text: 'Your session still holds the claims I gave you at sign-in, so let me sign you in again. Then it will carry them.',
         links: [link('refresh')],
       },
     ],
@@ -321,15 +325,22 @@ const grantDeed = (before: Page[] = []) =>
       learn('refresh')
 
       void addDeed().then((added) => {
-        if (added) refreshClaims(() => {})
-        else quest.toast("The Oracle couldn't add your deed. Talk to him again.", 'deny')
+        if (!added) {
+          quest.toast("The Oracle couldn't grant your claims. Talk to him again.", 'deny')
+
+          return
+        }
+
+        quest.send({ type: 'CITIZEN_GRANTED' })
+        refreshClaims(() => {})
       })
     },
   )
 
 const welcome = (next: Identity) =>
-  grantDeed([
+  quest.say([
     { who: 'Oracle', text: `There. You are ${next.email}. Here are your claims.`, code: claimsCode(next) },
+    ...(stage() === 'newcomer' ? [SAGE_HINT] : []),
   ])
 
 const welcomeBack = (next: Identity, onDone?: () => void) =>
@@ -347,6 +358,8 @@ const welcomeBack = (next: Identity, onDone?: () => void) =>
 /** Groups the Captain or the Librarian asked the Oracle to add, whether or not the session has them yet. */
 function vouchedGroups() {
   const vouched: string[] = []
+
+  if (isAtLeast('granted')) vouched.push('citizen')
 
   if (isAtLeast('knighted')) vouched.push('knights')
 
@@ -423,9 +436,15 @@ function oracle() {
     return
   }
 
-  // Players who signed in before the Oracle granted deeds get theirs the next time they visit.
-  if (houseStage() === 'unowned') {
-    grantDeed()
+  // The sage tells a newcomer they're entitled to citizenship and a house; the Oracle grants both after that.
+  if (stage() === 'newcomer') {
+    quest.say([SAGE_HINT])
+
+    return
+  }
+
+  if (stage() === 'invited') {
+    grantCitizenship()
 
     return
   }
@@ -582,19 +601,66 @@ function baker() {
   )
 }
 
-const SCRIPTS: Record<NpcId, () => void> = {
-  sage: () => {
-    if (identity().authenticated) {
+/** The sage once the player has signed in: a newcomer is told they're entitled to citizenship and a house. */
+function sageAfterSignIn() {
+  switch (stage()) {
+    case 'newcomer':
+      quest.say(
+        [
+          {
+            who: 'Sage',
+            text: "The Oracle knows who you are. That's not the same as being a citizen: the guards in town want to see it in your papers.",
+            links: [link('claims')],
+          },
+          {
+            who: 'Sage',
+            text: "You're about to become a citizen. And every citizen is entitled to a house outside the walls: an empty one in the Slime Fields, just below the pond.",
+          },
+          {
+            who: 'Sage',
+            text: 'Go and see the Oracle again. He will put two claims in your papers: a group called citizen, and the deed to your house.',
+          },
+        ],
+        () => quest.send({ type: 'SAGE_SPOKE' }),
+      )
+
+      return
+    case 'invited':
       quest.say([
         {
           who: 'Sage',
-          text: 'The Oracle vouches for you now. Head north through the Fields Gate. A guard stands at every gate, and the sign beside it shows the exact orders that guard follows.',
+          text: 'Go and see the Oracle, in his temple to the west. He will put your citizen group and the deed to your house in your papers.',
+        },
+      ])
+
+      return
+    case 'granted':
+      quest.say([
+        {
+          who: 'Sage',
+          text: 'The Oracle has made you a citizen, but your papers still show the old claims. Visit him once more, and he will sign you in again.',
+        },
+      ])
+
+      return
+    default:
+      quest.say([
+        {
+          who: 'Sage',
+          text: 'Head north through the Fields Gate. A guard stands at every gate, and the sign beside it shows the exact orders that guard follows.',
         },
         {
           who: 'Sage',
           text: 'Your house stands out in the Slime Fields, just below the pond. Nobody guards it but its own door rules, and the slimes have noticed.',
         },
       ])
+  }
+}
+
+const SCRIPTS: Record<NpcId, () => void> = {
+  sage: () => {
+    if (identity().authenticated) {
+      sageAfterSignIn()
 
       return
     }
@@ -638,6 +704,9 @@ const SCRIPTS: Record<NpcId, () => void> = {
     // The Armorer keeps the forge; the guard decides. Each stage gets a line about what the guard sees.
     const lines: Record<QuestStage, string> = {
       anonymous: armorerIntro,
+      newcomer: armorerIntro,
+      invited: armorerIntro,
+      granted: armorerIntro,
       citizen: armorerIntro,
       proven: `${armorerIntro} The Captain can vouch for you.`,
       knighted:

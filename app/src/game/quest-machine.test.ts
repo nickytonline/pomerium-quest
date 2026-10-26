@@ -12,19 +12,49 @@ const beatSlimes = (actor: ReturnType<typeof start>, count: number) => {
 const toProven = () => {
   const actor = start()
 
-  actor.send({ type: 'SIGNED_IN', groups: [] })
+  actor.send({ type: 'SIGNED_IN', groups: ['citizen'] })
   beatSlimes(actor, KNIGHT_QUOTA)
 
   return actor
 }
 
 describe("chapter one's quest", () => {
-  it('starts anonymous and becomes a citizen on sign-in', () => {
+  it('starts anonymous and becomes a citizen on sign-in with the citizen claim', () => {
     const actor = start()
 
     expect(actor.getSnapshot().value).toBe('anonymous')
-    actor.send({ type: 'SIGNED_IN', groups: [] })
+    actor.send({ type: 'SIGNED_IN', groups: ['citizen'] })
     expect(actor.getSnapshot().value).toBe('citizen')
+  })
+
+  it('makes a newcomer a citizen only once a sign-in carries the claim the Oracle granted', () => {
+    const actor = start()
+
+    actor.send({ type: 'SIGNED_IN', groups: [] })
+    expect(actor.getSnapshot().value).toBe('newcomer')
+
+    actor.send({ type: 'SAGE_SPOKE' })
+    expect(actor.getSnapshot().value).toBe('invited')
+
+    actor.send({ type: 'CITIZEN_GRANTED' })
+    expect(actor.getSnapshot().value).toBe('granted')
+
+    // The session still holds the claims from sign-in.
+    actor.send({ type: 'SIGNED_IN', groups: [] })
+    expect(actor.getSnapshot().value).toBe('granted')
+
+    actor.send({ type: 'SIGNED_IN', groups: ['citizen', 'deed-3f9a1c2b7d4e'] })
+    expect(actor.getSnapshot().value).toBe('citizen')
+  })
+
+  it('sends a session from before citizens were a claim back to be granted it', () => {
+    const actor = toProven()
+    const old = start()
+
+    old.send({ type: 'SIGNED_IN', groups: ['citizen'] })
+    old.send({ type: 'SIGNED_IN', groups: [] })
+    expect(old.getSnapshot().value).toBe('invited')
+    expect(actor.getSnapshot().value).toBe('proven')
   })
 
   it('is proven only after the full quota of slimes, however they were counted before signing in', () => {
@@ -32,12 +62,12 @@ describe("chapter one's quest", () => {
 
     beatSlimes(actor, KNIGHT_QUOTA)
     expect(actor.getSnapshot().value).toBe('anonymous')
-    actor.send({ type: 'SIGNED_IN', groups: [] })
+    actor.send({ type: 'SIGNED_IN', groups: ['citizen'] })
     expect(actor.getSnapshot().value).toBe('proven')
 
     const short = start()
 
-    short.send({ type: 'SIGNED_IN', groups: [] })
+    short.send({ type: 'SIGNED_IN', groups: ['citizen'] })
     beatSlimes(short, KNIGHT_QUOTA - 1)
     expect(short.getSnapshot().value).toBe('citizen')
   })
