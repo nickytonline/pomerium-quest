@@ -773,13 +773,6 @@ export async function readBook(index: number) {
   })
 }
 
-export async function writeLedger() {
-  const outcome = await attempt(zoneById('library'), 'POST', 'ledger')
-
-  if (outcome.kind === 'allow')
-    quest.say([{ who: 'Royal Ledger', text: 'Your words are recorded. You must be a scribe.' }])
-}
-
 /** The town fountain restores half a heart per drink, up to two full hearts each game. */
 export const FOUNTAIN_LIMIT = 4
 

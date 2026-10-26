@@ -103,7 +103,6 @@ export interface World {
   readonly phish: readonly Point[]
   readonly rocks: readonly Point[]
   readonly chest: Point
-  readonly ledger: Point
   /** Top-left tile of the 2x2 fountain. */
   readonly fountain: Point
   readonly spawn: Point
@@ -302,8 +301,8 @@ export function buildWorld(): World {
   set(chest.x, chest.y, TILE.chest)
   set(31, 4, TILE.anvil)
   set(35, 3, TILE.workbench)
-  const ledger = { x: 26, y: 22 }
-  set(ledger.x, ledger.y, TILE.lectern)
+  // The Royal Ledger on its lectern. Getting past the scriptorium door is the write, so it's only scenery.
+  set(26, 22, TILE.lectern)
 
   return {
     tiles,
@@ -311,7 +310,6 @@ export function buildWorld(): World {
     signs,
     rocks,
     chest,
-    ledger,
     fountain,
     npcs: [
       { x: 12, y: 25, npcId: 'sage' },

@@ -17,7 +17,6 @@ import {
   readSign,
   readWorkbench,
   talk,
-  writeLedger,
 } from './story.ts'
 import {
   GUARD_FRAME,
@@ -678,8 +677,6 @@ export class KingdomScene extends Phaser.Scene {
     }
 
     if (tile === TILE.shelf) void readBook(target.x)
-
-    if (tile === TILE.lectern) void writeLedger()
 
     if (isFountain(tile)) drinkFromFountain()
 
