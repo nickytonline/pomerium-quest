@@ -530,6 +530,37 @@ const NPCS = {
       '................',
     ],
   },
+  // Stands in every gateway and lets you past only if the route's policy allows it: a steel kettle
+  // helmet, a spear, and a Pomerium-purple tabard with a gold key.
+  guard: {
+    palette: {
+      I: '#dfe7f1',
+      E: '#8d97a8',
+      F: '#e8b48a',
+      P: '#6d3fd0',
+      p: '#3a2280',
+      G: '#e9b44c',
+      C: '#2b2b45',
+    },
+    rows: [
+      '.............K..',
+      '.....KKKKK..KIK.',
+      '....KIIIEEK.KEK.',
+      '...KIIIIIEEK.D..',
+      '..KEEEEEEEEEKD..',
+      '...KFKFFFKFK.D..',
+      '...KFFFFFFFK.D..',
+      '....KFFKFFK..D..',
+      '...KPPKKKPPK.D..',
+      '..KPPPGGGPPPKFK.',
+      '..KPPPGpGPPPKD..',
+      '..KFPPPGPPPPKD..',
+      '...KPPPGGPPPKD..',
+      '...KCCCKKCCCKD..',
+      '...KKKK..KKKKD..',
+      '.............D..',
+    ],
+  },
 }
 
 // Frame order is load-bearing: see NPC_FRAME in app/src/game/world.ts.
@@ -613,7 +644,7 @@ sheet(
     ...dogCells.map((r) => [...r, null, null]),
     [SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, ...BOT_SLIME, ...FISH],
     npcs.slice(0, 5),
-    [npcs[5], npcs[6], npcs[7], ...tiles.slice(0, 2)],
+    [npcs[5], npcs[6], npcs[7], npcs[8], tiles[15]],
   ],
   { scale: 10, checker: true },
 )
