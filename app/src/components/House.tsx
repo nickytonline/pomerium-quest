@@ -1,6 +1,6 @@
 // The player's house (docs/prd/your-house.md): the desk where they write their door rules. The rules
 // become a real Pomerium route; nothing here decides access.
-import { useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { useEffect, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { LESSONS, link, type LessonId } from '../game/content.ts'
 import { HOUSE_LIMITS, HOUSE_VALUE, VISITORS, type HouseCriterion, type HouseRule } from '../game/house.ts'
 import { currentLetter, houseRouteYaml, saveDoorRules } from '../game/house-story.ts'
@@ -132,11 +132,22 @@ function Editor() {
     else setStatus(built.message)
   }
 
-  // The form keeps its keys: typing must not walk the dog or open the menu. Escape closes it.
-  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    event.stopPropagation()
+  // Escape closes the desk wherever focus is, even outside the form.
+  useEffect(() => {
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      quest.closeHouseEditor()
+    }
 
-    if (event.key === 'Escape') quest.closeHouseEditor()
+    window.addEventListener('keydown', onEscape)
+
+    return () => window.removeEventListener('keydown', onEscape)
+  }, [])
+
+  // The form keeps its other keys: typing must not walk the dog or open the menu.
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Escape') event.stopPropagation()
   }
 
   const actions = (
