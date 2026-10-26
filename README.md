@@ -19,7 +19,8 @@ Chapter one covers the fundamentals. (`kingdom.com` is the default citizens' dom
 | The town only admits `kingdom.com` citizens                    | The `domain` criterion                                                   |
 | The Captain makes you a knight; the armory checks it           | `claim/groups`, and claims coming from the IdP                           |
 | Being knighted doesn't open the armory until you sign in again | Your session holds the claims from sign-in until Pomerium refreshes it   |
-| Citizens may read the books; only scribes may enter to write   | Allow rules can check `http_method`                                      |
+| Citizens may read the books, but not write in them             | Allow rules can check `http_method`                                      |
+| Only scribes may enter the scriptorium inside the library      | A longer path can be its own route, with its own policy                  |
 | The access log and the denial screen                           | Every request is checked, and denied by default                          |
 | The game server knows who you are                              | Pomerium's signed `X-Pomerium-Jwt-Assertion` header, verified by the app |
 
@@ -111,7 +112,7 @@ steel sword splits the cracked rocks that block the road to the library.
 | ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | <img src="docs/images/steel-sword.gif" width="288" alt="A chest opens and the steel sword rises out of it"> | <img src="docs/images/break-rock.gif" width="336" alt="The dog splits two cracked rocks with the steel sword"> |
 
-From there, the library lets citizens read but only scribes write, the Librarian can make you a scholar,
+From there, the library lets citizens read but only scribes into its scriptorium, the Librarian can make you a scholar,
 and the Royal Keep at the end of the road wants a citizen who is a knight and a scholar at once.
 
 ### Write the rules on your own door
@@ -241,7 +242,8 @@ flowchart LR
       town["/zones/town/* · domain is kingdom.com"]
       guild["/zones/guild/* · domain is kingdom.com"]
       armory["/zones/armory/* · claim/groups: knights"]
-      library["/zones/library/* · citizen GET, or scribes"]
+      scriptorium["/zones/library/scriptorium/* · citizen, scribes"]
+      library["/zones/library/* · citizen, GET only"]
       keep["/zones/keep/* · citizen, knights and scholars"]
       builder["/zones/builder/* · domain is kingdom.com"]
       home["/zones/home/{id}/ · the rules each player wrote"]
@@ -255,7 +257,7 @@ flowchart LR
   end
 
   browser --> pomerium
-  oracleRoute & fields & town & guild & armory & library & keep & builder & home & shell --> quest
+  oracleRoute & fields & town & guild & armory & scriptorium & library & keep & builder & home & shell --> quest
   idpRoute --> keycloak
   pomerium -. "OIDC sign-in" .-> keycloak
   quest -- "adds you to knights or scholars" --> keycloak
@@ -287,7 +289,7 @@ sequenceDiagram
 
 1. The scene ([`scene.ts`](app/src/game/scene.ts)) hands the gate to [`story.ts`](app/src/game/story.ts),
    which asks [`access.ts`](app/src/game/access.ts) to make a real request through Pomerium:
-   `fetch('/zones/armory/enter')`, as a GET (or a POST, for the scriptorium's ledger).
+   `fetch('/zones/armory/enter')`, as a GET.
 2. Pomerium checks the request against that route's policy, using the claims in the player's session.
 3. If the policy allows it, Pomerium forwards the request to the game server with a signed
    `X-Pomerium-Jwt-Assertion` header. The server checks the signature against Pomerium's JWKS, and the
