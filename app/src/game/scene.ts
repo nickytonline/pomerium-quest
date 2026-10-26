@@ -444,6 +444,7 @@ export class KingdomScene extends Phaser.Scene {
         }
 
         this.setTile(target, TILE.gateOpen)
+        sfx('gateOpen')
         this.openGate = target
         this.walk(target)
       })
@@ -487,6 +488,7 @@ export class KingdomScene extends Phaser.Scene {
 
     if (this.openGate && !same(this.openGate, target)) {
       this.setTile(this.openGate, TILE.gateClosed)
+      sfx('gateClose')
       this.openGate = undefined
     }
 

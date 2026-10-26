@@ -26,6 +26,9 @@ export type Effect =
   | 'victory'
   | 'clang'
   | 'dialogOpen'
+  | 'gateOpen'
+  | 'gateClose'
+  | 'denied'
   | 'dialogNext'
   | 'smash'
 
@@ -375,6 +378,29 @@ const EFFECTS: Record<Effect, (mix: Mixer, out: AudioNode, at: number) => void> 
   },
   /** Turning to the next page of a text box: one soft tick. */
   dialogNext: (_mix, out, at) => tone(out, at, { wave: 'square', freq: hz('A5'), dur: 0.04, peak: 0.05 }),
+  /** Pomerium says yes: the gate swings open with a bright rising chord. */
+  gateOpen: (mix, out, at) => {
+    hiss(mix, out, at, { filter: 'lowpass', freq: 700, to: 300, attack: 0.06, dur: 0.35, peak: 0.25 })
+
+    for (const [i, name] of ['G4', 'C5', 'E5', 'G5'].entries())
+      tone(out, at + i * 0.06, { wave: 'triangle', freq: hz(name), dur: 0.22, peak: 0.2 })
+  },
+  /** The gate swinging shut behind the player: a soft wooden thud. */
+  gateClose: (mix, out, at) => {
+    tone(out, at, { wave: 'sine', freq: 120, to: 50, dur: 0.15, peak: 0.3 })
+    hiss(mix, out, at, { filter: 'lowpass', freq: 500, dur: 0.1, peak: 0.25 })
+  },
+  /** Pomerium says no: a gate that won't budge, then a low, sour two-part buzzer. */
+  denied: (mix, out, at) => {
+    hiss(mix, out, at, { filter: 'lowpass', freq: 400, dur: 0.12, peak: 0.4 })
+
+    for (const [start, dur] of [
+      [0.05, 0.12],
+      [0.22, 0.26],
+    ] as const)
+      for (const freq of [147, 156])
+        tone(out, at + start, { wave: 'square', freq, dur, peak: 0.07, hold: true })
+  },
   clang: (_mix, out, at) => {
     tone(out, at, { wave: 'square', freq: 1180, dur: 0.25, peak: 0.05 })
     tone(out, at, { wave: 'triangle', freq: 1770, dur: 0.3, peak: 0.12 })
@@ -532,6 +558,7 @@ function syncMusic() {
 }
 
 let shownDialog: QuestState['dialog'] = null
+let shownDeny: QuestState['deny'] = null
 
 /** Text boxes blip as they open and as each page turns, whoever opened them. */
 function syncDialog() {
@@ -542,6 +569,16 @@ function syncDialog() {
 
   if (!dialog || dialog === before) return
   sfx(before && before.pages === dialog.pages ? 'dialogNext' : 'dialogOpen')
+}
+
+/** The denial screen buzzes as it opens, whatever was refused: a gate, a book or the ledger. */
+function syncDeny() {
+  const { deny } = quest.get()
+  const before = shownDeny
+
+  shownDeny = deny
+
+  if (deny && !before) sfx('denied')
 }
 
 // ── Setup ───────────────────────────────────────────────────────────────────────────────────
@@ -599,6 +636,7 @@ export function startSound() {
   const unsubscribe = quest.subscribe(() => {
     syncMusic()
     syncDialog()
+    syncDeny()
   })
 
   return () => {
