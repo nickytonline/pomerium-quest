@@ -59,7 +59,7 @@ export const questMachine = setup({
   },
   states: {
     anonymous: {
-      description: 'No session. Every gate redirects to the identity provider.',
+      description: 'No session. Every guard sends you to the identity provider.',
       on: { SIGNED_IN: 'citizen' },
     },
     citizen: {

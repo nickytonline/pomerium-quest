@@ -222,7 +222,7 @@ function CastList({ hidden = false }: { readonly hidden?: boolean }) {
         </li>
       ))}
       <li className="pt-2 font-display text-[1.1rem] text-sun">And Pomerium</li>
-      <li className="text-muted">as every gate in the kingdom</li>
+      <li className="text-muted">as every guard in the kingdom</li>
     </ul>
   )
 }
@@ -290,7 +290,7 @@ function CelebrationScreen({ stats }: { readonly stats: string }) {
             The kingdom is secure!
           </h2>
           <p className="m-0 max-w-[48ch] text-muted">
-            Every gate checked you, every time, and you made it all the way to the Royal Keep.
+            Every guard checked you, every time, and you made it all the way to the Royal Keep.
           </p>
           <p className="m-0 font-display text-[0.9rem] text-lime">{stats}</p>
         </div>

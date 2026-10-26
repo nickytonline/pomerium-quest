@@ -1,4 +1,4 @@
-// What happens when the player talks, reads or walks into a gate. The scene handles
+// What happens when the player talks, reads or asks a guard to let them through a gate. The scene handles
 // movement and drawing; this module handles the conversation with Pomerium.
 import { probe, refreshClaimsUrl, requestZone, signInUrl, type Outcome } from './access.ts'
 import {
@@ -71,13 +71,16 @@ function keepRefusal(id: Identity): Refusal {
   return {
     story: {
       title: 'Knights who are scholars only',
-      text: `The Royal Keep admits only knights who are also scholars. You still need to be ${missing.join(', and ')}.`,
+      text: `The guard of the Royal Keep reads your papers twice. "My orders: only knights who are also scholars. You still need to be ${missing.join(', and ')}."`,
     },
     hint: `The keep's one rule needs domain: ${KINGDOM_DOMAIN}, claim/groups: knights and claim/groups: scholars. In an and rule every check must pass; the ✗ lines are the ones your session fails.`,
   }
 }
 
-/** Why a gate refused, told twice: as the kingdom sees it, and as Pomerium decided it. */
+/**
+ * Why a guard refused, told twice: as the kingdom sees it, and as Pomerium decided it. In the kingdom the
+ * policy is the guard's orders and the session is the papers the player carries.
+ */
 interface Refusal {
   readonly story: DenyView['story']
   readonly hint: string
@@ -87,7 +90,7 @@ function refusal(zone: Zone, method: 'GET' | 'POST', id: Identity): Refusal {
   const citizensOnly = (place: string): Refusal => ({
     story: {
       title: 'Citizens only',
-      text: `${place} only opens to citizens of ${KINGDOM_DOMAIN}. You're ${id.email}, from ${domainOf(id)}.`,
+      text: `The guard lowers a spear across the road. "${place} is for citizens of ${KINGDOM_DOMAIN}. Those are my orders. Your papers say ${id.email}, from ${domainOf(id)}, so I can't let you pass."`,
     },
     hint: NOT_A_CITIZEN,
   })
@@ -101,7 +104,7 @@ function refusal(zone: Zone, method: 'GET' | 'POST', id: Identity): Refusal {
       return {
         story: {
           title: 'Knights only',
-          text: "The armory is for knights, and you aren't one yet. The Captain in the Knights' Guild can vouch for you.",
+          text: 'The guard doesn\'t budge. "My orders say knights only, and nothing in your papers says knight. The Captain in the Knights\' Guild can vouch for you."',
         },
         hint: "The armory's only rule needs claim/groups: knights, and the groups claim in your session doesn't include knights.",
       }
@@ -112,14 +115,14 @@ function refusal(zone: Zone, method: 'GET' | 'POST', id: Identity): Refusal {
         ? {
             story: {
               title: 'Scribes only',
-              text: "Anyone may read the books here, but only scribes may write in the Royal Ledger, and you aren't one.",
+              text: 'The library guard calls over from the door. "Read all you like, but my orders say only scribes may write in the Royal Ledger, and your papers don\'t say scribe."',
             },
             hint: "Writing in the ledger is a POST. The rule for readers only allows GET, so it doesn't match, and the other rule needs the scribes group, which you aren't in. This denial is the lesson.",
           }
         : citizensOnly('The library')
     default:
       return {
-        story: { title: 'The gate stays shut', text: "This gate won't open for you." },
+        story: { title: "The guard won't let you pass", text: '"Sorry, my orders don\'t cover you."' },
         hint: 'No allow rule matched this request, so Pomerium denied it.',
       }
   }
@@ -149,8 +152,8 @@ function denyView(
       status: 401,
       title: 'Sign in required',
       story: {
-        title: "The gate doesn't know you",
-        text: "Gates here only open for people the Oracle has vouched for, and he hasn't met you yet. His temple is back in Hearth Village.",
+        title: "The guard doesn't know you",
+        text: 'The guard holds out a hand. "Papers, please. My orders are to let in only people the Oracle has vouched for, and you have no papers at all. His temple is back in Hearth Village."',
       },
       requestLine,
       who: 'anonymous',
@@ -182,7 +185,7 @@ function denyView(
                 title: 'The ink is still wet',
                 text: 'The guard peers at your papers. "A scholar, is it? Then you\'ll know the first rule of scholarship: let the ink dry before you wave it about. Give it a minute."',
               },
-        hint: 'Try again in a moment. Once the cached copy expires, Pomerium reads your updated user record and the gate opens.',
+        hint: 'Try again in a moment. Once the cached copy expires, Pomerium reads your updated user record and the guard lets you through.',
       }
     : refusal(zone, method, id)
 
@@ -221,7 +224,7 @@ async function attempt(zone: Zone, method: 'GET' | 'POST', action: string): Prom
     })
   }
 
-  if (outcome.kind === 'error') quest.toast(`The gate jammed: ${outcome.message}`, 'deny')
+  if (outcome.kind === 'error') quest.toast(`The guard couldn't get an answer: ${outcome.message}`, 'deny')
 
   return outcome
 }
@@ -289,7 +292,7 @@ const welcomeBack = (next: Identity, onDone?: () => void) =>
     [
       {
         who: 'Oracle',
-        text: 'Signed in again. Your new claims are below. Gates may take up to a minute to hear of them.',
+        text: 'Signed in again. Your new claims are below. Guards may take up to a minute to hear of them.',
         code: claimsCode(next),
       },
     ],
@@ -343,7 +346,7 @@ function oracle() {
 
   if (!id.authenticated) {
     const intro: Page[] = [
-      { who: 'Oracle', text: "I am the Oracle. I don't open gates. I answer one question: who is this?" },
+      { who: 'Oracle', text: "I am the Oracle. I don't guard gates. I answer one question: who is this?" },
       {
         who: 'Oracle',
         text: 'In Pomerium terms, I am your identity provider, like Google, Okta or GitHub. Pomerium never sees your password. It sends you to me, I check who you are, and then I give Pomerium a signed token with your claims.',
@@ -458,7 +461,7 @@ function traveler() {
       { who: 'Traveler', text: "The Oracle knows me. I'm wanderer@outlands.net, signed in and everything." },
       {
         who: 'Traveler',
-        text: `But this town only lets in people whose email domain is ${KINGDOM_DOMAIN}. Signing in got me to the gate. It didn't get me in.`,
+        text: `But this town only lets in people whose email domain is ${KINGDOM_DOMAIN}. Signing in got me as far as the guard. It didn't get me past them.`,
       },
       {
         who: 'Traveler',
@@ -475,7 +478,7 @@ function traveler() {
           onBehalfOf: 'the Traveler',
           story: {
             title: 'Not a citizen',
-            text: `The town gate turns the Traveler away. The Oracle knows them as ${TRAVELER.email}, but the town only opens to citizens of ${KINGDOM_DOMAIN}.`,
+            text: `The town guard turns the Traveler away. The Oracle knows them as ${TRAVELER.email}, but the town only opens to citizens of ${KINGDOM_DOMAIN}.`,
           },
           requestLine: `GET ${location.origin}${path}`,
           who: TRAVELER.email,
@@ -489,7 +492,7 @@ function traveler() {
   )
 }
 
-/** The Traveler's counterpart: same gate, same rule, but this citizen gets in. */
+/** The Traveler's counterpart: same guard, same orders, but this citizen gets in. */
 function baker() {
   const town = zoneById('town')
   const path = `${town.prefix}/enter`
@@ -501,11 +504,11 @@ function baker() {
       },
       {
         who: 'Baker',
-        text: `The gate checks me every single time, same as everyone. My email domain is ${KINGDOM_DOMAIN}, so its rule matches and it lets me through.`,
+        text: `The guard checks me every single time, same as everyone. My email domain is ${KINGDOM_DOMAIN}, so I match the guard's orders and I'm let through.`,
       },
       {
         who: 'Baker',
-        text: 'The Traveler outside faces the same gate and the same rule. The only difference is who we are.',
+        text: 'The Traveler outside faces the same guard and the same orders. The only difference is who we are.',
         links: [link('authz')],
       },
     ],
@@ -523,7 +526,7 @@ const SCRIPTS: Record<NpcId, () => void> = {
       quest.say([
         {
           who: 'Sage',
-          text: 'The Oracle vouches for you now. Head north through the Fields Gate. Read the sign beside each gate: it shows the exact rule that gate enforces.',
+          text: 'The Oracle vouches for you now. Head north through the Fields Gate. A guard stands at every gate, and the sign beside it shows the exact orders that guard follows.',
         },
       ])
 
@@ -539,20 +542,20 @@ const SCRIPTS: Record<NpcId, () => void> = {
         },
         {
           who: 'Sage',
-          text: 'Here every gate checks you each time you pass. Pomerium works the same way: each request to each app is checked against that app’s policy.',
+          text: 'Here every guard checks you each time you pass. Pomerium works the same way: each request to each app is checked against that app’s policy.',
           links: [link('every')],
         },
         {
           who: 'Sage',
-          text: "Bot slimes and phish roam the fields, and both mean harm. The bots hammer the town gate day and night, but they'll never get in. They can't prove they're citizens, and the gate checks every one of them, every time.",
+          text: "Bot slimes and phish roam the fields, and both mean harm. The bots hammer the town gate day and night, but they'll never get in. They can't prove they're citizens, and the guard checks every one of them, every time.",
         },
         {
           who: 'Sage',
-          text: "The phish are craftier. They don't storm the gate. They dress up as the Oracle, robes and all, and offer to sign you in, because a gate can't tell a stolen sign-in from yours. The real Oracle keeps to his temple. Only ever sign in there.",
+          text: "The phish are craftier. They don't storm the gate. They dress up as the Oracle, robes and all, and offer to sign you in, because a guard can't tell stolen papers from yours. The real Oracle keeps to his temple. Only ever sign in there.",
         },
         {
           who: 'Sage',
-          text: 'Gates only let in people they can identify. Visit the Oracle in the temple to the west.',
+          text: 'Guards only let in people they can identify. Visit the Oracle in the temple to the west.',
         },
       ],
       () => learn('every'),
@@ -564,19 +567,19 @@ const SCRIPTS: Record<NpcId, () => void> = {
   captain: () => void captain(),
   armorer: () => {
     const armorerIntro =
-      "I forge the blades. I don't decide who gets in: the gate does. It checks your claims on every visit. Its rule is on the sign: only the knights group."
+      "I forge the blades. I don't decide who gets in: the guard does. The guard checks your claims on every visit. Their orders are on the sign: only the knights group."
 
-    // The Armorer keeps the forge; the gate decides. Each stage gets a line about what the gate sees.
+    // The Armorer keeps the forge; the guard decides. Each stage gets a line about what the guard sees.
     const lines: Record<QuestStage, string> = {
       anonymous: armorerIntro,
       citizen: armorerIntro,
       proven: `${armorerIntro} The Captain can vouch for you.`,
       knighted:
-        "The Oracle lists you as a knight? Then your session hasn't caught up. The gate reads the claims in your session, and those were set when you signed in: groups: []. Pomerium refreshes them from the Oracle now and then, but sign in with him again and you won't have to wait.",
+        "The Oracle lists you as a knight? Then your session hasn't caught up. The guard reads the claims in your session, and those were set when you signed in: groups: []. Pomerium refreshes them from the Oracle now and then, but sign in with him again and you won't have to wait.",
       knight:
-        'Your session says groups: [knights] now, so the gate will let you through. The steel sword is in the chest inside.',
+        'Your session says groups: [knights] now, so the guard will let you through. The steel sword is in the chest inside.',
       armed:
-        "Same gate, same rule as before you were a knight. You didn't unlock a policy. You gained the claim it was waiting for.",
+        "Same guard, same orders as before you were a knight. You didn't unlock a policy. You gained the claim it was waiting for.",
     }
 
     const text = lines[stage()]
@@ -589,11 +592,11 @@ const SCRIPTS: Record<NpcId, () => void> = {
 const LIBRARIAN_INTRO: Page[] = [
   {
     who: 'Librarian',
-    text: "Read anything you like. There's no gate in here, but the one you came through still checks every request. Opening a book sends a GET to the library, and the gate checks it again, even though you're already inside.",
+    text: "Read anything you like. There's no guard in here, but the one at the door still checks every request. Opening a book sends a GET to the library, and the guard checks it again, even though you're already inside.",
   },
   {
     who: 'Librarian',
-    text: "The Royal Ledger on the lectern is different. Writing in it sends a POST, and the gate's rule only lets scribes do that. Go ahead and try: the denial will show you which rule failed.",
+    text: "The Royal Ledger on the lectern is different. Writing in it sends a POST, and the guard's orders only let scribes do that. Go ahead and try: the denial will show you which rule failed.",
     links: [link('request')],
   },
   {
@@ -609,7 +612,7 @@ async function librarian() {
     quest.say([
       {
         who: 'Librarian',
-        text: 'The Royal Keep lies at the end of the road that runs south, just west of the library. Its gate wants citizens who are knights and scholars, and checks all three at once.',
+        text: 'The Royal Keep lies at the end of the road that runs south, just west of the library. Its guard wants citizens who are knights and scholars, and checks all three at once.',
       },
     ])
 
@@ -667,7 +670,7 @@ export function meetPhish(onTurnedAway: () => void) {
   quest.say([
     {
       who: 'Oracle?',
-      text: "Ah, there you are! I am the Oracle. Your session is about to expire, and then every gate will lock you out. Quick, there's no time to walk back to the temple.",
+      text: "Ah, there you are! I am the Oracle. Your session is about to expire, and then every guard will turn you away. Quick, there's no time to walk back to the temple.",
     },
     {
       who: 'Oracle?',
@@ -796,7 +799,7 @@ export const readAnvil = () =>
   quest.say([
     {
       who: 'Anvil',
-      text: 'A heavy iron anvil, its face worn bright by years of hammering. Every blade in the kingdom was shaped here. Forging a sword never decided who may carry it through the gate.',
+      text: 'A heavy iron anvil, its face worn bright by years of hammering. Every blade in the kingdom was shaped here. Forging a sword never decided who may carry it past the guard.',
     },
   ])
 

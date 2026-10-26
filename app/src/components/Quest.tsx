@@ -250,7 +250,7 @@ function Splash() {
       <h1 className="sunset-text m-0 font-display text-[clamp(2.2rem,7vw,3.6rem)] font-bold tracking-[0.02em] text-balance">
         Pomerium Quest
       </h1>
-      <p className="m-0 max-w-[36ch] text-muted">Every gate checks you, every time.</p>
+      <p className="m-0 max-w-[36ch] text-muted">Every guard checks you, every time.</p>
       {mode !== 'unreachable' && (
         <>
           <button
@@ -282,7 +282,7 @@ function Splash() {
       <SplashSound />
       <p className="m-0 text-[0.85rem] text-muted">
         {mode === 'loading' && 'Looking for Pomerium…'}
-        {mode === 'pomerium' && 'Connected to a real Pomerium. Every gate is a live route.'}
+        {mode === 'pomerium' && 'Connected to a real Pomerium. Every guard enforces a live route.'}
         {mode === 'unreachable' &&
           "No Pomerium in front of this game, so there's nothing to play. Run ./quest dev and open the URL it prints."}
       </p>
@@ -912,7 +912,7 @@ function CachedClaims({ claims }: { readonly claims: NonNullable<DenyView['cache
           Signing in made a new session with your new groups, and updated your user record with them too.
         </li>
         <li>
-          But this gate read your user record from Pomerium's cache: a copy saved on an earlier request, kept
+          But this guard read your user record from Pomerium's cache: a copy saved on an earlier request, kept
           for up to a minute. Your session is new, so it was read fresh. Your user record wasn't.
         </li>
         <li>
@@ -959,7 +959,8 @@ function FinaleStory({ email }: { readonly email: string }) {
         Quest complete
       </h2>
       <p className="m-0">
-        The Royal Keep opens its doors to {email}. The gate admits only someone who is all three, and you are:
+        The Royal Keep opens its doors to {email}. The guard admits only someone who is all three, and you
+        are:
       </p>
       <ul className="m-0 grid list-none gap-1.5 p-0">
         {VOUCHED_BY.map(({ role, by }) => (
@@ -973,7 +974,8 @@ function FinaleStory({ email }: { readonly email: string }) {
         ))}
       </ul>
       <p className="m-0 text-[0.85rem] text-muted">
-        Every gate in the kingdom is a Pomerium route. See how Pomerium let you in on the{' '}
+        Every gate in the kingdom is a Pomerium route, and its guard's orders are the route's policy. See how
+        Pomerium let you in on the{' '}
         <button className="border-0 bg-transparent p-0 text-lens underline" type="button" onClick={switchTab}>
           In Pomerium
         </button>{' '}
@@ -1011,7 +1013,7 @@ function FinalePomerium({ identity }: { readonly identity: Identity }) {
       <PolicyLines lines={lines} />
       <p className="mt-3 mb-0">
         One allow rule, three criteria under and. Each matched a claim in your session, so Pomerium forwarded
-        the request to the app behind the route. Every gate you passed worked the same way.
+        the request to the app behind the route. Every guard you passed worked the same way.
       </p>
       <p className="mt-3 mb-1 text-[0.72rem] tracking-[0.08em] text-paper-muted uppercase">
         Lessons learned · {LESSON_ORDER.filter((id) => learned.includes(id)).length} of {LESSON_ORDER.length}
@@ -1054,7 +1056,7 @@ function DenyScreen() {
   return (
     <TabbedScreen
       name="deny"
-      label="Why the gate refused"
+      label="Why the guard refused"
       showing={deny}
       overlay="absolute inset-0 grid items-start justify-items-center overflow-auto bg-[rgb(10_7_22/0.88)] p-3.5"
       kingdom={<DenyStory deny={deny} />}
@@ -1071,7 +1073,8 @@ function DenyStory({ deny }: { readonly deny: DenyView }) {
       </h2>
       <p className="mt-2 mb-0 max-w-[60ch] text-[clamp(0.95rem,1.6vw,1.05rem)]">{deny.story.text}</p>
       <p className="mt-3 mb-0 text-[0.85rem] text-muted">
-        Every gate in the kingdom is a Pomerium route. See how Pomerium made this call in the{' '}
+        Every gate in the kingdom is a Pomerium route, and its guard's orders are the route's policy. See how
+        Pomerium made this call in the{' '}
         <button className="border-0 bg-transparent p-0 text-lens underline" type="button" onClick={switchTab}>
           In Pomerium
         </button>{' '}
@@ -1096,7 +1099,7 @@ function DenyPomerium({ deny }: { readonly deny: DenyView }) {
     <div className="flex flex-col rounded-tr-lg rounded-b-lg border-t-6 border-deny bg-paper px-5 py-[18px] text-paper-ink [&_a]:text-paper-link">
       {deny.onBehalfOf && (
         <p className="mb-2 rounded bg-paper-tint px-2.5 py-1.5 text-[0.8rem] text-paper-muted">
-          Not your request: this is what {deny.onBehalfOf} saw at the gate.
+          Not your request: this is what {deny.onBehalfOf} was told by the guard.
         </p>
       )}
       <p className="m-0 font-mono text-[2.2rem] leading-none font-bold text-deny">{deny.status}</p>
@@ -1294,7 +1297,7 @@ function AccessLog() {
     <section className={panel}>
       <h2 className={panelTitle}>Access log</h2>
       {log.length === 0 ? (
-        <p className={panelMuted}>Every request a gate checks shows up here.</p>
+        <p className={panelMuted}>Every request a guard checks shows up here.</p>
       ) : (
         <ol className="m-0 grid max-h-60 list-none gap-1.5 overflow-auto p-0 text-[0.8rem]">
           {log.map((entry) => (

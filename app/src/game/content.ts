@@ -96,10 +96,10 @@ export const link = (lesson: LessonId) => LESSONS[lesson].link
 /** What each gate's sign says above its route config. */
 export const SIGN_TEXT: Partial<Record<ZoneId, string>> = {
   fields:
-    'This gate is a route. Pomerium checks every request for this path against the policy below, and forwards the ones it allows to the app behind the route.',
+    "This gate is a route, and its guard follows the route's policy. Pomerium checks every request for this path against the policy below, and forwards the ones it allows to the app behind the route.",
   town: `The town only lets in citizens: people whose email domain is ${KINGDOM_DOMAIN}.`,
   guild: "The Knights' Guild hall. Any citizen may enter.",
-  armory: 'Only knights. The gate reads the groups claim your identity provider put in your session.',
+  armory: 'Only knights. The guard reads the groups claim your identity provider put in your session.',
   library:
     'Two allow rules on one route. Citizens may read (GET); scribes may also write (POST). Pomerium lets a request in when any rule matches.',
   keep: 'The Royal Keep. One rule, three checks: a citizen who is both a knight and a scholar. In an and rule, every check must pass.',
@@ -131,7 +131,7 @@ export const BOOKS: Page[] = [
     links: [link('defaultDeny')],
   },
   {
-    who: 'Book · The Gate’s Seal',
+    who: 'Book · The Guard’s Seal',
     text: 'When Pomerium lets a request through on a route with pass_identity_headers turned on, it adds a signed JWT in the X-Pomerium-Jwt-Assertion header. The app behind the route learns who you are without running its own login. Every gate in this kingdom turns it on.',
     links: [
       link('jwt'),

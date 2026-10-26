@@ -51,8 +51,8 @@ function PhishedScreen() {
         <div id="phished-story" className="grid gap-2 text-left">
           <p className="m-0">
             A phish in a borrowed robe asked for your sign-in, and you handed it over. Now it walks up to
-            every gate as you, and every gate checks it and lets it in. As far as any gate can tell, the phish
-            is you: it holds your sign-in, and a gate can only check the identity it's shown.
+            every guard as you, and every guard checks it and lets it in. As far as any guard can tell, the
+            phish is you: it holds your sign-in, and a guard can only check the identity it's shown.
           </p>
           <p className="m-0 text-muted">
             In Pomerium terms: Pomerium checks every request against who your identity provider says you are.

@@ -1,15 +1,16 @@
 # Pomerium Quest
 
 A Zelda-style browser game that teaches how [Pomerium](https://www.pomerium.com) works. You play the
-Pomerium Pomeranian, and every gate in the kingdom is a real Pomerium route with a real policy. When a
-gate turns you away, the game shows you the exact policy rule that failed.
+Pomerium Pomeranian, and every gate in the kingdom is a real Pomerium route. The guard in front of it
+follows the route's real policy, and when a guard turns you away, the game shows you the exact policy rule
+that failed.
 
 Chapter one covers the fundamentals:
 
 | In the game                                                    | In Pomerium                                                              |
 | -------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | The Oracle signs you in                                        | Your identity provider (Keycloak, over OIDC)                             |
-| Each gate, and the sign beside it                              | A route and its policy                                                   |
+| Each gate's guard, and the sign beside it                      | A route and its policy                                                   |
 | The town only admits `kingdom.com` citizens                    | The `domain` criterion                                                   |
 | The Captain makes you a knight; the armory checks it           | `claim/groups`, and claims coming from the IdP                           |
 | Being knighted doesn't open the armory until you sign in again | Your session holds the claims from sign-in until Pomerium refreshes it   |
@@ -85,7 +86,7 @@ browser ──► Pomerium ──┬─ /zones/oracle/*   authenticated_user    
 ### Things worth knowing
 
 - **Anyone can sign up as any citizen.** The realm takes any `kingdom.com` email without verifying
-  it, because the address is what the game's gates check. Set `QUEST_KINGDOM_DOMAIN` to use another
+  it, because the address is what the game's guards check. Set `QUEST_KINGDOM_DOMAIN` to use another
   domain in the sign-up form, the policies, and the game's text. That's fine for a learning game. Never reuse the realm, or
   this Pomerium, for anything real.
 - **Keycloak runs in dev mode** (`start-dev`) with its H2 database on a volume, so players survive a
