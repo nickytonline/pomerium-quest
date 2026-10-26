@@ -7,14 +7,14 @@ Status: not started. Planned for v2.
 Chapter one teaches players to read policy. Every sign shows a route's YAML, and every refusal marks the
 check that failed. But players never write a policy, so they can't test what they think a rule means.
 
-The house fixes that. The player owns a house in Hearth Village, writes the policy on its door, and
+The house fixes that. The player owns a house in the Slime Fields, writes the policy on its door, and
 watches real visitors get let in or turned away by Pomerium. It's also the natural place to teach what
 chapter one doesn't: public routes, `deny` rules (which always beat `allow`), and the `or` and `not`
 operators.
 
 ## What the player does
 
-1. The sage gives the player the deed to the empty house next to theirs.
+1. The sage gives the player the deed to an empty house in the Slime Fields, just below the pond.
 2. **The house starts open to everyone.** Its route is public
    (`allow_public_unauthenticated_access`), so Pomerium lets every request through, signed in or not.
    When the player arrives, slime bots are bouncing around inside and the traveler is at the table eating
@@ -66,42 +66,57 @@ cases.
 
 ### Where it goes and what's inside
 
-Hearth Village is small, but the corner north of the sage's house is free apart from three trees, at
-(12, 19), (14, 19) and (14, 21), which move. The house uses the village's north wall (y = 17) and the
-region wall (x = 16) as two of its own walls. That leaves a 6 by 4 room inside, at x 10 to 15 and y 18
-to 21. The door is on the west side at (9, 20), opening onto the village road (x = 8), so the player
-passes it on the way out at the start.
+The house stands in the Slime Fields, just below the pond in the top-left corner, so the slimes are
+already on the doorstep. Its walls run from (1, 9) to (7, 15), which leaves a 5 by 5 room inside, at x 2
+to 6 and y 10 to 14. The door is on the east side at (7, 12), opening onto the field path where it turns
+east (8, 12). Row 8 stays grass, so there's a strip of meadow between the pond and the house.
 
 ```
-        x: 9  10 11 12 13 14 15 16
-  y 17     #  #  #  #  #  #  #  #     # wall (the village's north wall)
-  y 18     #  .  T  T  .  .  W  #     T table with the bread, W writing desk
-  y 19     #  .  t  .  .  .  .  #     t the traveler, eating
-  y 20  →  D  m  .  .  .  s  .  #     D door, m doormat (letters), s a slime bot
-  y 21     #  .  .  .  .  .  .  #
-  y 22     #  #  #  #  #  #  #  #
+        x: 1  2  3  4  5  6  7  8
+  y  9     #  #  #  #  #  #  #        # wall
+  y 10     #  W  .  .  .  .  #        W writing desk
+  y 11     #  .  T  T  .  .  #        T table with the bread
+  y 12     #  .  t  .  .  m  D  =     t the traveler, m doormat (letters), D door, = the field path
+  y 13     #  .  .  .  s  .  #        s a slime bot
+  y 14     #  .  .  .  .  .  #
+  y 15     #  #  #  #  #  #  #
 ```
 
-That's 24 floor tiles, 21 of them walkable once the table and desk are placed: room for the traveler, a
-slime wandering and the player swinging a sword. If it turns out too cramped when played, the fallback is
-a separate interior map entered through the door, which the scene doesn't support yet.
+That's 25 floor tiles, 22 of them walkable once the table and desk are in: room for the traveler, a slime
+wandering and the player swinging a sword. If it turns out too cramped when played, there are two fallbacks:
+
+- **A bigger map.** The camera already follows the player and stops at the map's edges, so the map
+  can grow. But every place on it is set by hand (and `regionAt` hard-codes the region borders), so
+  making the fields bigger means moving everything east or south of them. It's worth doing when chapter
+  two needs room too.
+- **A separate interior map** entered through the door, which the scene doesn't support yet.
+
+What moves to make room:
+
+- The trees at (3, 9), (4, 9), (1, 11), (2, 14) and (5, 14), and the flowers at (3, 12).
+- Two bot slime start points that would be inside or in the wall: (6, 10) and (3, 15). Move them
+  elsewhere in the fields, for example (10, 15) and (5, 16).
+
+The house is past the Fields Gate, so the player reaches it signed in. That suits it: the editor needs
+their email from the session anyway.
 
 New art in `art/tiles.mjs`: a table with bread, the same table with crumbs, and a writing desk.
 
 ### Slimes in the house
 
-- **One bot at a time.** While the house is public, the game server sends a request with no session to
-  the house route when the player walks in, and again every 20 seconds or so while they're inside. Each
-  ALLOW brings a slime bot through the door, up to one in the room at once.
-- **The sword works indoors.** The player can kill the slime as anywhere else. But another one arrives
-  with the next allowed request, so the sword only ever buys time. Fixing the policy is what stops them.
-  That's the lesson: you can't fight your way out of a public route.
-- **After the first save,** the bots' requests are denied. The next slime bumps against the door, the
-  access log shows the DENY, and it bounces back outside. No more arrive.
+- **Slimes come from the fields.** A field slime that wanders onto the doorstep tries the door. The game
+  server sends the house route a request with no session on its behalf. If Pomerium allows it, the slime
+  comes in; at most one is inside at a time.
+- **The sword works indoors.** The player can kill the slime as anywhere else. But the next slime that
+  reaches the door gets in the same way, so the sword only ever buys time. Fixing the policy is what
+  stops them. That's the lesson: you can't fight your way out of a public route.
+- **After the first save,** a slime that tries the door is denied. The access log shows the DENY and the
+  slime bounces back into the field.
 - **No farming.** Slimes killed in the house don't count toward the Captain's quota, or an open house
   would be an endless supply.
-- Monsters are kept inside a fixed area today (`FIELDS` in `scene.ts`). Each monster needs its own area
-  instead: the fields, or the house's floor.
+- Monsters are kept inside a fixed area today (`FIELDS` in `scene.ts`), and the house is inside it. The
+  house walls keep slimes out on their own, but the door needs to block monsters except when a request
+  for one is allowed.
 
 ### The traveler at the table
 
@@ -109,8 +124,9 @@ New art in `art/tiles.mjs`: a table with bread, the same table with crumbs, and 
   any NPC (pleased about the bread).
 - When a save stops letting them in, they get up, walk out of the door and grumble from the road. The
   bread on the table turns to crumbs after the second letter's story.
-- The traveler in the Slime Fields stays where they are; the one in the house is the same person as far
-  as Pomerium is concerned, with the same Keycloak account.
+- The traveler already stands in the Slime Fields, a short walk from the door. When the traveler's visit
+  is allowed they walk over and sit down; when it's denied they walk back to their spot. It's one person
+  to Pomerium: the same Keycloak account.
 
 ## How it works
 
