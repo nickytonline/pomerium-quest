@@ -59,7 +59,7 @@ operators.
 
 ## What the player does
 
-1. The sage gives the player the deed to an empty house in the Slime Fields, just below the pond.
+1. At first sign-in the Oracle tells the player that every citizen is entitled to a house outside the walls: an empty one in the Slime Fields, just below the pond. He adds its deed to their claims (a group named for the house) and signs them in again so their session carries it.
 2. **The house starts open to everyone.** Its route is public
    (`allow_public_unauthenticated_access`), so Pomerium lets every request through, signed in or not.
    When the player arrives, slime bots are bouncing around inside and the traveler is at the table eating
@@ -76,33 +76,26 @@ operators.
 The first two letters tell one story:
 
 1. **"Get the slimes out, but your friend the traveler is welcome."** The player writes their first
-   policy: themselves or the traveler. The bots have no session, so no rule can match them and they
-   bounce out. The traveler's visit is still an ALLOW.
+   policy: just the traveler, since the deed already lets the owner in. The bots have no session, so no
+   rule can match them and they bounce out. The traveler's visit is still an ALLOW.
 
    ```yaml
    - allow:
        or:
-         - email: { is: <you> }
          - email: { is: wanderer@outlands.net }
    ```
 
-2. **"The traveler ate all your bread."** The player deletes the traveler's line, leaving only
-   themselves. They don't add anything to keep the traveler out: once no rule matches them, Pomerium
-   denies them. That's default deny, learned by removing a line rather than adding one.
-
-   ```yaml
-   - allow:
-       or:
-         - email: { is: <you> }
-   ```
+2. **"The traveler ate all your bread."** The player deletes the traveler's rule, leaving none. They
+   don't add anything to keep the traveler out: once no rule matches them, Pomerium denies them, and
+   only the deed's owner gets in. That's default deny, learned by removing a rule rather than adding one.
 
 Later letters build on that:
 
-| Letter                                                           | What it teaches                       | One answer                                                     |
-| ---------------------------------------------------------------- | ------------------------------------- | -------------------------------------------------------------- |
-| "Let in your friends from the Knights' Guild"                    | `claim/groups`                        | `allow: { or: [email: { is: <you> }, claim/groups: knights] }` |
-| "Any citizen may visit, except the baker"                        | `deny` beats `allow`                  | allow `domain`, then `deny` the baker's `email`                |
-| "Friends may look in through the window (GET), not knock (POST)" | `http_method`, two rules on one route | as the library does                                            |
+| Letter                                                           | What it teaches                       | One answer                                      |
+| ---------------------------------------------------------------- | ------------------------------------- | ----------------------------------------------- |
+| "Let in your friends from the Knights' Guild"                    | `claim/groups`                        | `allow: { or: [claim/groups: knights] }`        |
+| "Any citizen may visit, except the baker"                        | `deny` beats `allow`                  | allow `domain`, then `deny` the baker's `email` |
+| "Friends may look in through the window (GET), not knock (POST)" | `http_method`, two rules on one route | as the library does                             |
 
 A letter counts as solved when the real visits come out the way the brief asks: the visitors are the test
 cases.
@@ -270,12 +263,13 @@ The server checks them with an Effect Schema before writing anything:
   No quotes, colons, newlines or spaces can reach the YAML.
 - **Size:** at most 6 rules with 6 criteria each.
 
-PPL has no variables, so a rule can't say "the owner" and have Pomerium work out who that is. The editor
-handles it instead: an email block starts filled in with the player's own email, read from the `email`
-claim in their session, and the player can change it or type someone else's. The saved policy always
-holds a plain email, the same as the server writes and the sign shows. In the letters, `<you>` stands for
-that filled-in email. The server doesn't need to check that it's the player's own: letting in anyone you
-like is the point of the house.
+PPL has no variables, so a rule can't say "the owner" and have Pomerium work out who that is. The deed does
+it instead. Each house is named for a hash of its owner's email, and the Oracle adds the owner to a group
+with that name (`deed-<id>`) when he grants the deed. The server writes `allow: claim/groups: deed-<id>` as
+the first rule of every saved house, and the editor and sign show it too, so the owner needs no email rule
+of their own and can't remove themselves by accident. Only a `deny` can still turn the owner away, since a
+deny always beats an allow; the desk checks the rules with `turnsAwayOwner` and refuses to save one. The
+rules may be empty: then only the deed's owner gets in.
 
 The server then renders the PPL with the same `policyYaml` code the signs use, extended for `deny`.
 Players' text is never passed through as YAML. That's the main security property of the feature: if
@@ -333,7 +327,7 @@ Each step stands on its own and is committed separately.
 3. **The builder API.** The `/zones/builder` zone, the `quest-houses` namespace, the ServiceAccount and
    Role, rule checking, Ingress writes, clean-up, limits.
 4. **Visitors.** Realm users in `render.ts`, server-side sign-in and visits, the NetworkPolicy changes.
-5. **The house in the game.** The map, the deed from the sage, the desk and editor, the letters,
+5. **The house in the game.** The map, the deed from the Oracle, the desk and editor, the letters,
    the new lessons, signs and README updates.
 6. **End-to-end checks** in `scripts/e2e.sh`:
    - each letter's answer gives the expected visits;
