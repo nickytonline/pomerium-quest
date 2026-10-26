@@ -100,8 +100,9 @@ export const SIGN_TEXT: Partial<Record<ZoneId, string>> = {
   town: `The town only lets in citizens: people whose email domain is ${KINGDOM_DOMAIN}.`,
   guild: "The Knights' Guild hall. Any citizen may enter.",
   armory: 'Only knights. The guard reads the groups claim your identity provider put in your session.',
-  library:
-    'Two allow rules on one route. Citizens may read (GET); scribes may also write (POST). Pomerium lets a request in when any rule matches.',
+  library: 'The reading room. Any citizen may come in and read.',
+  scriptorium:
+    'The scriptorium, where the Royal Ledger is kept. Two allow rules on one route: citizens may look (GET); scribes may also write (POST). Pomerium lets a request in when any rule matches.',
   keep: 'The Royal Keep. One rule, three checks: a citizen who is both a knight and a scholar. In an and rule, every check must pass.',
 }
 
@@ -120,7 +121,8 @@ export const SIGN_DOCS: Partial<Record<ZoneId, readonly DocLink[]>> = {
   town: [{ label: 'The domain criterion', href: `${DOCS}/internals/ppl#supported-ppl-criteria` }],
   guild: [link('route')],
   armory: [link('claims'), link('refresh')],
-  library: [link('request'), { label: 'Path matching', href: `${DOCS}/reference/routes/path-matching` }],
+  library: [link('route'), { label: 'Path matching', href: `${DOCS}/reference/routes/path-matching` }],
+  scriptorium: [link('request')],
   keep: [link('allOf'), link('claims')],
 }
 

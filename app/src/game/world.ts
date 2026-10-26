@@ -242,17 +242,18 @@ export function buildWorld(): World {
   fill(20, 19, 33, 19, TILE.cobble)
   // The road south to the Royal Keep, the quest's last gate.
   fill(21, 19, 21, 28, TILE.cobble)
-  room(29, 20, 37, 27)
+  // The library, with the scriptorium walled off at its west end behind a door of its own.
+  room(24, 20, 37, 27)
+  fill(29, 21, 29, 26, TILE.wall)
   fill(30, 22, 32, 22, TILE.shelf)
   fill(34, 22, 36, 22, TILE.shelf)
   each(
     [
       [18, 24],
       [19, 26],
-      [25, 24],
-      [24, 21],
+      [23, 22],
       [37, 18],
-      [26, 27],
+      [23, 27],
     ],
     TILE.tree,
   )
@@ -263,6 +264,7 @@ export function buildWorld(): World {
     { x: 21, y: 7, zoneId: 'guild' },
     { x: 33, y: 7, zoneId: 'armory' },
     { x: 33, y: 20, zoneId: 'library' },
+    { x: 29, y: 24, zoneId: 'scriptorium' },
     { x: 21, y: 29, zoneId: 'keep' },
   ]
 
@@ -274,6 +276,7 @@ export function buildWorld(): World {
     { x: 20, y: 8, signId: 'guild' },
     { x: 32, y: 8, signId: 'armory' },
     { x: 35, y: 19, signId: 'library' },
+    { x: 30, y: 25, signId: 'scriptorium' },
     { x: 22, y: 28, signId: 'keep' },
   ]
 
@@ -290,7 +293,7 @@ export function buildWorld(): World {
   set(chest.x, chest.y, TILE.chest)
   set(31, 4, TILE.anvil)
   set(35, 3, TILE.workbench)
-  const ledger = { x: 33, y: 25 }
+  const ledger = { x: 26, y: 22 }
   set(ledger.x, ledger.y, TILE.lectern)
 
   return {
@@ -307,7 +310,7 @@ export function buildWorld(): World {
       { x: 14, y: 11, npcId: 'traveler' },
       { x: 21, y: 4, npcId: 'captain' },
       { x: 34, y: 9, npcId: 'armorer' },
-      { x: 31, y: 25, npcId: 'librarian' },
+      { x: 34, y: 25, npcId: 'librarian' },
       { x: 30, y: 13, npcId: 'baker' },
     ],
     bots: [

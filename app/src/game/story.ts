@@ -111,15 +111,17 @@ function refusal(zone: Zone, method: 'GET' | 'POST', id: Identity): Refusal {
     case 'keep':
       return keepRefusal(id)
     case 'library':
+      return citizensOnly('The library')
+    case 'scriptorium':
       return method === 'POST'
         ? {
             story: {
               title: 'Scribes only',
-              text: 'The library guard calls over from the door. "Read all you like, but my orders say only scribes may write in the Royal Ledger, and your papers don\'t say scribe."',
+              text: 'The scriptorium guard calls over from the door. "Look all you like, but my orders say only scribes may write in the Royal Ledger, and your papers don\'t say scribe."',
             },
-            hint: "Writing in the ledger is a POST. The rule for readers only allows GET, so it doesn't match, and the other rule needs the scribes group, which you aren't in. This denial is the lesson.",
+            hint: "Writing in the ledger is a POST. The rule for visitors only allows GET, so it doesn't match, and the other rule needs the scribes group, which you aren't in. This denial is the lesson.",
           }
-        : citizensOnly('The library')
+        : citizensOnly('The scriptorium')
     default:
       return {
         story: { title: "The guard won't let you pass", text: '"Sorry, my orders don\'t cover you."' },
@@ -592,11 +594,11 @@ const SCRIPTS: Record<NpcId, () => void> = {
 const LIBRARIAN_INTRO: Page[] = [
   {
     who: 'Librarian',
-    text: "Read anything you like. There's no guard in here, but the one at the door still checks every request. Opening a book sends a GET to the library, and the guard checks it again, even though you're already inside.",
+    text: "Read anything you like. The guard at the front door still checks every request, even now that you're inside. Opening a book sends a GET to the library, and the guard checks it again.",
   },
   {
     who: 'Librarian',
-    text: "The Royal Ledger on the lectern is different. Writing in it sends a POST, and the guard's orders only let scribes do that. Go ahead and try: the denial will show you which rule failed.",
+    text: "The Royal Ledger is next door, in the scriptorium, and that room has a guard of its own. Any citizen may go in and look, but writing in the ledger sends a POST, and that guard's orders only let scribes do that. Go ahead and try: the denial will show you which rule failed.",
     links: [link('request')],
   },
   {
@@ -750,7 +752,7 @@ export async function readBook(index: number) {
 }
 
 export async function writeLedger() {
-  const outcome = await attempt(zoneById('library'), 'POST', 'ledger')
+  const outcome = await attempt(zoneById('scriptorium'), 'POST', 'ledger')
 
   if (outcome.kind === 'allow')
     quest.say([{ who: 'Royal Ledger', text: 'Your words are recorded. You must be a scribe.' }])
