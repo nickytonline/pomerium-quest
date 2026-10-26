@@ -163,10 +163,16 @@ function denyView(
 
   const { story, hint } = stale
     ? {
-        story: {
-          title: 'Word is still on its way',
-          text: 'Your new papers are in your hand, but this gate still remembers you as you were. Word travels slowly: wait a moment, then try the gate again.',
-        },
+        story:
+          zone.id === 'armory'
+            ? {
+                title: 'Easy there, Sir Eager',
+                text: 'The guard squints at your papers. "Knighted this very minute, were you? The ink\'s still wet. Go polish your sword for a bit, then come back."',
+              }
+            : {
+                title: 'The ink is still wet',
+                text: 'The guard peers at your papers. "A scholar, is it? Then you\'ll know the first rule of scholarship: let the ink dry before you wave it about. Give it a minute."',
+              },
         hint: 'Pomerium said no, yet the claims in your new session say you qualify. Pomerium caches what it knows about a user for up to a minute, and the claim check merges that cached record with your session. Until the cache expires, the old groups win. Try again shortly.',
       }
     : refusal(zone, method, id)
