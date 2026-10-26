@@ -64,7 +64,10 @@ The game only plays behind Pomerium. Opened directly (say, `npm run dev -w app` 
 http://localhost:3000), it says so and won't start: use `./quest dev` for hot reload behind
 Pomerium and Keycloak.
 
-## How it fits together
+## Architecture
+
+Three services run in a local k3d cluster: Pomerium, the game (`quest`), and Keycloak (the Oracle).
+Every request from the browser goes through Pomerium first, including the game itself:
 
 ```
 browser ──► Pomerium ──┬─ /zones/oracle/*       authenticated_user              ─┐
@@ -80,14 +83,39 @@ browser ──► Pomerium ──┬─ /zones/oracle/*       authenticated_user
                        oracle.localhost.pomerium.io ──► keycloak (OIDC IdP, realm "kingdom")
 ```
 
+### What happens at a gate
+
+The game never decides who gets in. When the dog walks into a gate:
+
+1. The scene ([`scene.ts`](app/src/game/scene.ts)) hands the gate to [`story.ts`](app/src/game/story.ts),
+   which asks [`access.ts`](app/src/game/access.ts) to make a real request through Pomerium:
+   `fetch('/zones/armory/enter')`, as a GET (or a POST, for the scriptorium's ledger).
+2. Pomerium checks the request against that route's policy, using the claims in the player's session.
+3. If the policy allows it, Pomerium forwards the request to the game server with a signed
+   `X-Pomerium-Jwt-Assertion` header. The server checks the signature against Pomerium's JWKS, and the
+   guard steps aside. If it doesn't, Pomerium answers 403 (or 401 with no session), and the gate stays
+   shut.
+4. On a refusal, the game shows the route's rules and marks which line failed and why. That
+   explanation comes from a small PPL evaluator ([`ppl.ts`](app/src/game/ppl.ts)) running the same
+   rules from `zones.ts` against your claims. It only explains the answer; the answer is Pomerium's.
+
+Every check also lands in the access log beside the board, and a denial screen shows Pomerium's request
+ID.
+
+### One source of truth for policy
+
+[`app/src/game/zones.ts`](app/src/game/zones.ts) defines every zone and its rules.
+[`scripts/render.ts`](scripts/render.ts) turns that list into an Ingress per zone, the Keycloak realm and
+the other Kubernetes manifests (`deploy/.generated/`), and the game's signs and denial screens show the
+same rules. So what a sign says, what a guard does and what Pomerium enforces can't drift apart.
+Players' houses are the one exception: their policy comes from the player.
+
+### The pieces
+
 - **Pomerium is the [Pomerium Ingress Controller](https://www.pomerium.com/docs/deploy/k8s/ingress)**
   (branch 0-33-0, which embeds Pomerium v0.33.4), in the `pomerium` namespace. Its global settings are
   a `Pomerium` resource, and every route is an Ingress. The install is vendored in
   [`deploy/pomerium/ingress-controller.yaml`](deploy/pomerium/ingress-controller.yaml).
-- **One source of truth for policy.** [`app/src/game/zones.ts`](app/src/game/zones.ts) defines every
-  zone and its rules. [`scripts/render.ts`](scripts/render.ts) turns it into an Ingress per zone and
-  the other Kubernetes manifests (`deploy/.generated/`). The game's signs and denial screens show the
-  same rules. Players' houses are the one exception: their policy comes from the player.
 - **Players' houses** ([docs/prd/your-house.md](docs/prd/your-house.md)) are Ingresses the game server
   writes into the `quest-houses` namespace, the only one its ServiceAccount may change. The owner
   always comes from Pomerium's verified JWT, and door rules are checked against a strict schema before
@@ -98,9 +126,8 @@ browser ──► Pomerium ──┬─ /zones/oracle/*       authenticated_user
   accounts, which `./quest` imports at every deploy. The game server signs them in through Pomerium and
   knocks on houses as them; a slime is a knock with no session at all.
 - **The game** ([`app/`](app)) is a TanStack Start app in SPA mode with a Phaser overworld and a React
-  UI. Its `/zones/*` server routes use Effect 4 to verify Pomerium's signed JWT against Pomerium's JWKS
-  and to call the Oracle. Quest progression is an XState machine
-  ([`app/src/game/quest-machine.ts`](app/src/game/quest-machine.ts)).
+  UI around it. Its `/zones/*` server routes use Effect 4 to verify Pomerium's signed JWT against
+  Pomerium's JWKS and to call the Oracle.
 - **The Oracle** is [Keycloak](https://www.keycloak.org). `scripts/render.ts` writes its `kingdom`
   realm: open sign-up, the `knights` and `scholars` groups, a mapper that puts them in a `groups`
   claim, Pomerium's client, and a `quest-admin` client whose service account lets the game add a
@@ -110,6 +137,59 @@ browser ──► Pomerium ──┬─ /zones/oracle/*       authenticated_user
 - **Kubernetes:** NetworkPolicies allow only Pomerium to reach the game, and only Pomerium and the game
   to reach the Oracle. A CoreDNS rewrite sends in-cluster requests for `*.localhost.pomerium.io` to
   Pomerium, so the game can fetch Pomerium's JWKS and knock on houses.
+
+### Inside the browser
+
+The board is a [Phaser](https://phaser.io) scene; everything around it (dialogs, the sign-in frame,
+denial screens, the identity panel, the access log, the door-rules editor and the menu) is React. The
+two share one small store ([`store.ts`](app/src/game/store.ts)): Phaser writes the player's position,
+health and region to it, and React writes the controls, so the touch buttons drive the same code as the
+keyboard.
+
+Progress lives in three [XState](https://stately.ai/docs/xstate) statecharts, saved to local storage:
+
+| Machine                                               | Tracks                                                                           |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------- |
+| [`quest-machine.ts`](app/src/game/quest-machine.ts)   | Chapter one: anonymous → citizen → proven → knighted → knight → armed            |
+| [`house-machine.ts`](app/src/game/house-machine.ts)   | Your house: one stage per letter on the desk, solved by real visits              |
+| [`player-machine.ts`](app/src/game/player-machine.ts) | The dog: walking, waiting on a gate, swinging, and a moment's safety after a hit |
+
+`knighted` is the stage the chapter turns on: the Oracle lists you in `knights`, but your Pomerium
+session still holds the claims from when you signed in, so the armory says no until you sign in again.
+
+The art and sound are code too. The sprites and tiles are pixel grids in [`art/`](art) that
+`node art/sprites.mjs` draws into sprite sheets, and there are no audio files: every note of music and
+every sound effect is synthesized at runtime with the Web Audio API ([`sound.ts`](app/src/game/sound.ts)).
+
+### On the server
+
+The server is a handful of [Effect](https://effect.website) services behind one catch-all route,
+[`routes/zones/$.ts`](app/src/routes/zones/$.ts). By the time a request reaches it, Pomerium has already
+allowed it.
+
+| Service                                          | Job                                                                                   |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| [`PomeriumIdentity`](app/src/server/identity.ts) | Verifies `X-Pomerium-Jwt-Assertion` against Pomerium's JWKS: who is asking            |
+| [`OracleAdmin`](app/src/server/oracle-admin.ts)  | Adds a player to `knights` or `scholars` in Keycloak, as the Captain or the Librarian |
+| [`Houses`](app/src/server/houses.ts)             | Renders a player's door rules as PPL and writes their house's Ingress                 |
+| [`Visitors`](app/src/server/visitors.ts)         | Signs the townsfolk in through Pomerium and knocks on a house as them                 |
+| [`Kube`](app/src/server/kube.ts)                 | Talks to the Kubernetes API with the pod's ServiceAccount                             |
+
+### Where things live
+
+| Path                      | What it is                                                                     |
+| ------------------------- | ------------------------------------------------------------------------------ |
+| `app/src/game/zones.ts`   | Every zone and its policy                                                      |
+| `scripts/render.ts`       | Turns `zones.ts` into the Pomerium config, Keycloak realm and Kubernetes files |
+| `app/src/game/scene.ts`   | The Phaser overworld: movement, sword, monsters, drawing                       |
+| `app/src/game/story.ts`   | Talking, reading and gates: everything that asks Pomerium a question           |
+| `app/src/game/content.ts` | What characters say, what signs show, and the docs each lesson links to        |
+| `app/src/game/house*.ts`  | The player's house: its visitors, its statechart, and its letters and bell     |
+| `app/src/components/`     | The React UI around the game                                                   |
+| `app/src/server/`         | The server's Effect services                                                   |
+| `deploy/`                 | The vendored Pomerium Ingress Controller install and the Oracle's login theme  |
+| `art/`                    | Pixel art as code                                                              |
+| `docs/prd/`               | Plans for work not yet built                                                   |
 
 ### Things worth knowing
 
