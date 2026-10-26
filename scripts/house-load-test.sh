@@ -87,7 +87,7 @@ house() {
     annotations="    ingress.pomerium.io/policy: |
       - allow:
           or:
-            - email: { is: owner-${id}@kingdom.com }"
+            - email: { is: owner-${id}@game.localhost.pomerium.io }"
   fi
   cat <<EOF
 ---

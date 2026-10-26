@@ -10,7 +10,7 @@
 #   ./quest reset-oracle  forget every player: re-import the Keycloak realm from scratch
 #
 # Environment: QUEST_PORT (default 443), QUEST_DOMAIN (default localhost.pomerium.io),
-# QUEST_KINGDOM_DOMAIN (citizens' email domain, default kingdom.com).
+# QUEST_KINGDOM_DOMAIN (citizens' email domain, default game.localhost.pomerium.io).
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -23,7 +23,7 @@ PORT="${QUEST_PORT:-443}"
 DOMAIN="${QUEST_DOMAIN:-localhost.pomerium.io}"
 STATE=.quest
 CERTS="${STATE}/certs"
-KINGDOM_DOMAIN="${QUEST_KINGDOM_DOMAIN:-kingdom.com}"
+KINGDOM_DOMAIN="${QUEST_KINGDOM_DOMAIN:-game.$DOMAIN}"
 export QUEST_PORT="$PORT" QUEST_DOMAIN="$DOMAIN" QUEST_KINGDOM_DOMAIN="$KINGDOM_DOMAIN"
 
 say() { printf '\033[1;35m▸\033[0m %s\n' "$*"; }

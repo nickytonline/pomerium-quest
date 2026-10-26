@@ -5,7 +5,7 @@ set -uo pipefail
 
 PORT="${QUEST_PORT:-443}"
 DOMAIN="${QUEST_DOMAIN:-localhost.pomerium.io}"
-KINGDOM="${QUEST_KINGDOM_DOMAIN:-kingdom.com}"
+KINGDOM="${QUEST_KINGDOM_DOMAIN:-game.$DOMAIN}"
 SUFFIX=""
 [ "$PORT" = 443 ] || SUFFIX=":${PORT}"
 GAME="https://game.${DOMAIN}${SUFFIX}"

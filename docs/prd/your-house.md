@@ -217,7 +217,7 @@ metadata:
     ingress.pomerium.io/policy: |
       - allow:
           or:
-            - email: { is: alice@kingdom.com }
+            - email: { is: alice@game.localhost.pomerium.io }
             - claim/groups: knights
     quest/last-visited: '2026-10-25T18:00:00Z'
 spec:

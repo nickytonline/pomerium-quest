@@ -466,7 +466,7 @@ const NPCS = {
       '................',
     ],
   },
-  // baker@kingdom.com, a citizen the town gate lets in: tall baker's hat, rosy cheeks, apron, a loaf.
+  // baker@game.localhost.pomerium.io, a citizen the town gate lets in: tall baker's hat, rosy cheeks, apron, a loaf.
   baker: {
     palette: {
       W: '#f4f4f8',

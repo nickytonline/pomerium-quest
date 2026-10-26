@@ -49,13 +49,13 @@ export interface Zone {
 }
 
 /**
- * The email domain of the kingdom's citizens: QUEST_KINGDOM_DOMAIN, or kingdom.com. Node reads it
+ * The email domain of the kingdom's citizens: QUEST_KINGDOM_DOMAIN, or game.localhost.pomerium.io. Node reads it
  * at render and on the server; Vite bakes it into the browser bundle (see vite.config.ts).
  */
 export const KINGDOM_DOMAIN: string =
   (typeof process === 'undefined'
     ? import.meta.env.QUEST_KINGDOM_DOMAIN
-    : process.env['QUEST_KINGDOM_DOMAIN']) || 'kingdom.com'
+    : process.env['QUEST_KINGDOM_DOMAIN']) || 'game.localhost.pomerium.io'
 
 /** Posted to the game by the sign-in frame once Pomerium hands it back with a session. */
 export const SIGNED_IN_MESSAGE = 'pomerium-quest/signed-in'

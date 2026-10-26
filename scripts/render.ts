@@ -5,7 +5,7 @@
 //   node scripts/render.ts            → deploy/.generated/pomerium.yaml and manifests.yaml
 //
 // Environment: QUEST_DOMAIN (default localhost.pomerium.io), QUEST_PORT (default 443),
-// QUEST_KINGDOM_DOMAIN (citizens' email domain, default kingdom.com), and QUEST_DEV=1 to run the game's Vite dev server from the source mounted into the cluster.
+// QUEST_KINGDOM_DOMAIN (citizens' email domain, default game.localhost.pomerium.io), and QUEST_DEV=1 to run the game's Vite dev server from the source mounted into the cluster.
 import { generateKeyPairSync, randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
