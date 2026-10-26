@@ -41,11 +41,12 @@ require() {
   done
   if [ ${#missing[@]} -gt 0 ]; then
     echo "Missing: ${missing[*]}"
-    echo "macOS:  brew install ${missing[*]/node/node}"
-    echo "Linux:  see https://k3d.io, https://kubernetes.io/docs/tasks/tools, https://github.com/FiloSottile/mkcert"
+    echo "macOS:          brew install ${missing[*]}"
+    echo "Linux, Windows: see \"Play it on a real Pomerium\" in README.md (on Windows, run ./quest in WSL 2)"
     exit 1
   fi
-  docker info >/dev/null 2>&1 || fail "Docker isn't running. Start Docker Desktop (or OrbStack/Colima) and try again."
+  docker info >/dev/null 2>&1 ||
+    fail "Docker isn't running. Start Docker Desktop (or OrbStack, Colima or the Docker service) and try again."
 }
 
 cluster_exists() { k3d cluster list "$CLUSTER" >/dev/null 2>&1; }
