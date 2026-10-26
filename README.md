@@ -1,5 +1,9 @@
 # Pomerium Quest
 
+<p align="center">
+  <img src="app/public/assets/splash.png" width="400" alt="The Pomerium Pomeranian in aviators and a leather jacket">
+</p>
+
 A Zelda-style browser game that teaches how [Pomerium](https://www.pomerium.com) works. You play the
 Pomerium Pomeranian, and every gate in the kingdom is a real Pomerium route. The guard in front of it
 follows the route's real policy, and when a guard turns you away, the game shows you the exact policy rule
@@ -29,6 +33,94 @@ Then the sage gives you a house in the Slime Fields, and you write the policy on
 | Every citizen may visit, except the baker                      | A `deny` rule beats any `allow`                                                       |
 | Knights may look in (GET) but not knock (POST)                 | `http_method`                                                                         |
 | Saving door rules sends the townsfolk and a slime to your door | Real requests through Pomerium, with real sessions (or none)                          |
+
+## How the game works
+
+You wake up in Hearth Village. Walk around, talk to people, read the signs, and try the gates. Every gate
+asks Pomerium whether to let you through, so what you can reach depends on who the Oracle says you are.
+
+### Who's who
+
+|                                                                  | Who                 | What they do                                                                                  |
+| ---------------------------------------------------------------- | ------------------- | --------------------------------------------------------------------------------------------- |
+| <img src="docs/images/legend/dog.gif" width="48" alt="">         | **You**             | The Pomerium Pomeranian                                                                       |
+| <img src="docs/images/legend/sage.png" width="48" alt="">        | **The sage**        | Starts you on the quest, and once you've signed in, gives you the deed to a house             |
+| <img src="docs/images/legend/oracle.png" width="48" alt="">      | **The Oracle**      | Your identity provider. He signs you in, in his temple, and hands Pomerium your claims        |
+| <img src="docs/images/legend/guard.png" width="48" alt="">       | **A guard**         | Stands at every gate and follows that route's policy, to the letter, on every request         |
+| <img src="docs/images/legend/captain.png" width="48" alt="">     | **The Captain**     | Runs the Knights' Guild. Beat three bot slimes and they have the Oracle add you to `knights`  |
+| <img src="docs/images/legend/armorer.png" width="48" alt="">     | **The Armorer**     | Keeps the forge. The armory's guard, not the Armorer, decides who gets the steel sword        |
+| <img src="docs/images/legend/librarian.png" width="48" alt="">   | **The Librarian**   | Read every book in the library and they have the Oracle add you to `scholars`                 |
+| <img src="docs/images/legend/baker.png" width="48" alt="">       | **The baker**       | `baker@kingdom.com`, a citizen, so the town gate lets them in                                 |
+| <img src="docs/images/legend/traveler.png" width="48" alt="">    | **The traveler**    | `wanderer@outlands.net`: signed in, but not a citizen, so the town gate turns them away       |
+| <img src="docs/images/legend/phish.png" width="48" alt="">       | **A phish**         | Dresses as the Oracle and offers to sign you in. Hand over your password and you lose         |
+| <img src="docs/images/legend/bot-slime.gif" width="48" alt="">   | **A bot slime**     | Roams the Slime Fields and bites. It never signs in, so it's a request with no session at all |
+| <img src="docs/images/legend/fish.gif" width="48" alt="">        | **A fish**          | Swims in the ponds. Catch one to get a heart back                                             |
+| <img src="docs/images/legend/steel-sword.png" width="48" alt=""> | **The steel sword** | Waits in a chest in the armory. It hits harder than your wooden one, and splits cracked rock  |
+
+### What you can do
+
+| To            | Keyboard                                  | Touch             |
+| ------------- | ----------------------------------------- | ----------------- |
+| Move          | The arrow keys, or the W, A, S and D keys | The direction pad |
+| Talk and read | E or Enter, facing someone or something   | A (Talk)          |
+| Swing a sword | Space or J                                | B (Sword)         |
+| Open the menu | Esc                                       | The Menu button   |
+
+The menu saves your game, restarts it, quits to the title screen, and turns music and sound effects on
+and off. Beside the board, your identity shows the claims in your session right now, and the access log
+lists every request a guard has checked.
+
+### Sign in with the Oracle
+
+Nobody gets far without papers. The Oracle signs you in through Pomerium without leaving the game: his
+temple is a real Keycloak login, and afterwards he shows you the claims Pomerium got for you.
+
+<img src="docs/images/sign-in.png" width="600" alt="The Oracle shows the claims for nick@kingdom.com: an email, and an empty groups list">
+
+### Fight, swim and get your strength back
+
+Bot slimes roam the Slime Fields. They bite for a whole heart, and your wooden sword takes two swings to
+pop one. The Captain wants three gone before they'll vouch for you. Run out of hearts and you wake up back
+in Hearth Village, still signed in and with all your gear. Catch a fish or drink from the town fountain
+to heal.
+
+The dog can swim, too: only its head shows above the water, and it shakes itself dry on the bank.
+
+| Fighting a bot slime                                                                                     | Swimming, then shaking dry                                                                                      |
+| -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| <img src="docs/images/fight.gif" width="336" alt="The dog swings its wooden sword and pops a bot slime"> | <img src="docs/images/swim-and-shake.gif" width="336" alt="The dog swims across a pond, climbs out and shakes"> |
+
+### Get turned away
+
+When a guard says no, it's because Pomerium said no. The refusal tells the story first. Its second tab
+shows the request Pomerium checked, the route's policy with the line that failed, and Pomerium's request
+ID.
+
+<img src="docs/images/denied.png" width="600" alt="A 403 from the armory: its policy needs claim/groups: knights, and your groups are empty">
+
+### Earn the steel sword
+
+The Captain knights you, but the armory still says no: your session holds the claims you had when you
+signed in. Sign in with the Oracle again, and the armory's guard lets you through to the chest. The
+steel sword splits the cracked rocks that block the road to the library.
+
+| Opening the armory's chest                                                                                  | Splitting the rocks                                                                                            |
+| ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| <img src="docs/images/steel-sword.gif" width="288" alt="A chest opens and the steel sword rises out of it"> | <img src="docs/images/break-rock.gif" width="336" alt="The dog splits two cracked rocks with the steel sword"> |
+
+From there, the library lets citizens read but only scribes write, the Librarian can make you a scholar,
+and the Royal Keep at the end of the road wants a citizen who is a knight and a scholar at once.
+
+### Write the rules on your own door
+
+The sage gives you a house in the Slime Fields. Its door is a real Pomerium route too, and it starts
+public, so slimes walk right in. Letters on your desk ask for door rules, one lesson at a time, and the
+rules you write become the route's policy. Save them, and the townsfolk and a slime come and knock,
+signed in as themselves (or not at all), so you see what Pomerium does with your policy.
+
+| A public door                                                                                                         | Writing the rules                                                                                                |
+| --------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| <img src="docs/images/house.png" width="300" alt="A slime has got into the house, and another waits on the doorstep"> | <img src="docs/images/door-rules.png" width="420" alt="Door rules that let in nick@kingdom.com or the traveler"> |
 
 ## Play it on a real Pomerium (local k3d)
 
