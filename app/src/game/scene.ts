@@ -1775,8 +1775,8 @@ export class KingdomScene extends Phaser.Scene {
 
   /**
    * At the table, a bite every so often: a piece of the loaf goes up to the traveler's mouth and is
-   * chewed, now and then dropping a crumb. The loaf gets
-   * smaller every few bites, and once it's gone (or if it already was) the traveler leaves.
+   * chewed, now and then dropping a crumb. The loaf gets smaller every few bites, and once it's gone
+   * (or if it already was) the traveler leaves.
    */
   private eatBread(traveler: NpcSprite, time: number) {
     const plan = this.traveler
