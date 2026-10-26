@@ -674,7 +674,7 @@ ${sheetUrls.join('\n')}
 `,
 )
 
-writeFileSync(new URL('../app/public/favicon.svg', import.meta.url), faviconSvg())
+writeFileSync(new URL('../app/public/favicon.svg', import.meta.url), faviconSvg(HEAD_DOWN, PALETTE))
 
 console.log(
   `wrote ${assets}{dog,items,npcs,tiles}.png, the splash's URL, app/public/favicon.svg, app/src/game/sheets.ts and art/out previews`,
