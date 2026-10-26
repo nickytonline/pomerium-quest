@@ -132,19 +132,25 @@ deploy() {
 }
 
 # The townsfolk who visit players' houses get real Oracle accounts, imported (and reset) at every deploy.
+# Keycloak only imports its realm on first start, so the groups they belong to are created first if an
+# older realm doesn't have them yet (an existing group is left alone, with its members).
 townsfolk() {
-  local password
+  local password groups
   password="$(node -p "require('./${STATE}/secrets.json').keycloakAdminPassword")"
+  groups="$(node -p "[...new Set(require('./deploy/.generated/townsfolk.json').users.flatMap((u) => u.groups))].map((g) => g.slice(1)).join(' ')")"
   kc -n "$NAMESPACE" exec -i deploy/keycloak -- sh -c '
     cat >/tmp/townsfolk.json
     kcadm=/opt/keycloak/bin/kcadm.sh
     $kcadm config credentials --config /tmp/kcadm.config --server http://localhost:8080 \
-      --realm master --user admin --password "$1" >/dev/null 2>&1 &&
+      --realm master --user admin --password "$1" >/dev/null 2>&1 || exit 1
+    for group in $2; do
+      $kcadm create groups --config /tmp/kcadm.config -r kingdom -s "name=$group" >/dev/null 2>&1 || true
+    done
     $kcadm create partialImport --config /tmp/kcadm.config -r kingdom -f /tmp/townsfolk.json >/dev/null
     status=$?
     rm -f /tmp/townsfolk.json
     exit $status
-  ' sh "$password" <deploy/.generated/townsfolk.json || fail "Couldn't add the townsfolk to the Oracle"
+  ' sh "$password" "$groups" <deploy/.generated/townsfolk.json || fail "Couldn't add the townsfolk to the Oracle"
 }
 
 case "${1:-up}" in

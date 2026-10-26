@@ -397,7 +397,7 @@ allowed it.
   Pomerium, for anything real.
 - **Keycloak runs in dev mode** (`start-dev`) with its H2 database on a volume, so players survive a
   redeploy. It imports the realm on first start only: after changing the realm in `render.ts`, or
-  `QUEST_DOMAIN`/`QUEST_PORT`, run `./quest reset-oracle`. A public deployment should run
+  `QUEST_DOMAIN`/`QUEST_PORT`, run `./quest reset-oracle`. (`./quest deploy` does create any group the townsfolk need, such as `citizen`, if an older realm lacks it, so a new group alone needs no reset.) A public deployment should run
   `start` with a real database.
 - **Signing in again signs you out of Keycloak too.** Pomerium's sign-out calls Keycloak's
   end-session endpoint, so refreshing your claims asks for your password again.
