@@ -264,7 +264,10 @@ export async function enterGate(
   learn('every')
   learn('route')
 
-  if (zone.id === 'armory' || zone.id === 'library') learn('jwt')
+  // Taught on the way into the armory or the reading room, not at the scriptorium door or on the way out.
+  const intoJwtRoom = (zone.id === 'armory' || zone.id === 'library') && action === 'enter' && !leaving
+
+  if (intoJwtRoom) learn('jwt')
 
   if (zone.id === 'keep') {
     learn('allOf')
