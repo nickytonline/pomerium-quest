@@ -14,6 +14,7 @@ import { INTRO, LESSONS, LESSON_ORDER, type Choice } from '../game/content.ts'
 import { KNIGHT_QUOTA, questMachine, type QuestStage } from '../game/quest-machine.ts'
 import { MAX_HP, SETTLE_MS, quest, useQuest, type DenyView, type Dir } from '../game/store.ts'
 import { decide, type EvalLine, type Identity } from '../game/ppl.ts'
+import { sound, startSound, useSound, type SoundSettings } from '../game/sound.ts'
 import { KINGDOM_DOMAIN, SIGNED_IN_MESSAGE, zoneById } from '../game/zones.ts'
 
 /** Wide enough for the panels beside the game. The game fits the height, so width alone decides. */
@@ -194,6 +195,7 @@ function useDevResume(started: boolean) {
 
 export function Quest() {
   useBoot()
+  useEffect(startSound, [])
   useDialogKeys()
   const started = useQuest((s) => s.started)
   useDevResume(started)
@@ -520,6 +522,8 @@ function PauseMenu() {
         <button className={menuButton} type="button" onClick={() => quest.save()}>
           Save game
         </button>
+        <SoundToggle setting="music" label="Music" />
+        <SoundToggle setting="effects" label="Sound effects" />
         {confirmingRestart ? (
           <div className="grid gap-2 rounded border-2 border-deny p-3 text-[0.9rem]">
             <span>Restart from the village? Your lessons and progress are cleared.</span>
@@ -546,6 +550,22 @@ function PauseMenu() {
         </p>
       </div>
     </div>
+  )
+}
+
+function SoundToggle({ setting, label }: { readonly setting: keyof SoundSettings; readonly label: string }) {
+  const on = useSound()[setting]
+
+  return (
+    <button
+      className={`${menuButton} flex justify-between`}
+      type="button"
+      aria-pressed={on}
+      onClick={() => sound.toggle(setting)}
+    >
+      {label}
+      <span className={on ? 'text-allow' : 'text-muted'}>{on ? 'On' : 'Off'}</span>
+    </button>
   )
 }
 

@@ -29,7 +29,7 @@ brew install k3d kubectl mkcert node
 ```
 
 Then open **https://game.localhost.pomerium.io**. Move with the arrow keys or the W, A, S and D keys, talk with E or Enter,
-swing with Space or J, and press Esc for the menu (save, restart, quit to title). `*.localhost.pomerium.io` resolves to `127.0.0.1`, so you
+swing with Space or J, and press Esc for the menu (save, restart, quit to title, and turn music or sound effects on and off). `*.localhost.pomerium.io` resolves to `127.0.0.1`, so you
 don't need to edit `/etc/hosts`. mkcert creates a locally trusted certificate, and may ask for your
 password the first time.
 

@@ -14,6 +14,7 @@ import {
 } from './content.ts'
 import { decide, routeYaml, type Identity } from './ppl.ts'
 import { KNIGHT_QUOTA, hasSteel, isAtLeast, stage, type QuestStage } from './quest-machine.ts'
+import { sfx } from './sound.ts'
 import { MAX_HP, quest, type DenyView, type LogEntry } from './store.ts'
 import type { NpcId } from './world.ts'
 import { KINGDOM_DOMAIN, zoneById, type Zone, type ZoneId } from './zones.ts'
@@ -238,6 +239,7 @@ export async function enterGate(zoneId: ZoneId): Promise<boolean> {
 
   if (zone.id === 'keep') {
     learn('allOf')
+    sfx('victory')
     quest.openFinale()
   }
 
@@ -673,10 +675,12 @@ export function meetPhish(onTurnedAway: () => void) {
       choices: [
         {
           label: 'Sign in here',
-          pick: () =>
+          pick: () => {
+            sfx('laugh')
             quest.say([{ who: 'Oracle?', text: 'Thank you kindly. Heh. Heh heh heh…' }], () =>
               quest.fallForPhish(),
-            ),
+            )
+          },
         },
         {
           label: 'No. I only sign in at the temple.',
@@ -704,6 +708,7 @@ export function meetPhish(onTurnedAway: () => void) {
 export function openChest(): boolean {
   if (hasSteel() || stage() !== 'knight') return false
   quest.send({ type: 'STEEL_TAKEN' })
+  sfx('itemGet')
   quest.say(
     [
       { who: 'Armory', text: 'You found the Steel Sword! Strong enough to break cracked rock.' },
@@ -776,6 +781,7 @@ export function drinkFromFountain() {
     return
   }
 
+  sfx('drink')
   quest.setHp(hp + 1)
   quest.progress({ fountainHealed: progress.fountainHealed + 1 })
   say(
@@ -823,6 +829,7 @@ export function eatFish(): boolean {
     return false
   }
 
+  sfx('chomp')
   quest.setHp(hp + 1)
   quest.progress({ fishEaten: progress.fishEaten + 1 })
   say(

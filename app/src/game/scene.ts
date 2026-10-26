@@ -3,6 +3,7 @@
 import * as Phaser from 'phaser'
 import { startPlayer } from './player-machine.ts'
 import { SHEETS } from './sheets.ts'
+import { sfx } from './sound.ts'
 import { KNIGHT_QUOTA, defeated, hasSteel, type MonsterKind } from './quest-machine.ts'
 import { MAX_HP, buzz, quest, type Dir } from './store.ts'
 import {
@@ -464,6 +465,8 @@ export class KingdomScene extends Phaser.Scene {
 
     if (!player) return
     this.mode.send({ type: 'WALK' })
+
+    if (this.tileAt(target) === TILE.water) sfx(this.tileAt(this.pos) === TILE.water ? 'paddle' : 'splash')
     this.swim(this.tileAt(target) === TILE.water)
     player.anims.play(`walk-${this.dir}`, true)
     this.tweens.add({
@@ -556,6 +559,7 @@ export class KingdomScene extends Phaser.Scene {
 
     if (!sword) return
     this.mode.send({ type: 'SWING' })
+    sfx(hasSteel() ? 'swingSteel' : 'swing')
     const target = this.front()
     const step = STEP[this.dir]
     const base = SWORD_ANGLE[this.dir]
@@ -611,12 +615,14 @@ export class KingdomScene extends Phaser.Scene {
     if (this.tileAt(target) !== TILE.rock) return
 
     if (!hasSteel()) {
+      sfx('clang')
       quest.toast('Clang. The wooden sword bounces off the cracked rock.', 'info')
 
       return
     }
 
     this.setTile(target, TILE.cobble)
+    sfx('smash')
     this.shatterRock(target)
     quest.progress({ brokenRocks: [...quest.get().progress.brokenRocks, keyOf(target)] })
     quest.toast('The steel sword splits the rock.', 'info')
@@ -718,6 +724,7 @@ export class KingdomScene extends Phaser.Scene {
         swing++
         player.setOrigin(0.5 - (side * Math.round(SHAKE.reach * strength)) / T, 0.5)
         player.setScale(1 - 0.12 * strength, 1)
+        sfx('shake')
         this.flingDroplets(side, strength)
         this.time.delayedCall(SHAKE.swingMs, next)
       }
@@ -800,6 +807,7 @@ export class KingdomScene extends Phaser.Scene {
   private hitMonster(monster: Monster, damage: number) {
     monster.hp -= damage
     buzz(15)
+    sfx(monster.hp > 0 ? 'slimeHit' : 'slimePop')
     monster.sprite.setTint(0xffffff)
     this.time.delayedCall(120, () => monster.sprite.clearTint())
 
@@ -962,11 +970,13 @@ export class KingdomScene extends Phaser.Scene {
     this.tweens.add({ targets: this.player, alpha: 0.2, duration: 90, yoyo: true, repeat: 4 })
 
     if (hp <= 0) {
+      sfx('faint')
       this.respawn()
 
       return
     }
 
+    sfx('bite')
     quest.setHp(hp)
     const back = { x: this.pos.x + STEP[dir].x, y: this.pos.y + STEP[dir].y }
 
@@ -1005,6 +1015,8 @@ export function startGame(parent: HTMLElement) {
     width: VIEW.width,
     height: VIEW.height,
     pixelArt: true,
+    // sound.ts makes every sound itself; Phaser would only open a second, unused AudioContext.
+    audio: { noAudio: true },
     backgroundColor: '#14111f',
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
     scene: [KingdomScene],
