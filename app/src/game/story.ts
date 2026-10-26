@@ -15,6 +15,7 @@ import {
   type SignId,
 } from './content.ts'
 import { decide, failedChecks, routeYaml, type Identity, type RequestInfo } from './ppl.ts'
+import { VISITORS, type VisitorId } from './house.ts'
 import { houseStage } from './house-machine.ts'
 import { giveDeed } from './house-story.ts'
 import { KNIGHT_QUOTA, hasSteel, isAtLeast, stage, type QuestStage } from './quest-machine.ts'
@@ -25,17 +26,15 @@ import { KINGDOM_DOMAIN, zoneById, type Zone } from './zones.ts'
 
 const UPSTREAM = 'http://quest.quest.svc.cluster.local:3000'
 
-const TRAVELER: Identity = {
-  authenticated: true,
-  email: 'wanderer@outlands.net',
-  groups: [],
+/** Townsfolk as Pomerium sees them: the same accounts that visit the player's house. */
+const townsperson = (id: VisitorId): Identity => {
+  const { email, groups } = VISITORS[id]
+
+  return { authenticated: true, email, groups }
 }
 
-const BAKER: Identity = {
-  authenticated: true,
-  email: `baker@${KINGDOM_DOMAIN}`,
-  groups: [],
-}
+const TRAVELER = townsperson('traveler')
+const BAKER = townsperson('baker')
 
 const learn = (lesson: LessonId) => quest.learn(lesson, LESSONS[lesson].title)
 const identity = () => quest.get().identity
