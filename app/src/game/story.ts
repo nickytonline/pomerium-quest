@@ -15,6 +15,8 @@ import {
   type SignId,
 } from './content.ts'
 import { decide, failedChecks, routeYaml, type Identity, type RequestInfo } from './ppl.ts'
+import { houseStage } from './house-machine.ts'
+import { giveDeed } from './house-story.ts'
 import { KNIGHT_QUOTA, hasSteel, isAtLeast, stage, type QuestStage } from './quest-machine.ts'
 import { sfx } from './sound.ts'
 import { MAX_HP, quest, type DenyView, type LogEntry } from './store.ts'
@@ -550,12 +552,18 @@ function baker() {
 const SCRIPTS: Record<NpcId, () => void> = {
   sage: () => {
     if (identity().authenticated) {
-      quest.say([
-        {
-          who: 'Sage',
-          text: 'The Oracle vouches for you now. Head north through the Fields Gate. A guard stands at every gate, and the sign beside it shows the exact orders that guard follows.',
+      quest.say(
+        [
+          {
+            who: 'Sage',
+            text: 'The Oracle vouches for you now. Head north through the Fields Gate. A guard stands at every gate, and the sign beside it shows the exact orders that guard follows.',
+          },
+        ],
+        // Once the player has a session, the sage hands over the deed to their house.
+        () => {
+          if (houseStage() === 'unowned') giveDeed()
         },
-      ])
+      )
 
       return
     }

@@ -28,6 +28,14 @@ export const TILE = {
   fountainBottomRight: 20,
   anvil: 29,
   workbench: 30,
+  tableBread: 31,
+  tableCrumbs: 32,
+  tableCup: 33,
+  desk: 34,
+  door: 35,
+  doorLocked: 36,
+  doormat: 37,
+  bell: 38,
 } as const
 
 export type TileId = (typeof TILE)[keyof typeof TILE]
@@ -43,10 +51,14 @@ export const WALKABLE: ReadonlySet<number> = new Set([
   TILE.path,
   TILE.cobble,
   TILE.floor,
+  TILE.doormat,
 ])
 
-/** The dog can also swim. Monsters keep to their own terrain, so bot slimes stay out of the water. */
-export const PLAYER_TERRAIN: ReadonlySet<number> = new Set([...WALKABLE, TILE.water])
+/**
+ * The dog can also swim, and walk through the door of their own house. Monsters keep to their own
+ * terrain, so bot slimes stay out of the water and only get into the house when Pomerium lets them.
+ */
+export const PLAYER_TERRAIN: ReadonlySet<number> = new Set([...WALKABLE, TILE.water, TILE.door])
 
 export const MAP_WIDTH = 40
 export const MAP_HEIGHT = 30
@@ -75,6 +87,8 @@ export interface Point {
   readonly y: number
 }
 
+export const same = (a: Point, b: Point) => a.x === b.x && a.y === b.y
+
 /** What a guard asks Pomerium: `method` on the path `action` under the zone's route. */
 export interface GateRequest {
   readonly zoneId: ZoneId
@@ -97,6 +111,45 @@ export interface Npc extends Point {
   readonly npcId: NpcId
 }
 
+/** The player's house in the Slime Fields (docs/prd/your-house.md). */
+export interface House {
+  readonly door: Point
+  /** The path outside the door, where slimes and visitors knock. */
+  readonly doorstep: Point
+  readonly mat: Point
+  readonly desk: Point
+  readonly bell: Point
+  /** The table's two tiles: the bread end, then the cup end. */
+  readonly table: readonly [Point, Point]
+  /** Where the traveler sits while they're welcome. */
+  readonly seat: Point
+  /** The sign outside, which shows the house's route. */
+  readonly sign: Point
+  /** The floor inside, corner to corner. */
+  readonly inside: { readonly x0: number; readonly y0: number; readonly x1: number; readonly y1: number }
+}
+
+export const HOUSE: House = {
+  door: { x: 7, y: 12 },
+  doorstep: { x: 8, y: 12 },
+  mat: { x: 6, y: 12 },
+  desk: { x: 2, y: 10 },
+  bell: { x: 6, y: 10 },
+  table: [
+    { x: 3, y: 11 },
+    { x: 4, y: 11 },
+  ],
+  seat: { x: 3, y: 12 },
+  sign: { x: 8, y: 11 },
+  inside: { x0: 2, y0: 10, x1: 6, y1: 14 },
+}
+
+export const inHouse = (point: Point) =>
+  point.x >= HOUSE.inside.x0 &&
+  point.x <= HOUSE.inside.x1 &&
+  point.y >= HOUSE.inside.y0 &&
+  point.y <= HOUSE.inside.y1
+
 export interface World {
   readonly tiles: number[][]
   readonly gates: readonly Gate[]
@@ -113,9 +166,11 @@ export interface World {
   readonly spawn: Point
 }
 
-export type Region = 'Hearth Village' | 'Slime Fields' | 'Kingdom Town' | 'Library Quarter'
+export type Region = 'Hearth Village' | 'Slime Fields' | 'Your House' | 'Kingdom Town' | 'Library Quarter'
 
 export function regionAt(point: Point): Region {
+  if (inHouse(point) || same(point, HOUSE.door)) return 'Your House'
+
   if (point.x <= 15) return point.y >= 18 ? 'Hearth Village' : 'Slime Fields'
 
   return point.y >= 18 ? 'Library Quarter' : 'Kingdom Town'
@@ -176,8 +231,16 @@ export function buildWorld(): World {
     TILE.tree,
   )
 
-  // Slime Fields, with a pond of fish.
+  // Slime Fields, with a pond of fish, and the player's house below it.
   fill(2, 5, 5, 7, TILE.water)
+  room(1, 9, 7, 15)
+  set(HOUSE.door.x, HOUSE.door.y, TILE.doorLocked)
+  set(HOUSE.mat.x, HOUSE.mat.y, TILE.doormat)
+  set(HOUSE.desk.x, HOUSE.desk.y, TILE.desk)
+  set(HOUSE.bell.x, HOUSE.bell.y, TILE.bell)
+  set(HOUSE.table[0].x, HOUSE.table[0].y, TILE.tableBread)
+  set(HOUSE.table[1].x, HOUSE.table[1].y, TILE.tableCup)
+  set(HOUSE.sign.x, HOUSE.sign.y, TILE.sign)
   fill(8, 12, 8, 16, TILE.path)
   fill(8, 12, 15, 12, TILE.path)
   each(
@@ -189,14 +252,9 @@ export function buildWorld(): World {
       [11, 3],
       [12, 3],
       [12, 4],
-      [3, 9],
-      [4, 9],
       [13, 8],
-      [5, 14],
-      [2, 14],
       [14, 16],
       [10, 7],
-      [1, 11],
       [14, 3],
       [7, 2],
     ],
@@ -207,7 +265,6 @@ export function buildWorld(): World {
       [5, 3],
       [9, 9],
       [11, 13],
-      [3, 12],
       [13, 15],
       [6, 16],
     ],
@@ -331,9 +388,9 @@ export function buildWorld(): World {
     ],
     bots: [
       { x: 10, y: 2 },
-      { x: 6, y: 10 },
+      { x: 10, y: 15 },
       { x: 12, y: 14 },
-      { x: 3, y: 15 },
+      { x: 5, y: 16 },
       { x: 13, y: 6 },
     ],
     phish: [

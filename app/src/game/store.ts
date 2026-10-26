@@ -1,7 +1,9 @@
 // Shared state between the Phaser scene and the React UI. The scene writes to it (dialog,
 // denials, log, progress); React renders it and reports button presses back.
 import { useSyncExternalStore } from 'react'
-import type { Choice, DocLink, LessonId, Page } from './content.ts'
+import type { Caller, Choice, DocLink, LessonId, Page } from './content.ts'
+import type { HouseRule, HouseState } from './house.ts'
+import { houseActor, persistHouse, resetHouse, type HouseEvent, type HouseStage } from './house-machine.ts'
 import type { EvalLine, Identity } from './ppl.ts'
 import {
   persist,
@@ -35,6 +37,30 @@ export interface Progress {
   readonly scholar: boolean
   /** True once a game has been started, so the title screen offers Continue. */
   readonly playedBefore: boolean
+  /** The door rules the player last saved; null while their house is still public. */
+  readonly houseRules: readonly HouseRule[] | null
+}
+
+/** One knock on the player's house, as Pomerium answered it. */
+export interface VisitResult {
+  readonly who: Caller
+  readonly method: 'GET' | 'POST'
+  /** Pomerium's status code: 200 let in, 401 no session, 403 refused, 0 unreachable. */
+  readonly status: number
+  /** What the letter asked for, when there is a letter. */
+  readonly wanted?: boolean
+  /** How the rules on the door decided, line by line. */
+  readonly lines: readonly EvalLine[]
+}
+
+export interface VisitsView {
+  /** What happened at the door, as the kingdom tells it. */
+  readonly story: string
+  readonly results: readonly VisitResult[]
+  /** Every visit came out as the letter asked. */
+  readonly solved: boolean
+  /** Why the letter isn't solved even though the visits are right, if so. */
+  readonly note?: string
 }
 
 export interface DenyView {
@@ -114,6 +140,15 @@ export interface QuestState {
   readonly journalUnread: boolean
   /** When the player last saved explicitly (progress also saves on every step). */
   readonly savedAt: string | null
+  /** Mirrors the house machine so React can render it. */
+  readonly houseStage: HouseStage
+  readonly letterRead: boolean
+  /** The player's house as the server last reported it; null until they first go in. */
+  readonly house: HouseState | null
+  /** The door rules editor is open at the desk. Pauses the game. */
+  readonly houseEditor: boolean
+  /** The results of the last ring of the bell. Pauses the game while shown. */
+  readonly visits: VisitsView | null
 }
 
 /** Health is counted in half hearts: 10 is five full hearts. */
@@ -142,6 +177,7 @@ const freshProgress = (): Progress => ({
   booksRead: [],
   scholar: false,
   playedBefore: false,
+  houseRules: null,
 })
 
 function loadProgress(): Progress {
@@ -187,6 +223,11 @@ let state: QuestState = {
   journalOpen: false,
   journalUnread: false,
   savedAt: null,
+  houseStage: houseActor.getSnapshot().value,
+  letterRead: houseActor.getSnapshot().context.letterRead,
+  house: null,
+  houseEditor: false,
+  visits: null,
 }
 
 const listeners = new Set<() => void>()
@@ -224,6 +265,8 @@ export const quest = {
     state.phished ||
     state.menuOpen ||
     state.journalOpen ||
+    state.houseEditor ||
+    state.visits !== null ||
     !state.started,
 
   start: () => update({ started: true }),
@@ -278,6 +321,17 @@ export const quest = {
     const snapshot = questActor.getSnapshot()
     update({ stage: snapshot.value, defeated: snapshot.context.defeated })
   },
+  sendHouse: (event: HouseEvent) => {
+    houseActor.send(event)
+    persistHouse()
+    const snapshot = houseActor.getSnapshot()
+    update(noted({ houseStage: snapshot.value, letterRead: snapshot.context.letterRead }))
+  },
+  setHouse: (house: HouseState | null) => update({ house }),
+  openHouseEditor: () => update({ houseEditor: true, menuOpen: false, journalOpen: false }),
+  closeHouseEditor: () => update({ houseEditor: false, inputResumesAt: performance.now() + 200 }),
+  showVisits: (visits: VisitsView) => update({ visits }),
+  closeVisits: () => update({ visits: null, inputResumesAt: performance.now() + 200 }),
   learn: (lesson: LessonId, title: string) => {
     if (state.progress.lessons.includes(lesson)) return
     quest.progress({ lessons: [...state.progress.lessons, lesson] })
@@ -288,8 +342,12 @@ export const quest = {
     const progress = freshProgress()
     saveProgress(progress)
     resetQuest()
+    resetHouse()
     update({
       progress,
+      houseStage: houseActor.getSnapshot().value,
+      letterRead: false,
+      house: null,
       hp: MAX_HP,
       log: [],
       stage: questActor.getSnapshot().value,

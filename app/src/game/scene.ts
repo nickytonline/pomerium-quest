@@ -5,6 +5,16 @@ import { startPlayer } from './player-machine.ts'
 import { SHEETS } from './sheets.ts'
 import { sfx } from './sound.ts'
 import { KNIGHT_QUOTA, defeated, hasSteel, type MonsterKind } from './quest-machine.ts'
+import { houseStage } from './house-machine.ts'
+import {
+  enterHouse,
+  readHouseSign,
+  readLetter,
+  readTable,
+  ringBell,
+  slimeKnocks,
+  travelerWelcome,
+} from './house-story.ts'
 import { MAX_HP, buzz, quest, type Dir } from './store.ts'
 import {
   drinkFromFountain,
@@ -20,6 +30,7 @@ import {
 } from './story.ts'
 import {
   GUARD_FRAME,
+  HOUSE,
   MAP_HEIGHT,
   MAP_WIDTH,
   NPC_FRAME,
@@ -30,9 +41,12 @@ import {
   WALKABLE,
   isFountain,
   buildWorld,
+  inHouse,
   regionAt,
+  same,
   type Gate,
   type GateRequest,
+  type NpcId,
   type Point,
 } from './world.ts'
 
@@ -112,6 +126,12 @@ const PHISH_CALL = { reach: 3, ms: 20_000 }
 /** Monsters never leave the fields. */
 const FIELDS = { x0: 1, y0: 1, x1: 15, y1: 16 }
 
+/** How often a slime on the doorstep may try the player's door. */
+const SLIME_KNOCK_MS = 15_000
+
+/** Where a slime Pomerium lets in appears, just inside the door. */
+const SLIME_IN = { x: 5, y: 13 }
+
 /** Each kind's first frame in items.png (two frames each), hit points and name. */
 const MONSTER: Record<MonsterKind, { readonly frame: number; readonly hp: number; readonly name: string }> = {
   bot: { frame: 3, hp: 2, name: 'Bot slime' },
@@ -135,6 +155,8 @@ interface Fish {
 
 interface Monster {
   readonly kind: MonsterKind
+  /** Field monsters roam the fields; one Pomerium let into the player's house stays inside it. */
+  home: 'fields' | 'house'
   readonly sprite: Phaser.GameObjects.Sprite
   x: number
   y: number
@@ -164,7 +186,6 @@ interface Phish {
 }
 
 const center = (tile: number) => tile * T + T / 2
-const same = (a: Point, b: Point) => a.x === b.x && a.y === b.y
 const keyOf = (p: Point) => `${p.x},${p.y}`
 
 export class KingdomScene extends Phaser.Scene {
@@ -174,6 +195,8 @@ export class KingdomScene extends Phaser.Scene {
   private sword: Phaser.GameObjects.Image | undefined
   private keys: Record<string, Phaser.Input.Keyboard.Key> = {}
   private pos: Point = { x: 0, y: 0 }
+  /** Where the player was before their last step, to tell when they walk into the house. */
+  private previous: Point = { x: 0, y: 0 }
   private dir: Dir = 'down'
   private readonly mode = startPlayer()
   private openGate: Guard | undefined
@@ -189,6 +212,16 @@ export class KingdomScene extends Phaser.Scene {
   private lastRockHint = 0
   /** The Oracle, appearing beside the player to sign them in again with new claims. */
   private visitingOracle: Phaser.GameObjects.Sprite | undefined
+  /** Townsfolk, where they stand now. Only the traveler moves: to the player's table and back. */
+  private npcs: {
+    readonly npcId: NpcId
+    x: number
+    y: number
+    readonly sprite: Phaser.GameObjects.Sprite
+  }[] = []
+  /** A slime is asking Pomerium to let it into the player's house, or did so recently. */
+  private slimeKnockedAt = -Infinity
+  private stopWatching: (() => void) | undefined
 
   constructor() {
     super('kingdom')
@@ -205,6 +238,7 @@ export class KingdomScene extends Phaser.Scene {
   create() {
     const { progress, controls } = quest.get()
     this.pos = { x: progress.x, y: progress.y }
+    this.previous = this.pos
     this.dir = progress.dir
     this.seen = { interact: controls.interact, attack: controls.attack }
 
@@ -223,8 +257,12 @@ export class KingdomScene extends Phaser.Scene {
     this.map = map
     this.animateFountain()
 
-    for (const npc of this.world.npcs)
-      this.add.sprite(center(npc.x), center(npc.y), 'npcs', NPC_FRAME[npc.npcId])
+    this.npcs = this.world.npcs.map((npc) => ({
+      ...npc,
+      sprite: this.add.sprite(center(npc.x), center(npc.y), 'npcs', NPC_FRAME[npc.npcId]),
+    }))
+
+    this.dressHouse()
 
     this.guards = this.world.gates.map((gate) => {
       const post = this.postOf(gate)
@@ -253,6 +291,7 @@ export class KingdomScene extends Phaser.Scene {
     const spawn = (kind: MonsterKind) => (spot: Point) => ({
       kind,
       sprite: this.add.sprite(center(spot.x), center(spot.y), 'items', MONSTER[kind].frame).play(kind),
+      home: 'fields' as const,
       x: spot.x,
       y: spot.y,
       hp: MONSTER[kind].hp,
@@ -325,7 +364,15 @@ export class KingdomScene extends Phaser.Scene {
     }
 
     quest.setRegion(regionAt(this.pos))
-    this.events.once('destroy', () => this.mode.stop())
+
+    // A game saved inside the house resumes with the house standing and its visitors in place.
+    if (inHouse(this.pos)) void this.cameHome()
+
+    this.stopWatching = this.watchHouse()
+    this.events.once('destroy', () => {
+      this.mode.stop()
+      this.stopWatching?.()
+    })
   }
 
   override update(time: number) {
@@ -428,7 +475,7 @@ export class KingdomScene extends Phaser.Scene {
 
   private occupied(p: Point) {
     return (
-      this.world.npcs.some((npc) => same(npc, p)) ||
+      this.npcs.some((npc) => same(npc, p)) ||
       this.monsters.some((monster) => same(monster, p)) ||
       this.guards.some((guard) => same(guard.spot, p)) ||
       this.fish.some((fish) => same(fish, p)) ||
@@ -446,7 +493,7 @@ export class KingdomScene extends Phaser.Scene {
     this.face(dir)
     const target = this.front()
 
-    if (this.world.npcs.some((npc) => same(npc, target))) return
+    if (this.npcs.some((npc) => same(npc, target))) return
 
     if (this.phish.some((phish) => same(phish, target))) return
 
@@ -494,6 +541,12 @@ export class KingdomScene extends Phaser.Scene {
       return
     }
 
+    if (tile === TILE.doorLocked) {
+      this.lockedHint()
+
+      return
+    }
+
     if (PLAYER_TERRAIN.has(tile) || tile === TILE.gateOpen) this.walk(target)
   }
 
@@ -529,8 +582,14 @@ export class KingdomScene extends Phaser.Scene {
       sfx('gateClose')
     }
 
+    const cameIn = !inHouse(this.previous) && inHouse(target)
+    this.previous = target
     quest.progress({ x: target.x, y: target.y, dir: this.dir })
     quest.setRegion(regionAt(target))
+
+    if (cameIn) void this.cameHome()
+
+    if (same(target, HOUSE.mat) && !quest.get().letterRead && houseStage() !== 'unowned') readLetter()
   }
 
   /** A guard's post is the tile in front of their gate, on the outside, where the gate's sign stands. */
@@ -628,7 +687,7 @@ export class KingdomScene extends Phaser.Scene {
 
   private interact() {
     const target = this.front()
-    const npc = this.world.npcs.find((candidate) => same(candidate, target))
+    const npc = this.npcs.find((candidate) => same(candidate, target))
 
     if (npc) {
       talk(npc.npcId)
@@ -648,6 +707,12 @@ export class KingdomScene extends Phaser.Scene {
 
     if (fish) {
       this.catchFish(fish)
+
+      return
+    }
+
+    if (same(target, HOUSE.sign)) {
+      readHouseSign()
 
       return
     }
@@ -687,6 +752,16 @@ export class KingdomScene extends Phaser.Scene {
     if (tile === TILE.anvil) readAnvil()
 
     if (tile === TILE.workbench) readWorkbench()
+
+    if (tile === TILE.desk) quest.openHouseEditor()
+
+    if (tile === TILE.bell) void ringBell()
+
+    if (tile === TILE.tableBread || tile === TILE.tableCrumbs || tile === TILE.tableCup) readTable()
+
+    if (tile === TILE.doormat) readLetter()
+
+    if (tile === TILE.doorLocked) this.lockedHint()
   }
 
   private swing() {
@@ -933,6 +1008,134 @@ export class KingdomScene extends Phaser.Scene {
     }
   }
 
+  /** The house as its story stands: locked until the deed, and the bread gone once the traveler ate it. */
+  private dressHouse() {
+    const stage = houseStage()
+    const door = stage === 'unowned' ? TILE.doorLocked : TILE.door
+    const bread = stage === 'unowned' || stage === 'slimes' ? TILE.tableBread : TILE.tableCrumbs
+
+    if (this.tileAt(HOUSE.door) !== door) this.setTile(HOUSE.door, door, Boolean(this.map))
+
+    if (this.tileAt(HOUSE.table[0]) !== bread) this.setTile(HOUSE.table[0], bread, Boolean(this.map))
+  }
+
+  /** Follows the house's story and its door rules: new rules mean the traveler may come or go. */
+  private watchHouse() {
+    let { houseStage: stage, progress, visits } = quest.get()
+    let rules = progress.houseRules
+
+    return quest.subscribe(() => {
+      const next = quest.get()
+
+      if (next.houseStage !== stage) {
+        stage = next.houseStage
+        this.dressHouse()
+      }
+
+      // Saving rules, or closing the bell's results, is when the traveler finds out if they're welcome.
+      const closedVisits = visits !== null && next.visits === null
+      visits = next.visits
+
+      if (next.progress.houseRules !== rules || closedVisits) {
+        rules = next.progress.houseRules
+        void this.seatTraveler()
+      }
+    })
+  }
+
+  /** Walking in puts the house up as a route; then whoever Pomerium allows is inside. */
+  private async cameHome() {
+    const house = await enterHouse()
+
+    if (!house) return
+    await this.seatTraveler()
+
+    // A public house has a slime in it already: one walked in with no session at all.
+    if (house.version === 'public' && !this.monsters.some((monster) => monster.home === 'house')) {
+      if (await slimeKnocks()) this.letSlimeIn()
+    }
+  }
+
+  /** The traveler sits at the table while Pomerium lets them in, and goes back to the fields when it won't. */
+  private async seatTraveler() {
+    if (houseStage() === 'unowned') return
+    const traveler = this.npcs.find((npc) => npc.npcId === 'traveler')
+    const home = this.world.npcs.find((npc) => npc.npcId === 'traveler')
+
+    if (!traveler || !home) return
+    const welcome = await travelerWelcome()
+    const to = welcome ? HOUSE.seat : home
+
+    if (same(traveler, to) || (same(to, HOUSE.seat) && same(this.pos, HOUSE.seat))) return
+    traveler.x = to.x
+    traveler.y = to.y
+    this.tweens.killTweensOf(traveler.sprite)
+
+    if (!matchMedia('(prefers-reduced-motion: no-preference)').matches) {
+      traveler.sprite.setPosition(center(to.x), center(to.y))
+
+      return
+    }
+
+    // A short fade out and back in at the new spot: the traveler has walked over (or off).
+    this.tweens.add({
+      targets: traveler.sprite,
+      alpha: 0,
+      duration: 250,
+      onComplete: () => {
+        traveler.sprite.setPosition(center(to.x), center(to.y))
+        this.tweens.add({ targets: traveler.sprite, alpha: 1, duration: 250 })
+      },
+    })
+  }
+
+  /** A field slime on the doorstep tries the door: a real request with no session. */
+  private async slimeAtDoor(monster: Monster) {
+    const now = performance.now()
+
+    if (houseStage() === 'unowned' || now - this.slimeKnockedAt < SLIME_KNOCK_MS) return
+
+    if (this.monsters.some((candidate) => candidate.home === 'house')) return
+    this.slimeKnockedAt = now
+
+    if (!quest.get().house) return
+
+    if (await slimeKnocks()) {
+      monster.sprite.destroy()
+      this.monsters = this.monsters.filter((candidate) => candidate !== monster)
+      this.letSlimeIn()
+
+      if (inHouse(this.pos)) quest.toast('A slime squeezes in through your public door.', 'deny')
+
+      return
+    }
+
+    if (Math.abs(this.pos.x - HOUSE.door.x) + Math.abs(this.pos.y - HOUSE.door.y) <= 6)
+      quest.toast('A slime bounces off your door. With no session, it matches none of your rules.', 'allow')
+  }
+
+  /** A slime Pomerium let in appears just inside the door, and stays in the house. */
+  private letSlimeIn() {
+    const spot = this.occupied(SLIME_IN) || same(SLIME_IN, this.pos) ? HOUSE.mat : SLIME_IN
+
+    this.monsters.push({
+      kind: 'bot',
+      home: 'house',
+      sprite: this.add.sprite(center(spot.x), center(spot.y), 'items', MONSTER.bot.frame).play('bot'),
+      x: spot.x,
+      y: spot.y,
+      hp: MONSTER.bot.hp,
+      nextMoveAt: 0,
+      moving: false,
+    })
+  }
+
+  private lockedHint() {
+    if (performance.now() - this.lastRockHint < 2000) return
+    this.lastRockHint = performance.now()
+    quest.toast('Locked. The sage in Hearth Village holds the deed to this house.', 'info')
+  }
+
   private rockHint() {
     if (performance.now() - this.lastRockHint < 2000) return
     this.lastRockHint = performance.now()
@@ -949,13 +1152,26 @@ export class KingdomScene extends Phaser.Scene {
     if (monster.hp > 0) {
       const back = { x: monster.x + STEP[this.dir].x, y: monster.y + STEP[this.dir].y }
 
-      if (this.monsterCanEnter(back)) this.moveMonster(monster, back)
+      if (this.monsterCanEnter(monster, back)) this.moveMonster(monster, back)
 
       return
     }
 
     monster.sprite.destroy()
     this.monsters = this.monsters.filter((candidate) => candidate !== monster)
+
+    // An open house would be an endless supply of slimes, so the ones inside don't count for the Captain.
+    if (monster.home === 'house') {
+      quest.toast(
+        quest.get().progress.houseRules
+          ? 'Slime defeated. Your door rules keep the rest out.'
+          : 'Slime defeated. But your door is public, so the next slime can walk right in.',
+        'info',
+      )
+
+      return
+    }
+
     quest.send({ type: 'MONSTER_DEFEATED', kind: monster.kind })
     const count = Math.min(defeated()[monster.kind], KNIGHT_QUOTA)
     quest.toast(
@@ -964,11 +1180,12 @@ export class KingdomScene extends Phaser.Scene {
     )
   }
 
-  /** Bot slimes walk the fields and stay out of the water. */
-  private monsterCanEnter(p: Point) {
+  /** Bot slimes walk the fields and stay out of the water; one let into the house stays inside. */
+  private monsterCanEnter(monster: Monster, p: Point) {
     const inFields = p.x >= FIELDS.x0 && p.x <= FIELDS.x1 && p.y >= FIELDS.y0 && p.y <= FIELDS.y1
+    const area = monster.home === 'house' ? inHouse(p) : inFields && !inHouse(p)
 
-    return inFields && WALKABLE.has(this.tileAt(p)) && !this.occupied(p) && !same(p, this.pos)
+    return area && WALKABLE.has(this.tileAt(p)) && !this.occupied(p) && !same(p, this.pos)
   }
 
   private moveMonster(monster: Monster, target: Point) {
@@ -1012,7 +1229,9 @@ export class KingdomScene extends Phaser.Scene {
         continue
       }
 
-      if (this.monsterCanEnter(target)) this.moveMonster(monster, target)
+      if (this.monsterCanEnter(monster, target)) this.moveMonster(monster, target)
+
+      if (monster.home === 'fields' && same(monster, HOUSE.doorstep)) void this.slimeAtDoor(monster)
     }
   }
 

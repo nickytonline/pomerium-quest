@@ -1,4 +1,6 @@
 // Everything the characters say, what the signs show and what each lesson links to.
+import type { Knocker } from './house.ts'
+import type { LetterStage } from './house-machine.ts'
 import { KINGDOM_DOMAIN, type ZoneId } from './zones.ts'
 
 /** Every gate has a sign. Most are named for their zone; the scriptorium's door is the library's second rule. */
@@ -78,6 +80,22 @@ export const LESSONS = {
     title: 'An and rule needs every check to pass',
     link: { label: 'PPL: and, or, not, nor', href: `${DOCS}/internals/ppl#logical-operators` },
   },
+  publicRoute: {
+    title: 'A public route lets everyone in',
+    link: { label: 'Public access', href: `${DOCS}/reference/routes/public-access` },
+  },
+  writePolicy: {
+    title: 'You write the policy',
+    link: { label: 'Route policy', href: `${DOCS}/reference/routes/policy` },
+  },
+  anyOf: {
+    title: 'An or rule lets in anyone who passes one check',
+    link: { label: 'PPL: and, or, not, nor', href: `${DOCS}/internals/ppl#logical-operators` },
+  },
+  denyWins: {
+    title: 'A deny rule always beats an allow',
+    link: { label: 'PPL: allow and deny', href: `${DOCS}/internals/ppl#actions` },
+  },
 } as const
 
 export type LessonId = keyof typeof LESSONS
@@ -95,6 +113,10 @@ export const LESSON_ORDER: readonly LessonId[] = [
   'jwt',
   'verify',
   'allOf',
+  'publicRoute',
+  'writePolicy',
+  'anyOf',
+  'denyWins',
 ]
 
 export const link = (lesson: LessonId) => LESSONS[lesson].link
@@ -164,3 +186,93 @@ export const INTRO: Page[] = [
     text: 'The sage in the house to your right has been waiting for you. Go say hello.',
   },
 ]
+
+/** Who knocks in a letter's test: a townsperson, a slime, or the player at their own door. */
+export type Caller = Knocker | 'you'
+
+/** One visit a letter asks for, and whether Pomerium should let it in. */
+export interface Expectation {
+  readonly who: Caller
+  readonly method: 'GET' | 'POST'
+  readonly allowed: boolean
+}
+
+export interface Letter {
+  readonly title: string
+  readonly text: string
+  /** The visits that must come out this way, through the real Pomerium, for the letter to be solved. */
+  readonly expect: readonly Expectation[]
+  /** The answer must use a deny rule, since that's what the letter teaches. */
+  readonly needsDeny?: boolean
+  /** Taught when the letter is solved. */
+  readonly lesson: LessonId
+  /** What the house says once it's solved. */
+  readonly solved: string
+}
+
+const visit = (who: Caller, allowed: boolean, method: 'GET' | 'POST' = 'GET'): Expectation => ({
+  who,
+  method,
+  allowed,
+})
+
+/** The letters on the player's doormat, in order. Each is a small brief for the door rules. */
+export const LETTERS: Record<LetterStage, Letter> = {
+  slimes: {
+    title: 'Slimes in the house!',
+    text: "Welcome home! Your house is a route with no rules yet, so it's public: Pomerium lets in every request, even ones with no session at all. That's how the slimes got in. The traveler is a friend, though, so they can stay. Write door rules at the desk that let in you and the traveler, then ring the bell to check.",
+    expect: [visit('you', true), visit('traveler', true), visit('slime', false)],
+    lesson: 'anyOf',
+    solved:
+      "The slimes bounce off the door: with no session, they can't match any rule. The traveler waves from the table.",
+  },
+  bread: {
+    title: 'The traveler ate all your bread',
+    text: "Every last crumb. Change your door so only you can come in. You don't need a rule to keep the traveler out: once no rule matches them, Pomerium says no.",
+    expect: [visit('you', true), visit('traveler', false), visit('slime', false)],
+    lesson: 'defaultDeny',
+    solved: 'The traveler tries the door, shrugs and wanders back to the fields. No rule matches them now.',
+  },
+  guild: {
+    title: 'A letter from the Captain',
+    text: '"The knights would like to visit." Let in you and anyone in the knights group. Your door can read the groups claim, just like the armory\'s guard.',
+    expect: [
+      visit('you', true),
+      visit('captain', true),
+      visit('librarian', false),
+      visit('traveler', false),
+      visit('slime', false),
+    ],
+    lesson: 'claims',
+    solved: 'The Captain wipes their boots and comes in. The groups claim said knights.',
+  },
+  baker: {
+    title: 'Open house',
+    text: `Open your door to every citizen of ${KINGDOM_DOMAIN}, except the baker, who keeps bringing bread you've no room for. Use a deny rule for the baker: a deny always wins, even when an allow rule matches too.`,
+    expect: [
+      visit('you', true),
+      visit('captain', true),
+      visit('librarian', true),
+      visit('baker', false),
+      visit('traveler', false),
+      visit('slime', false),
+    ],
+    needsDeny: true,
+    lesson: 'denyWins',
+    solved: 'The baker matches your allow rule, but your deny rule matches them too, and a deny always wins.',
+  },
+  window: {
+    title: 'Looking in, not knocking',
+    text: 'The knights may look in through the window (a GET), but only you may knock on the door (a POST). A rule can check the request itself, as the library does.',
+    expect: [
+      visit('you', true),
+      visit('you', true, 'POST'),
+      visit('captain', true),
+      visit('captain', false, 'POST'),
+      visit('slime', false),
+    ],
+    lesson: 'request',
+    solved:
+      'The Captain peers in and waves, but the knocker stays still for them. Your house is all yours now.',
+  },
+}
