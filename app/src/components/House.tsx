@@ -219,6 +219,13 @@ function Editor() {
           .join(' · ')}
         , and slimes, who never sign in.
       </p>
+      {saved === null && (
+        <p className="m-0 rounded border-2 border-deny px-3 py-2.5 text-[0.9rem]">
+          <span className="font-display text-sun">Wide open</span> Right now your door is public
+          (allow_public_unauthenticated_access), so Pomerium lets in everyone, even slimes with no session.
+          Putting rules on the door replaces that.
+        </p>
+      )}
       <p className="m-0 rounded border-2 border-panel-edge px-3 py-2.5 text-[0.9rem]">
         <span className="font-display text-sun">Your deed</span> Whoever holds this house's deed always gets
         in, so you need no rule for yourself. The rules below are for everyone else.
@@ -265,6 +272,12 @@ function Editor() {
         The game writes your rules into a real route for your house, as its policy. Pomerium lets a request in
         when any allow rule matches and no deny rule does. If no allow rule matches, it says no.
       </p>
+      {saved === null && (
+        <p className="m-0 text-[0.9rem]">
+          Until you save, the route is public: it has allow_public_unauthenticated_access and no policy, so
+          Pomerium lets in every request, signed in or not. The route below replaces it.
+        </p>
+      )}
       <p className="m-0 text-[0.72rem] tracking-[0.08em] text-paper-muted uppercase">
         The route Pomerium will get
       </p>
