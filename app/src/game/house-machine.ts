@@ -2,7 +2,7 @@
 //
 //   unowned → slimes → bread → guild → baker → window → done
 //
-// Each state after `unowned` is a letter on the doormat. The house starts public, so the first letter
+// Each state after `unowned` is a letter on the desk. The house starts public, so the first letter
 // is about the slimes that walked in. A letter is solved when real visits through Pomerium come out
 // the way it asks.
 import { assign, createActor, setup, type SnapshotFrom } from 'xstate'
@@ -13,7 +13,7 @@ export type HouseEvent =
   | { readonly type: 'LETTER_SOLVED' }
 
 export interface HouseContext {
-  /** The player has read the letter now on the doormat. */
+  /** The player has read the letter now on the desk. */
   readonly letterRead: boolean
 }
 
@@ -66,7 +66,7 @@ export const houseMachine = setup({
 
 export type HouseStage = SnapshotFrom<typeof houseMachine>['value']
 
-/** The stages that have a letter on the doormat. */
+/** The stages that have a letter on the desk. */
 export type LetterStage = Exclude<HouseStage, 'unowned' | 'done'>
 
 const STORAGE_KEY = 'pomerium-quest/house/v1'

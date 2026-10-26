@@ -7,6 +7,7 @@ import { sfx } from './sound.ts'
 import { KNIGHT_QUOTA, defeated, hasSteel, type MonsterKind } from './quest-machine.ts'
 import { houseStage, type HouseStage } from './house-machine.ts'
 import {
+  currentLetter,
   enterHouse,
   readHouseSign,
   readLetter,
@@ -129,8 +130,11 @@ const FIELDS = { x0: 1, y0: 1, x1: 15, y1: 16 }
 /** How often a slime on the doorstep may try the player's door. */
 const SLIME_KNOCK_MS = 15_000
 
-/** Where a slime Pomerium lets in appears, just inside the door. */
-const SLIME_IN = { x: 5, y: 13 }
+/** Where a slime Pomerium lets in appears, just inside the door: here, or failing that the next one. */
+const SLIME_IN: readonly Point[] = [
+  { x: 5, y: 13 },
+  { x: 6, y: 12 },
+]
 
 /** The traveler roams the fields and, every so often, tries the player's door to get at the bread. */
 const TRAVELER = {
@@ -724,8 +728,6 @@ export class KingdomScene extends Phaser.Scene {
     quest.setRegion(regionAt(target))
 
     if (cameIn) void this.cameHome()
-
-    if (same(target, HOUSE.mat) && !quest.get().letterRead && houseStage() !== 'unowned') readLetter()
   }
 
   /** A guard's post is the tile in front of their gate, on the outside, where the gate's sign stands. */
@@ -889,13 +891,12 @@ export class KingdomScene extends Phaser.Scene {
 
     if (tile === TILE.workbench) readWorkbench()
 
-    if (tile === TILE.desk) quest.openHouseEditor()
+    // A letter waiting on the desk is read first, then the door rules open.
+    if (tile === TILE.desk || tile === TILE.deskLetter) readLetter(() => quest.openHouseEditor())
 
     if (tile === TILE.bell) void ringBell()
 
     if (LOAF.includes(tile)) readTable(this.bread, WHOLE_LOAF)
-
-    if (tile === TILE.doormat) readLetter()
 
     if (tile === TILE.doorLocked) this.lockedHint()
   }
@@ -1146,7 +1147,7 @@ export class KingdomScene extends Phaser.Scene {
 
   /**
    * The house as its story stands: locked until the deed, then shut unless someone is in the doorway,
-   * and as much of the loaf as is left.
+   * as much of the loaf as is left, and a letter on the desk until it's read.
    */
   private dressHouse() {
     const stage = houseStage()
@@ -1158,6 +1159,10 @@ export class KingdomScene extends Phaser.Scene {
     if (this.tileAt(HOUSE.door) !== door) this.setTile(HOUSE.door, door, Boolean(this.map))
 
     if (this.tileAt(HOUSE.table) !== bread) this.setTile(HOUSE.table, bread, Boolean(this.map))
+    const letter = stage !== 'unowned' && !quest.get().letterRead && currentLetter()
+    const desk = letter ? TILE.deskLetter : TILE.desk
+
+    if (this.tileAt(HOUSE.desk) !== desk) this.setTile(HOUSE.desk, desk, Boolean(this.map))
   }
 
   /** Whether the player or the traveler is in the doorway, or stepping into it. */
@@ -1197,7 +1202,7 @@ export class KingdomScene extends Phaser.Scene {
 
   /** Follows the house's story and its door rules: new rules mean the traveler may come or go. */
   private watchHouse() {
-    let { houseStage: stage, progress, visits } = quest.get()
+    let { houseStage: stage, progress, visits, letterRead } = quest.get()
     let rules = progress.houseRules
 
     return quest.subscribe(() => {
@@ -1208,6 +1213,11 @@ export class KingdomScene extends Phaser.Scene {
 
         // The bread letter says the traveler ate the loaf, so it's gone when the letter arrives.
         if (stage === 'bread') this.bread = 0
+        this.dressHouse()
+      }
+
+      if (next.letterRead !== letterRead) {
+        letterRead = next.letterRead
         this.dressHouse()
       }
 
@@ -1762,7 +1772,8 @@ export class KingdomScene extends Phaser.Scene {
 
   /** A slime Pomerium let in appears just inside the door, and stays in the house. */
   private letSlimeIn() {
-    const spot = this.occupied(SLIME_IN) || same(SLIME_IN, this.pos) ? HOUSE.mat : SLIME_IN
+    const free = (p: Point) => !this.occupied(p) && !same(p, this.pos)
+    const spot = SLIME_IN.find(free) ?? HOUSE.doorstep
 
     this.monsters.push({
       kind: 'bot',

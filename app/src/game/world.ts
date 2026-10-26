@@ -34,7 +34,7 @@ export const TILE = {
   desk: 34,
   door: 35,
   doorLocked: 36,
-  doormat: 37,
+  deskLetter: 37,
   bell: 38,
   doorClosed: 39,
   tableHalf: 40,
@@ -54,7 +54,6 @@ export const WALKABLE: ReadonlySet<number> = new Set([
   TILE.path,
   TILE.cobble,
   TILE.floor,
-  TILE.doormat,
 ])
 
 /**
@@ -119,7 +118,6 @@ export interface House {
   readonly door: Point
   /** The path outside the door, where slimes and visitors knock. */
   readonly doorstep: Point
-  readonly mat: Point
   readonly desk: Point
   readonly bell: Point
   /** The table, with the loaf on it. */
@@ -135,7 +133,6 @@ export interface House {
 export const HOUSE: House = {
   door: { x: 7, y: 12 },
   doorstep: { x: 8, y: 12 },
-  mat: { x: 6, y: 12 },
   desk: { x: 2, y: 10 },
   bell: { x: 6, y: 10 },
   table: { x: 4, y: 13 },
@@ -235,7 +232,6 @@ export function buildWorld(): World {
   fill(2, 5, 5, 7, TILE.water)
   room(1, 9, 7, 15)
   set(HOUSE.door.x, HOUSE.door.y, TILE.doorLocked)
-  set(HOUSE.mat.x, HOUSE.mat.y, TILE.doormat)
   set(HOUSE.desk.x, HOUSE.desk.y, TILE.desk)
   set(HOUSE.bell.x, HOUSE.bell.y, TILE.bell)
   set(HOUSE.table.x, HOUSE.table.y, TILE.tableBread)

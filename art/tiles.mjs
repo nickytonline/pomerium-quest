@@ -334,6 +334,32 @@ const eatenLoaf = (rect, inner) => {
   rect(inner + 9, 7, 1, 1, '#e3b06a')
 }
 
+/** The writing desk and its quill, with a sheet of paper on it or a sealed letter waiting. */
+const desk = (rect, top) => {
+  floor(rect)
+  rect(1, 6, 14, 9, '#241a2e')
+  rect(2, 7, 12, 3, '#a87a45')
+  rect(2, 10, 12, 4, '#6b4226')
+  rect(2, 14, 2, 2, '#4a2f18')
+  rect(12, 14, 2, 2, '#4a2f18')
+
+  if (top === 'paper') {
+    rect(4, 4, 6, 4, '#f4ecd8')
+    rect(5, 5, 4, 1, '#8b8597')
+  } else {
+    rect(2, 3, 9, 6, '#241a2e')
+    rect(3, 4, 7, 4, '#f4ecd8')
+    rect(4, 4, 1, 1, '#c9bfa6')
+    rect(5, 5, 1, 1, '#c9bfa6')
+    rect(7, 5, 1, 1, '#c9bfa6')
+    rect(8, 4, 1, 1, '#c9bfa6')
+    rect(6, 6, 1, 1, '#d03a3a')
+  }
+
+  rect(11, 1, 1, 6, '#f4f0ff')
+  rect(12, 2, 1, 3, '#d9dde6')
+}
+
 /** Paints a 16x16 grid of color keys; '.' leaves the pixel underneath. */
 const pixels = (rect, rows, colors) => {
   rows.forEach((row, y) => {
@@ -498,18 +524,7 @@ const painters = [
   // 33 the loaf, a quarter eaten
   (rect) => eatenLoaf(rect, 5),
   // 34 writing desk, where the player writes their door rules
-  (rect) => {
-    floor(rect)
-    rect(1, 6, 14, 9, '#241a2e')
-    rect(2, 7, 12, 3, '#a87a45')
-    rect(2, 10, 12, 4, '#6b4226')
-    rect(2, 14, 2, 2, '#4a2f18')
-    rect(12, 14, 2, 2, '#4a2f18')
-    rect(4, 4, 6, 4, '#f4ecd8')
-    rect(5, 5, 4, 1, '#8b8597')
-    rect(11, 1, 1, 6, '#f4f0ff')
-    rect(12, 2, 1, 3, '#d9dde6')
-  },
+  (rect) => desk(rect, 'paper'),
   // 35 the house's door, open to its owner
   (rect) => {
     floor(rect)
@@ -526,14 +541,8 @@ const painters = [
     for (const x of [5, 9]) rect(x, 2, 1, 14, '#5b3a22')
     rect(11, 8, 2, 2, '#e3b341')
   },
-  // 37 doormat, where letters arrive, running along the door
-  (rect) => {
-    floor(rect)
-    rect(4, 1, 9, 14, '#8b2e2e')
-    rect(5, 2, 7, 12, '#b5483b')
-    rect(7, 4, 3, 8, '#f4ecd8')
-    rect(8, 5, 1, 6, '#8b8597')
-  },
+  // 37 the same desk with a letter waiting on it, sealed
+  (rect) => desk(rect, 'letter'),
   // 38 bell beside the door, to invite visitors
   (rect) => {
     floor(rect)

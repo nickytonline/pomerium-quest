@@ -12,7 +12,7 @@ import { ANONYMOUS, quest, type VisitResult } from './store.ts'
 const learn = (lesson: LessonId) => quest.learn(lesson, LESSONS[lesson].title)
 const rules = () => quest.get().progress.houseRules
 
-/** The stage's letter, if there's one on the doormat. */
+/** The stage's letter, if there's one on the desk. */
 export const currentLetter = (): Letter | null => {
   const stage = houseStage()
 
@@ -105,25 +105,25 @@ export async function enterHouse(): Promise<HouseState | null> {
 
   if (built.value.version === 'public') learn('publicRoute')
 
-  if (!quest.get().letterRead && currentLetter()) quest.toast('There’s a letter on your doormat', 'info')
+  if (!quest.get().letterRead && currentLetter()) quest.toast('There’s a letter on your desk', 'info')
 
   return built.value
 }
 
-export function readLetter() {
+/** Reads the letter waiting on the desk, then does whatever comes next (opening the door rules). */
+export function readLetter(then: () => void) {
   const letter = currentLetter()
 
   if (!letter) {
-    quest.say([
-      { who: 'Doormat', text: 'No new letters. Your door rules are yours to keep changing at the desk.' },
-    ])
+    then()
 
     return
   }
 
-  quest.say([{ who: `Letter · ${letter.title}`, text: letter.text }], () =>
-    quest.sendHouse({ type: 'LETTER_READ' }),
-  )
+  quest.say([{ who: `Letter · ${letter.title}`, text: letter.text }], () => {
+    quest.sendHouse({ type: 'LETTER_READ' })
+    then()
+  })
 }
 
 export function readHouseSign() {

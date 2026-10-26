@@ -216,7 +216,7 @@ const visit = (who: Caller, allowed: boolean, method: 'GET' | 'POST' = 'GET'): E
   allowed,
 })
 
-/** The letters on the player's doormat, in order. Each is a small brief for the door rules. */
+/** The letters left on the player's desk, in order. Each is a small brief for the door rules. */
 export const LETTERS: Record<LetterStage, Letter> = {
   slimes: {
     title: 'Slimes in the house!',
