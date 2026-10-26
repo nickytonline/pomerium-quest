@@ -205,8 +205,8 @@ function healChime(out: AudioNode, at: number) {
 }
 
 /**
- * A sinister "mwa-ha-ha-ha-ha": a buzzing voice through two vowel formants, each "ha" lower than
- * the last, echoing away over a low drone.
+ * A sinister "mwa-ha-ha-ha-ha… haaaa": a buzzing voice through two vowel formants, each "ha" lower
+ * than the last, ending in a long sinking "haaaa" that echoes away over a low drone.
  */
 function laugh(mix: Mixer, out: AudioNode, at: number) {
   const ctx = mix.ctx
@@ -214,11 +214,17 @@ function laugh(mix: Mixer, out: AudioNode, at: number) {
   const feedback = ctx.createGain()
 
   echo.delayTime.value = 0.19
-  feedback.gain.value = 0.35
+  feedback.gain.value = 0.45
   echo.connect(feedback).connect(echo)
   echo.connect(out)
 
-  const syllable = (start: number, pitch: number, dur: number, vowel: readonly [number, number]) => {
+  const syllable = (
+    start: number,
+    pitch: number,
+    dur: number,
+    vowel: readonly [number, number],
+    fall = 0.8,
+  ) => {
     const osc = ctx.createOscillator()
     const vibrato = ctx.createOscillator()
     const depth = ctx.createGain()
@@ -226,12 +232,12 @@ function laugh(mix: Mixer, out: AudioNode, at: number) {
 
     osc.type = 'sawtooth'
     osc.frequency.setValueAtTime(pitch, start)
-    osc.frequency.exponentialRampToValueAtTime(pitch * 0.8, start + dur)
+    osc.frequency.exponentialRampToValueAtTime(pitch * fall, start + dur)
     vibrato.frequency.value = 7
     depth.gain.value = pitch * 0.03
     vibrato.connect(depth).connect(osc.frequency)
     env.gain.setValueAtTime(0, start)
-    env.gain.linearRampToValueAtTime(0.5, start + 0.02)
+    env.gain.linearRampToValueAtTime(1.8, start + 0.02)
     env.gain.exponentialRampToValueAtTime(0.0001, start + dur)
 
     for (const formant of vowel) {
@@ -239,7 +245,7 @@ function laugh(mix: Mixer, out: AudioNode, at: number) {
 
       filter.type = 'bandpass'
       filter.frequency.value = formant
-      filter.Q.value = 7
+      filter.Q.value = 4.5
       osc.connect(filter).connect(env)
     }
 
@@ -252,19 +258,26 @@ function laugh(mix: Mixer, out: AudioNode, at: number) {
   }
 
   // "Mwa": the lips open from an "oo" to an "ah".
-  syllable(at, 130, 0.36, [500, 900])
+  syllable(at, 130, 0.5, [500, 900])
 
-  for (let i = 0; i < 4; i++) {
-    const start = at + 0.42 + i * 0.2
+  const has = 7
+
+  for (let i = 0; i < has; i++) {
+    const start = at + 0.58 + i * 0.21
 
     // The breath of the "h", then the "a".
-    hiss(mix, out, start - 0.04, { filter: 'bandpass', freq: 1400, q: 1.5, dur: 0.06, peak: 0.12 })
-    syllable(start, 175 - i * 14, 0.16, [720, 1150])
+    hiss(mix, out, start - 0.04, { filter: 'bandpass', freq: 1400, q: 1.5, dur: 0.06, peak: 0.2 })
+    syllable(start, 185 - i * 9, 0.17, [720, 1150])
   }
 
-  tone(out, at + 0.3, { wave: 'sawtooth', freq: 55, to: 49, dur: 2.2, peak: 0.07 })
-  tone(out, at + 0.3, { wave: 'sawtooth', freq: 58.3, to: 51.9, dur: 2.2, peak: 0.05 })
-  setTimeout(() => echo.disconnect(), 4000)
+  // The last "haaaa", drawn out and sinking.
+  const last = at + 0.58 + has * 0.21 + 0.08
+
+  hiss(mix, out, last - 0.05, { filter: 'bandpass', freq: 1400, q: 1.5, dur: 0.08, peak: 0.22 })
+  syllable(last, 150, 0.9, [720, 1150], 0.55)
+  tone(out, at + 0.3, { wave: 'sawtooth', freq: 55, to: 46, dur: 3.6, peak: 0.1 })
+  tone(out, at + 0.3, { wave: 'sawtooth', freq: 58.3, to: 49, dur: 3.6, peak: 0.07 })
+  setTimeout(() => echo.disconnect(), 7000)
 }
 
 const EFFECTS: Record<Effect, (mix: Mixer, out: AudioNode, at: number) => void> = {
