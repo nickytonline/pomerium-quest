@@ -38,6 +38,7 @@ export const TILE = {
   doorClosed: 38,
   tableHalf: 39,
   tableHeel: 40,
+  signIndoors: 41,
 } as const
 
 export type TileId = (typeof TILE)[keyof typeof TILE]
@@ -349,7 +350,9 @@ export function buildWorld(): World {
     { x: 22, y: 28, signId: 'keep' },
   ]
 
-  for (const sign of signs) set(sign.x, sign.y, TILE.sign)
+  // A sign takes on the ground it stands on, so one inside a building stands on its floor, not grass.
+  for (const sign of signs)
+    set(sign.x, sign.y, tiles[sign.y]?.[sign.x] === TILE.floor ? TILE.signIndoors : TILE.sign)
 
   const rocks = [
     { x: 27, y: 17 },

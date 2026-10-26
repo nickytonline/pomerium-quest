@@ -334,6 +334,16 @@ const eatenLoaf = (rect, inner) => {
   rect(inner + 9, 7, 1, 1, '#e3b06a')
 }
 
+/** A signpost standing on `ground`: grass outdoors, the floor inside a building. */
+const signpost = (rect, ground) => {
+  ground(rect)
+  rect(7, 9, 2, 7, '#5b3a22')
+  rect(2, 2, 12, 8, '#7a5126')
+  rect(3, 3, 10, 6, '#a87a45')
+  rect(4, 5, 8, 1, '#6b4a27')
+  rect(4, 7, 6, 1, '#6b4a27')
+}
+
 /** The writing desk and its quill, with a sheet of paper on it or a sealed letter waiting. */
 const desk = (rect, top) => {
   floor(rect)
@@ -447,14 +457,7 @@ const painters = [
     rect(2, 10, 12, 1, '#e3b341')
   },
   // 12 sign
-  (rect) => {
-    grass(rect)
-    rect(7, 9, 2, 7, '#5b3a22')
-    rect(2, 2, 12, 8, '#7a5126')
-    rect(3, 3, 10, 6, '#a87a45')
-    rect(4, 5, 8, 1, '#6b4a27')
-    rect(4, 7, 6, 1, '#6b4a27')
-  },
+  (rect) => signpost(rect, grass),
   // 13 cracked rock
   (rect) => {
     cobble(rect)
@@ -556,6 +559,8 @@ const painters = [
   (rect) => eatenLoaf(rect, 3),
   // 40 the heel of the loaf, nearly gone
   (rect) => eatenLoaf(rect, 2),
+  // 41 sign indoors, on the floor
+  (rect) => signpost(rect, floor),
 ]
 
 export const tiles = painters.map((paint) => {
