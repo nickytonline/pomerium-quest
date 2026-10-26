@@ -224,7 +224,7 @@ export const LETTERS: Record<LetterStage, Letter> = {
     expect: [visit('you', true), visit('traveler', true), visit('slime', false)],
     lesson: 'anyOf',
     solved:
-      "The slimes bounce off the door: with no session, they can't match any rule. The traveler waves from the table.",
+      "The slimes bounce off the door: with no session, they can't match any rule. The traveler is still welcome to drop by for bread.",
   },
   bread: {
     title: 'The traveler ate all your bread',

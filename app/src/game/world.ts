@@ -30,12 +30,13 @@ export const TILE = {
   workbench: 30,
   tableBread: 31,
   tableCrumbs: 32,
-  tableCup: 33,
+  chair: 33,
   desk: 34,
   door: 35,
   doorLocked: 36,
   doormat: 37,
   bell: 38,
+  doorClosed: 39,
 } as const
 
 export type TileId = (typeof TILE)[keyof typeof TILE]
@@ -52,6 +53,7 @@ export const WALKABLE: ReadonlySet<number> = new Set([
   TILE.cobble,
   TILE.floor,
   TILE.doormat,
+  TILE.chair,
 ])
 
 /**
@@ -119,9 +121,9 @@ export interface House {
   readonly mat: Point
   readonly desk: Point
   readonly bell: Point
-  /** The table's two tiles: the bread end, then the cup end. */
-  readonly table: readonly [Point, Point]
-  /** Where the traveler sits while they're welcome. */
+  /** The table, with the loaf on it. */
+  readonly table: Point
+  /** The chair at the table, where the player or the traveler sits to eat. */
   readonly seat: Point
   /** The sign outside, which shows the house's route. */
   readonly sign: Point
@@ -135,10 +137,7 @@ export const HOUSE: House = {
   mat: { x: 6, y: 12 },
   desk: { x: 2, y: 10 },
   bell: { x: 6, y: 10 },
-  table: [
-    { x: 3, y: 11 },
-    { x: 4, y: 11 },
-  ],
+  table: { x: 3, y: 11 },
   seat: { x: 3, y: 12 },
   sign: { x: 8, y: 11 },
   inside: { x0: 2, y0: 10, x1: 6, y1: 14 },
@@ -238,8 +237,8 @@ export function buildWorld(): World {
   set(HOUSE.mat.x, HOUSE.mat.y, TILE.doormat)
   set(HOUSE.desk.x, HOUSE.desk.y, TILE.desk)
   set(HOUSE.bell.x, HOUSE.bell.y, TILE.bell)
-  set(HOUSE.table[0].x, HOUSE.table[0].y, TILE.tableBread)
-  set(HOUSE.table[1].x, HOUSE.table[1].y, TILE.tableCup)
+  set(HOUSE.table.x, HOUSE.table.y, TILE.tableBread)
+  set(HOUSE.seat.x, HOUSE.seat.y, TILE.chair)
   set(HOUSE.sign.x, HOUSE.sign.y, TILE.sign)
   fill(8, 12, 8, 16, TILE.path)
   fill(8, 12, 15, 12, TILE.path)

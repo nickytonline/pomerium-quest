@@ -132,9 +132,46 @@ const SLIME_KNOCK_MS = 15_000
 /** Where a slime Pomerium lets in appears, just inside the door. */
 const SLIME_IN = { x: 5, y: 13 }
 
+/** The traveler roams the fields and, every so often, tries the player's door to get at the bread. */
+const TRAVELER = {
+  stepMs: 300,
+  /** Roaming, a pause of between one and two of these before each step. */
+  roamMs: 900,
+  /** The first visit comes soon after the game starts; later ones about this far apart. */
+  firstVisitMs: 15_000,
+  visitMs: 45_000,
+  eatMs: 9_000,
+  biteMs: 1_200,
+  /** How many times a blocked step is tried again before the traveler finds another way. */
+  patience: 4,
+}
+
+/** Bread crumbs: crust, crumb and the pale inside of the loaf. */
+const CRUMB_COLORS = [0xc98a3c, 0x8a5a24, 0xe3b06a]
+const CRUMB_LINGER_MS = 4_000
+
 /** Each kind's first frame in items.png (two frames each), hit points and name. */
 const MONSTER: Record<MonsterKind, { readonly frame: number; readonly hp: number; readonly name: string }> = {
   bot: { frame: 3, hp: 2, name: 'Bot slime' },
+}
+
+/**
+ * What the traveler is doing: roaming the fields, walking to the doorstep, asking Pomerium to let them
+ * in, walking to the chair, eating, or walking back out.
+ */
+type TravelerPlan = 'roam' | 'visit' | 'knock' | 'enter' | 'eat' | 'leave'
+
+interface Traveler {
+  plan: TravelerPlan
+  /** The steps left to where the plan takes them. */
+  path: Point[]
+  moving: boolean
+  nextMoveAt: number
+  /** Unset until the first frame, since the scene's clock doesn't start at zero. */
+  nextVisitAt: number | undefined
+  doneEatingAt: number
+  nextBiteAt: number
+  blocked: number
 }
 
 interface Pond {
@@ -187,6 +224,20 @@ interface Phish {
 
 const center = (tile: number) => tile * T + T / 2
 const keyOf = (p: Point) => `${p.x},${p.y}`
+const inFields = (p: Point) => p.x >= FIELDS.x0 && p.x <= FIELDS.x1 && p.y >= FIELDS.y0 && p.y <= FIELDS.y1
+const isDoorstep = (p: Point) => same(p, HOUSE.doorstep)
+const isSeat = (p: Point) => same(p, HOUSE.seat)
+
+/** Where the traveler eats: the chair, or failing that any tile beside the table. */
+const atTable = (p: Point) =>
+  inHouse(p) && (same(p, HOUSE.seat) || Math.abs(p.x - HOUSE.table.x) + Math.abs(p.y - HOUSE.table.y) === 1)
+
+interface NpcSprite {
+  readonly npcId: NpcId
+  x: number
+  y: number
+  readonly sprite: Phaser.GameObjects.Sprite
+}
 
 export class KingdomScene extends Phaser.Scene {
   private readonly world = buildWorld()
@@ -212,13 +263,20 @@ export class KingdomScene extends Phaser.Scene {
   private lastRockHint = 0
   /** The Oracle, appearing beside the player to sign them in again with new claims. */
   private visitingOracle: Phaser.GameObjects.Sprite | undefined
-  /** Townsfolk, where they stand now. Only the traveler moves: to the player's table and back. */
-  private npcs: {
-    readonly npcId: NpcId
-    x: number
-    y: number
-    readonly sprite: Phaser.GameObjects.Sprite
-  }[] = []
+  /** Townsfolk, where they stand now. Only the traveler moves: around the fields and into the house. */
+  private npcs: NpcSprite[] = []
+  private traveler: Traveler = {
+    plan: 'roam',
+    path: [],
+    moving: false,
+    nextMoveAt: 0,
+    nextVisitAt: undefined,
+    doneEatingAt: 0,
+    nextBiteAt: 0,
+    blocked: 0,
+  }
+  /** The tile the player is stepping onto, until they arrive. */
+  private walkingTo: Point | undefined
   /** A slime is asking Pomerium to let it into the player's house, or did so recently. */
   private slimeKnockedAt = -Infinity
   private stopWatching: (() => void) | undefined
@@ -392,6 +450,7 @@ export class KingdomScene extends Phaser.Scene {
     }
 
     this.updateMonsters(time)
+    this.updateTraveler(time)
     this.updateFish(time)
     this.callOutPhish(time)
     this.dismissItem()
@@ -547,6 +606,13 @@ export class KingdomScene extends Phaser.Scene {
       return
     }
 
+    if (tile === TILE.doorClosed) {
+      this.openDoor()
+      this.walk(target)
+
+      return
+    }
+
     if (PLAYER_TERRAIN.has(tile) || tile === TILE.gateOpen) this.walk(target)
   }
 
@@ -555,6 +621,7 @@ export class KingdomScene extends Phaser.Scene {
 
     if (!player) return
     this.mode.send({ type: 'WALK' })
+    this.walkingTo = target
 
     if (this.tileAt(target) === TILE.water) sfx(this.tileAt(this.pos) === TILE.water ? 'paddle' : 'splash')
     this.swim(this.tileAt(target) === TILE.water)
@@ -572,6 +639,8 @@ export class KingdomScene extends Phaser.Scene {
     this.mode.send({ type: 'ARRIVED' })
     const leftWater = this.tileAt(this.pos) === TILE.water && this.tileAt(target) !== TILE.water
     this.pos = target
+    this.walkingTo = undefined
+    this.closeDoorBehind()
 
     if (leftWater) this.shakeOff()
 
@@ -757,7 +826,7 @@ export class KingdomScene extends Phaser.Scene {
 
     if (tile === TILE.bell) void ringBell()
 
-    if (tile === TILE.tableBread || tile === TILE.tableCrumbs || tile === TILE.tableCup) readTable()
+    if (tile === TILE.tableBread || tile === TILE.tableCrumbs) readTable()
 
     if (tile === TILE.doormat) readLetter()
 
@@ -1008,15 +1077,53 @@ export class KingdomScene extends Phaser.Scene {
     }
   }
 
-  /** The house as its story stands: locked until the deed, and the bread gone once the traveler ate it. */
+  /**
+   * The house as its story stands: locked until the deed, then shut unless someone is in the doorway,
+   * and the bread gone once the traveler ate it.
+   */
   private dressHouse() {
     const stage = houseStage()
-    const door = stage === 'unowned' ? TILE.doorLocked : TILE.door
     const bread = stage === 'unowned' || stage === 'slimes' ? TILE.tableBread : TILE.tableCrumbs
+    let door: number = this.inDoorway() ? TILE.door : TILE.doorClosed
+
+    if (stage === 'unowned') door = TILE.doorLocked
 
     if (this.tileAt(HOUSE.door) !== door) this.setTile(HOUSE.door, door, Boolean(this.map))
 
-    if (this.tileAt(HOUSE.table[0]) !== bread) this.setTile(HOUSE.table[0], bread, Boolean(this.map))
+    if (this.tileAt(HOUSE.table) !== bread) this.setTile(HOUSE.table, bread, Boolean(this.map))
+  }
+
+  /** Whether the player or the traveler is in the doorway, or stepping into it. */
+  private inDoorway() {
+    const traveler = this.travelerNpc()
+    const player = this.walkingTo ?? this.pos
+
+    return (
+      same(player, HOUSE.door) ||
+      same(this.pos, HOUSE.door) ||
+      Boolean(traveler && same(traveler, HOUSE.door))
+    )
+  }
+
+  /** The door opens for whoever walks through it. */
+  private openDoor() {
+    if (this.tileAt(HOUSE.door) !== TILE.doorClosed) return
+    this.setTile(HOUSE.door, TILE.door)
+
+    if (this.canSee(HOUSE.door)) sfx('doorOpen')
+  }
+
+  /** Once nobody is in the doorway, the door swings shut behind them. */
+  private closeDoorBehind() {
+    if (this.tileAt(HOUSE.door) !== TILE.door || this.inDoorway()) return
+    this.setTile(HOUSE.door, TILE.doorClosed)
+
+    if (this.canSee(HOUSE.door)) sfx('doorClose')
+  }
+
+  /** Whether a tile is on screen, so the player only hears what they can see. */
+  private canSee(p: Point) {
+    return this.cameras.main.worldView.contains(center(p.x), center(p.y))
   }
 
   /** Follows the house's story and its door rules: new rules mean the traveler may come or go. */
@@ -1038,7 +1145,7 @@ export class KingdomScene extends Phaser.Scene {
 
       if (next.progress.houseRules !== rules || closedVisits) {
         rules = next.progress.houseRules
-        void this.seatTraveler()
+        void this.recheckTraveler()
       }
     })
   }
@@ -1048,7 +1155,6 @@ export class KingdomScene extends Phaser.Scene {
     const house = await enterHouse()
 
     if (!house) return
-    await this.seatTraveler()
 
     // A public house has a slime in it already: one walked in with no session at all.
     if (house.version === 'public' && !this.monsters.some((monster) => monster.home === 'house')) {
@@ -1056,37 +1162,285 @@ export class KingdomScene extends Phaser.Scene {
     }
   }
 
-  /** The traveler sits at the table while Pomerium lets them in, and goes back to the fields when it won't. */
-  private async seatTraveler() {
-    if (houseStage() === 'unowned') return
-    const traveler = this.npcs.find((npc) => npc.npcId === 'traveler')
-    const home = this.world.npcs.find((npc) => npc.npcId === 'traveler')
+  private travelerNpc() {
+    return this.npcs.find((npc) => npc.npcId === 'traveler')
+  }
 
-    if (!traveler || !home) return
-    const welcome = await travelerWelcome()
-    const to = welcome ? HOUSE.seat : home
+  /**
+   * The traveler roams the fields. Every so often they walk to the player's door and knock: a real
+   * request through Pomerium. If it lets them in, they sit down and eat the bread, then wander off again.
+   */
+  private updateTraveler(time: number) {
+    const traveler = this.travelerNpc()
+    const plan = this.traveler
 
-    if (same(traveler, to) || (same(to, HOUSE.seat) && same(this.pos, HOUSE.seat))) return
-    traveler.x = to.x
-    traveler.y = to.y
-    this.tweens.killTweensOf(traveler.sprite)
+    if (!traveler || plan.moving || plan.plan === 'knock') return
+    plan.nextVisitAt ??= time + TRAVELER.firstVisitMs
 
-    if (!matchMedia('(prefers-reduced-motion: no-preference)').matches) {
-      traveler.sprite.setPosition(center(to.x), center(to.y))
+    if (plan.plan === 'eat') {
+      this.eatBread(traveler, time)
 
       return
     }
 
-    // A short fade out and back in at the new spot: the traveler has walked over (or off).
+    if (time < plan.nextMoveAt) return
+    plan.nextMoveAt = time + (plan.plan === 'roam' ? TRAVELER.roamMs * (1 + Math.random()) : 0)
+
+    // The house has to be up as a route before there's a door to knock on.
+    if (plan.plan === 'roam' && time >= plan.nextVisitAt && houseStage() !== 'unowned' && quest.get().house)
+      this.planTraveler(
+        'visit',
+        this.pathFor(traveler, (p) => same(p, HOUSE.doorstep)),
+      )
+
+    if (plan.plan === 'roam') {
+      this.roam(traveler)
+
+      return
+    }
+
+    const next = plan.path[0]
+
+    if (!next) {
+      this.travelerArrived(time)
+
+      return
+    }
+
+    if (!this.travelerCanEnter(next)) {
+      this.travelerBlocked(traveler, time)
+
+      return
+    }
+
+    plan.path.shift()
+    plan.blocked = 0
+    this.stepTraveler(traveler, next)
+  }
+
+  private planTraveler(plan: TravelerPlan, path: Point[] = []) {
+    this.traveler.plan = plan
+    this.traveler.path = path
+    this.traveler.blocked = 0
+  }
+
+  /** A random step around the fields, staying out of the house and the water. */
+  private roam(traveler: NpcSprite) {
+    const dir = DIRS[Math.floor(Math.random() * DIRS.length)] ?? 'down'
+    const target = { x: traveler.x + STEP[dir].x, y: traveler.y + STEP[dir].y }
+
+    if (!inFields(target) || inHouse(target) || !WALKABLE.has(this.tileAt(target))) return
+
+    if (this.travelerCanEnter(target)) this.stepTraveler(traveler, target)
+  }
+
+  /** Something is in the way: wait a moment, then look for another way round. */
+  private travelerBlocked(traveler: Point, time: number) {
+    const plan = this.traveler
+    const goal = plan.path.at(-1)
+    plan.nextMoveAt = time + 500
+    plan.blocked++
+
+    if (plan.blocked < TRAVELER.patience || !goal) return
+    plan.blocked = 0
+    const throughDoor = plan.plan !== 'visit'
+    const goalTest = plan.plan === 'enter' ? atTable : (p: Point) => same(p, goal)
+    const around = this.pathFor(traveler, goalTest, { throughDoor, avoid: true })
+
+    if (around.length > 0) plan.path = around
+    // Nowhere to sit: they leave rather than stand in the player's way.
+    else if (plan.plan === 'enter')
+      this.planTraveler('leave', this.pathFor(traveler, isDoorstep, { throughDoor }))
+    else if (plan.plan === 'visit') this.giveUpVisit(time)
+  }
+
+  private giveUpVisit(time: number) {
+    this.planTraveler('roam')
+    this.traveler.nextVisitAt = time + TRAVELER.visitMs * (0.75 + Math.random() / 2)
+  }
+
+  private travelerArrived(time: number) {
+    const plan = this.traveler.plan
+
+    if (plan === 'visit') void this.travelerKnocks()
+
+    if (plan === 'enter') {
+      this.planTraveler('eat')
+      this.traveler.doneEatingAt = time + TRAVELER.eatMs
+      this.traveler.nextBiteAt = time
+    }
+
+    if (plan === 'leave') this.giveUpVisit(time)
+  }
+
+  /** On the doorstep, the traveler knocks: Pomerium decides whether they come in. */
+  private async travelerKnocks() {
+    this.planTraveler('knock')
+    const welcome = await travelerWelcome()
+    const traveler = this.travelerNpc()
+
+    if (!traveler || this.traveler.plan !== 'knock') return
+
+    if (welcome) {
+      this.planTraveler('enter', this.pathFor(traveler, isSeat, { throughDoor: true }))
+
+      return
+    }
+
+    this.giveUpVisit(this.time.now)
+
+    if (this.near(HOUSE.door))
+      quest.toast(
+        'The traveler tries your door. No rule matches them, so Pomerium says no, and they wander off.',
+        'allow',
+      )
+  }
+
+  /** New door rules: a traveler already inside finds out whether they're still welcome. */
+  private async recheckTraveler() {
+    const plan = this.traveler.plan
+
+    if (plan !== 'enter' && plan !== 'eat') return
+
+    if (await travelerWelcome()) return
+    const traveler = this.travelerNpc()
+
+    if (!traveler) return
+    this.planTraveler('leave', this.pathFor(traveler, isDoorstep, { throughDoor: true }))
+
+    if (this.near(HOUSE.door))
+      quest.toast('No rule lets the traveler in any more. They put down the bread and head out.', 'allow')
+  }
+
+  /** At the table, a bite every so often: a munch, and crumbs falling to the floor. */
+  private eatBread(traveler: Point, time: number) {
+    const plan = this.traveler
+
+    if (time >= plan.doneEatingAt) {
+      this.planTraveler('leave', this.pathFor(traveler, isDoorstep, { throughDoor: true }))
+
+      return
+    }
+
+    if (time < plan.nextBiteAt) return
+    plan.nextBiteAt = time + TRAVELER.biteMs * (0.8 + Math.random() * 0.4)
+
+    if (!this.canSee(traveler)) return
+    sfx('munch')
+    this.dropCrumbs(traveler)
+  }
+
+  /** A few crumbs fall from the traveler's mouth, lie on the floor a while, then are gone. */
+  private dropCrumbs(at: Point) {
+    const motion = matchMedia('(prefers-reduced-motion: no-preference)').matches
+
+    for (let i = 0; i < Phaser.Math.Between(2, 4); i++) {
+      const color = CRUMB_COLORS[i % CRUMB_COLORS.length] ?? 0xc98a3c
+      const x = center(at.x) + Phaser.Math.Between(-2, 2)
+      const y = center(at.y) - 3
+      const landX = x + Phaser.Math.Between(-6, 6)
+      const landY = center(at.y) + Phaser.Math.Between(5, 7)
+      const size = Phaser.Math.Between(1, 2)
+      const crumb = this.add.rectangle(motion ? x : landX, motion ? y : landY, size, size, color).setDepth(11)
+      const linger = CRUMB_LINGER_MS + Phaser.Math.Between(0, 1_000)
+
+      if (!motion) {
+        this.time.delayedCall(linger, () => crumb.destroy())
+        continue
+      }
+
+      // y(t) = (1 + lift)t² − lift·t: a little hop out of the mouth, then down to the floor.
+      const lift = Phaser.Math.FloatBetween(0.3, 0.8)
+
+      this.tweens.add({
+        targets: crumb,
+        x: { value: landX, ease: 'Quad.easeOut' },
+        y: { value: landY, ease: (t: number) => (1 + lift) * t * t - lift * t },
+        duration: Phaser.Math.Between(220, 320),
+        onComplete: () =>
+          this.tweens.add({
+            targets: crumb,
+            alpha: 0,
+            delay: linger,
+            duration: 400,
+            onComplete: () => crumb.destroy(),
+          }),
+      })
+    }
+  }
+
+  private stepTraveler(traveler: NpcSprite, to: Point) {
+    const plan = this.traveler
+    plan.moving = true
+    traveler.x = to.x
+    traveler.y = to.y
+
+    if (same(to, HOUSE.door)) this.openDoor()
+
     this.tweens.add({
       targets: traveler.sprite,
-      alpha: 0,
-      duration: 250,
+      x: center(to.x),
+      y: center(to.y),
+      duration: TRAVELER.stepMs,
       onComplete: () => {
-        traveler.sprite.setPosition(center(to.x), center(to.y))
-        this.tweens.add({ targets: traveler.sprite, alpha: 1, duration: 250 })
+        plan.moving = false
+        this.closeDoorBehind()
       },
     })
+  }
+
+  /** A free tile the traveler could step onto: no one there, and the player isn't stepping onto it. */
+  private travelerCanEnter(p: Point) {
+    return !this.occupied(p) && !same(p, this.pos) && !(this.walkingTo && same(p, this.walkingTo))
+  }
+
+  /**
+   * The traveler's shortest walk around the fields to a tile `goal` accepts, or none. Only on their way
+   * in, once Pomerium has let them, or back out, do they go through the door.
+   */
+  private pathFor(
+    from: Point,
+    goal: (p: Point) => boolean,
+    { throughDoor = false, avoid = false }: { throughDoor?: boolean; avoid?: boolean } = {},
+  ): Point[] {
+    const passable = (p: Point) => {
+      const tile = this.tileAt(p)
+      const door = throughDoor && (tile === TILE.door || tile === TILE.doorClosed)
+
+      return inFields(p) && (WALKABLE.has(tile) || door) && (!avoid || this.travelerCanEnter(p))
+    }
+
+    const cameFrom = new Map<string, Point | null>([[keyOf(from), null]])
+    const queue: Point[] = [from]
+
+    for (let here = queue.shift(); here; here = queue.shift()) {
+      if (goal(here)) {
+        const path: Point[] = []
+
+        for (
+          let step: Point | null | undefined = here;
+          step && !same(step, from);
+          step = cameFrom.get(keyOf(step))
+        )
+          path.unshift(step)
+
+        return path
+      }
+
+      for (const dir of DIRS) {
+        const next = { x: here.x + STEP[dir].x, y: here.y + STEP[dir].y }
+
+        if (cameFrom.has(keyOf(next)) || !passable(next)) continue
+        cameFrom.set(keyOf(next), here)
+        queue.push(next)
+      }
+    }
+
+    return []
+  }
+
+  private near(p: Point, reach = 6) {
+    return Math.abs(this.pos.x - p.x) + Math.abs(this.pos.y - p.y) <= reach
   }
 
   /** A field slime on the doorstep tries the door: a real request with no session. */
@@ -1182,8 +1536,7 @@ export class KingdomScene extends Phaser.Scene {
 
   /** Bot slimes walk the fields and stay out of the water; one let into the house stays inside. */
   private monsterCanEnter(monster: Monster, p: Point) {
-    const inFields = p.x >= FIELDS.x0 && p.x <= FIELDS.x1 && p.y >= FIELDS.y0 && p.y <= FIELDS.y1
-    const area = monster.home === 'house' ? inHouse(p) : inFields && !inHouse(p)
+    const area = monster.home === 'house' ? inHouse(p) : inFields(p) && !inHouse(p)
 
     return area && WALKABLE.has(this.tileAt(p)) && !this.occupied(p) && !same(p, this.pos)
   }
@@ -1351,6 +1704,7 @@ export class KingdomScene extends Phaser.Scene {
     this.closeGate()
     this.pos = this.world.spawn
     this.player?.setPosition(center(this.pos.x), center(this.pos.y))
+    this.closeDoorBehind()
     this.swim(false)
     quest.setHp(MAX_HP)
     quest.progress({ x: this.pos.x, y: this.pos.y })
