@@ -5,7 +5,9 @@ set -uo pipefail
 
 PORT="${QUEST_PORT:-443}"
 DOMAIN="${QUEST_DOMAIN:-localhost.pomerium.io}"
-KINGDOM="${QUEST_KINGDOM_DOMAIN:-game.$DOMAIN}"
+# The townsfolk who visit houses have fixed addresses; players may sign up with any.
+TOWNSFOLK=game.localhost.pomerium.io
+PLAYERS=players.example
 SUFFIX=""
 [ "$PORT" = 443 ] || SUFFIX=":${PORT}"
 GAME="https://game.${DOMAIN}${SUFFIX}"
@@ -63,19 +65,38 @@ sign_in_again() {
     "$(curl -s -L -c "$jar" -b "$jar" "${GAME}/.pomerium/sign_out?pomerium_redirect_uri=${GAME}/zones/oracle/signin")"
 }
 
+# A newcomer isn't a citizen until the Oracle says so: he grants the citizen group and the deed, and the
+# player signs in again so their session carries them.
+become_citizen() {
+  local jar="$1" email="$2"
+  check "the Oracle grants citizenship and a deed" 200 "$(status "$jar" /zones/oracle/citizen POST)"
+  sign_in_again "$jar" "$email" >/dev/null
+}
+
 echo "Anonymous"
 anon="${JAR_DIR}/anon"
 check "game shell is public" 200 "$(curl -s -o /dev/null -w '%{http_code}' "${GAME}/")"
 check "fields needs a session" 401 "$(status "$anon" /zones/fields/enter)"
 
-echo "Citizen"
+echo "Newcomer"
 citizen="${JAR_DIR}/citizen"
-email="e2e-${RUN}@${KINGDOM}"
+email="e2e-${RUN}@${PLAYERS}"
 check "sign-up lands back in the game" "${GAME}/?signedin=1" "$(sign_up "$citizen" "$email")"
 check "app verified Pomerium's JWT" "$email" \
   "$(curl -s -b "$citizen" -H "$JSON" "${GAME}/zones/oracle/" | grep -o "\"email\":\"[^\"]*\"" | head -1 | cut -d'"' -f4)"
 check "fields" 200 "$(status "$citizen" /zones/fields/enter)"
-check "town (domain is ${KINGDOM})" 200 "$(status "$citizen" /zones/town/enter)"
+check "town refuses a newcomer, whatever their email" 403 "$(status "$citizen" /zones/town/enter)"
+check "the Builders' Yard refuses a newcomer" 403 "$(status "$citizen" /zones/builder/open POST)"
+
+echo "Citizen"
+become_citizen "$citizen" "$email"
+town=403
+for _ in $(seq 1 45); do
+  town="$(status "$citizen" /zones/town/enter)"
+  [ "$town" = 200 ] && break
+  sleep 2
+done
+check "town opens once the session carries the citizen group" 200 "$town"
 check "armory without knights" 403 "$(status "$citizen" /zones/armory/enter)"
 check "library read (GET)" 200 "$(status "$citizen" /zones/library/books/0)"
 check "library refuses a write (POST)" 403 "$(status "$citizen" /zones/library/books/0 POST)"
@@ -112,11 +133,6 @@ check "signing out to restart lands on the title screen" "${GAME}/" \
     "${GAME}/.pomerium/sign_out?pomerium_redirect_uri=${GAME}/")"
 check "and the session is gone" 401 "$(status "$citizen" /zones/fields/enter)"
 
-echo "Outsider"
-outsider="${JAR_DIR}/outsider"
-sign_up "$outsider" "wanderer-${RUN}@outlands.net" >/dev/null
-check "sign-up refused outside ${KINGDOM}" 401 "$(status "$outsider" /zones/fields/enter)"
-
 echo "Your house"
 # The Builders' Yard: the game server writes the house of whoever Pomerium signed in.
 builder() { curl -s -b "$1" -H "$JSON" -H 'content-type: application/json' -X POST "${GAME}/zones/builder/$2" -d "$3"; }
@@ -137,9 +153,10 @@ live_within() {
 }
 email_is() { printf '{"kind":"email","is":"%s"}' "$1"; }
 
-owner="house-${RUN}@${KINGDOM}"
+owner="house-${RUN}@${PLAYERS}"
 home="${JAR_DIR}/home"
 sign_up "$home" "$owner" >/dev/null
+become_citizen "$home" "$owner"
 opened="$(builder "$home" open '{"rules":null}')"
 path="$(printf '%s' "$opened" | field path)"
 check "a new house is public" public "$(printf '%s' "$opened" | field version)"
@@ -147,8 +164,8 @@ check "a slime (no session) walks into a public house" 200 \
   "$(curl -s -o /dev/null -w '%{http_code}' -H "$JSON" "${GAME}${path}knock")"
 check "the server's slime knock agrees" 200 "$(knock "$home" slime)"
 
-first="$(rules "[{\"action\":\"allow\",\"match\":\"or\",\"criteria\":[$(email_is "$owner"),$(email_is wanderer@outlands.net)]}]")"
-check "letter 1: save you or the traveler" 200 "$(builder_status "$home" save "$first")"
+first="$(rules "[{\"action\":\"allow\",\"match\":\"or\",\"criteria\":[$(email_is wanderer@outlands.net)]}]")"
+check "letter 1: save the traveler (the deed lets you in)" 200 "$(builder_status "$home" save "$first")"
 check "letter 1: the slime is turned away" 401 "$(knock "$home" slime)"
 check "letter 1: the traveler is let in" 200 "$(knock "$home" traveler)"
 check "letter 1: you are let in" 200 "$(status "$home" "${path}knock")"
@@ -157,41 +174,43 @@ check "saving again straight away waits for the builders" 503 "$(builder_status 
 sleep 11
 
 # Bodies go into variables first: nested in "$(...)", bash would brace-expand the JSON.
-only_you="$(rules "[{\"action\":\"allow\",\"match\":\"or\",\"criteria\":[$(email_is "$owner")]}]")"
-check "letter 2: save only you" 200 "$(builder_status "$home" save "$only_you")"
+only_you="$(rules '[]')"
+check "letter 2: save no rules, so only the deed's owner gets in" 200 "$(builder_status "$home" save "$only_you")"
 check "letter 2: the traveler is refused" 403 "$(knock "$home" traveler)"
 check "letter 2: you are let in" 200 "$(status "$home" "${path}knock")"
 sleep 11
 
 knights='{"kind":"claim","claim":"groups","value":"knights"}'
-guild="$(rules "[{\"action\":\"allow\",\"match\":\"or\",\"criteria\":[$(email_is "$owner"),${knights}]}]")"
-check "letter 3: save you or the knights" 200 "$(builder_status "$home" save "$guild")"
+guild="$(rules "[{\"action\":\"allow\",\"match\":\"or\",\"criteria\":[${knights}]}]")"
+check "letter 3: save the knights" 200 "$(builder_status "$home" save "$guild")"
 check "letter 3: the Captain (a knight) is let in" 200 "$(knock "$home" captain)"
 check "letter 3: the Librarian is refused" 403 "$(knock "$home" librarian)"
 sleep 11
 
-open_house="$(rules "[{\"action\":\"allow\",\"match\":\"and\",\"criteria\":[{\"kind\":\"domain\",\"is\":\"${KINGDOM}\"}]},{\"action\":\"deny\",\"match\":\"or\",\"criteria\":[$(email_is "baker@${KINGDOM}")]}]")"
+citizens='{"kind":"claim","claim":"groups","value":"citizen"}'
+open_house="$(rules "[{\"action\":\"allow\",\"match\":\"and\",\"criteria\":[${citizens}]},{\"action\":\"deny\",\"match\":\"or\",\"criteria\":[$(email_is "baker@${TOWNSFOLK}")]}]")"
 check "letter 4: save citizens, but deny the baker" 200 "$(builder_status "$home" save "$open_house")"
 check "letter 4: the baker matches the allow, but the deny wins" 403 "$(knock "$home" baker)"
 check "letter 4: the Librarian is let in" 200 "$(knock "$home" librarian)"
 sleep 11
 
-window="$(rules "[{\"action\":\"allow\",\"match\":\"or\",\"criteria\":[$(email_is "$owner")]},{\"action\":\"allow\",\"match\":\"and\",\"criteria\":[${knights},{\"kind\":\"http_method\",\"is\":\"GET\"}]}]")"
-check "letter 5: save you, and the knights for GET only" 200 "$(builder_status "$home" save "$window")"
+window="$(rules "[{\"action\":\"allow\",\"match\":\"and\",\"criteria\":[${knights},{\"kind\":\"http_method\",\"is\":\"GET\"}]}]")"
+check "letter 5: save the knights for GET only" 200 "$(builder_status "$home" save "$window")"
 check "letter 5: the Captain may look in (GET)" 200 "$(knock "$home" captain GET)"
 check "letter 5: the Captain may not knock (POST)" 403 "$(knock "$home" captain POST)"
 check "letter 5: you may knock (POST)" 200 "$(status "$home" "${path}knock" POST)"
 
 echo "Keeping houses apart"
 sleep 11
-quoted="$(rules "[{\"action\":\"allow\",\"match\":\"or\",\"criteria\":[$(email_is "x'y@${KINGDOM}")]}]")"
+quoted="$(rules "[{\"action\":\"allow\",\"match\":\"or\",\"criteria\":[$(email_is "x'y@${PLAYERS}")]}]")"
 check "rules with a quote are refused" 400 "$(builder_status "$home" save "$quoted")"
 newline='{"rules":[{"action":"allow","match":"or","criteria":[{"kind":"email","is":"a@b\nallow_public_unauthenticated_access: true"}]}]}'
 check "rules with a newline are refused" 400 "$(builder_status "$home" save "$newline")"
 unknown='{"rules":[{"action":"allow","match":"or","criteria":[{"kind":"groups","is":"knights"}]}]}'
 check "an unknown criterion is refused" 400 "$(builder_status "$home" save "$unknown")"
 neighbor="${JAR_DIR}/neighbor"
-sign_up "$neighbor" "neighbor-${RUN}@${KINGDOM}" >/dev/null
+sign_up "$neighbor" "neighbor-${RUN}@${PLAYERS}" >/dev/null
+become_citizen "$neighbor" "neighbor-${RUN}@${PLAYERS}"
 neighbor_path="$(builder "$neighbor" open '{"rules":null,"owner":"'"$owner"'"}' | field path)"
 check "a neighbor's house is their own, whatever they claim" yes "$([ -n "$neighbor_path" ] && [ "$neighbor_path" != "$path" ] && echo yes || echo no)"
 check "the neighbor's public house doesn't open yours" 401 \
