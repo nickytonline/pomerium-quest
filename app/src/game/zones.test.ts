@@ -44,11 +44,9 @@ describe('the citizens domain', () => {
   })
 
   it('gives the townsfolk addresses in that domain, with the traveler outside it', async () => {
-    const { VISITORS } = await (async () => {
-      await load('example.org')
+    await load('example.org')
 
-      return import('./house.ts')
-    })()
+    const { VISITORS } = await import('./house.ts')
 
     expect(VISITORS.baker.email).toBe('baker@example.org')
     expect(VISITORS.captain.email).toBe('captain@example.org')

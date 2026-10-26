@@ -23,8 +23,8 @@ policy. The [README](README.md) explains how it fits together; this file is how 
 
 ## Running and checking
 
-- `npm run check` (format, lint with the vendored anti-slop rules, and types) must pass before every
-  commit. `npx vp fmt` fixes formatting.
+- `npm run check` (format, lint with the vendored anti-slop rules, and types) and `npm test` must pass
+  before every commit. `npx vp fmt` fixes formatting.
 - The game only plays behind Pomerium. Use `./quest dev` for hot reload, and open
   https://game.localhost.pomerium.io. Don't add a mode that fakes Pomerium.
 - Changes under `app/src/game/` reload the whole page in dev, by design (see `app/vite.config.ts`).
@@ -90,6 +90,6 @@ policy. The [README](README.md) explains how it fits together; this file is how 
 - Commit often, in logical pieces: one commit per change that stands on its own. Split a larger
   feature as you build it (for example the engine, then each place it's wired in, then the UI)
   rather than landing it as one big commit at the end.
-- Commit each piece once `npm run check` passes, and push to `main` right away.
+- Commit each piece once `npm run check` and `npm test` pass, and push to `main` right away.
 - Use conventional commits with a scope, such as `feat(game): …`, `fix(quest): …` or `feat(oracle): …`.
 - Don't rewrite history that's already pushed.

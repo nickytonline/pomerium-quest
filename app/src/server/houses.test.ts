@@ -29,7 +29,7 @@ describe('the rules a player may save', () => {
     ).toBe(true)
   })
 
-  // These values end up in YAML the server writes into the cluster; each is a way out of the string.
+  // These values go into the policy annotation and the YAML shown to the player; each is a way out of a string.
   it.each([
     ['a quote', 'a"b@x.io'],
     ['a single quote', "a'b@x.io"],

@@ -101,9 +101,9 @@ describe('decide', () => {
 
   it('marks which criterion failed, so the denial screen can point at it', () => {
     const { lines } = decide(zoneById('keep'), knight, { method: 'GET', path: '/zones/keep' })
-    const failed = lines.filter((line) => line.ok === false).map((line) => line.text)
+    const failed = lines.filter((line) => line.ok === false).map((line) => line.text.trim())
 
-    expect(failed).toEqual(['      - claim/groups: scholars'])
+    expect(failed).toEqual(['- claim/groups: scholars'])
   })
 })
 
