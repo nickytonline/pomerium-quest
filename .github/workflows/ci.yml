@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  check:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,6 +23,18 @@ jobs:
       # The router plugin generates routeTree.gen.ts during a build; the type check needs it.
       - run: npm run build -w app
       - run: npm run check
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.22.1
+          cache: npm
+      - run: npm ci
       - run: npm test
 
   # Plays every gate on a real Pomerium: a k3d cluster with Keycloak, then ./quest test with curl.
