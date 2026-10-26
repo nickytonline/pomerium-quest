@@ -850,6 +850,27 @@ function CachedClaims({ claims }: { readonly claims: NonNullable<DenyView['cache
       <p className="mt-1 mb-0 text-[0.75rem] text-paper-muted">
         The user record wins, so the policy below sees the old groups.
       </p>
+      <p className="mt-2.5 mb-1 text-[0.72rem] tracking-[0.08em] text-paper-muted uppercase">
+        Why signing in again didn't fix it yet
+      </p>
+      <ol className="m-0 grid list-decimal gap-1 pl-5 text-[0.8rem]">
+        <li>
+          Pomerium keeps two records: a <strong>session</strong> per sign-in, and one{' '}
+          <strong>user record</strong> per person that every session shares. Each holds claims.
+        </li>
+        <li>Signing out deleted your old session. Your user record stayed.</li>
+        <li>
+          Signing in made a new session with your new groups, and updated your user record with them too.
+        </li>
+        <li>
+          But this gate read your user record from Pomerium's cache: a copy saved on an earlier request, kept
+          for up to a minute. Your session is new, so it was read fresh. Your user record wasn't.
+        </li>
+        <li>
+          The <code>claim</code> check merges the session's claims with the user record's, and the user record
+          wins. So the old copy decides until it expires.
+        </li>
+      </ol>
     </div>
   )
 }

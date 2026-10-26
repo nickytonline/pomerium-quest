@@ -6,6 +6,7 @@ import {
   LESSONS,
   LESSON_ORDER,
   SIGN_DOCS,
+  STALE_DOCS,
   SIGN_TEXT,
   link,
   type LessonId,
@@ -180,7 +181,7 @@ function denyView(
                 title: 'The ink is still wet',
                 text: 'The guard peers at your papers. "A scholar, is it? Then you\'ll know the first rule of scholarship: let the ink dry before you wave it about. Give it a minute."',
               },
-        hint: "Your new session's claims qualify, but Pomerium's authorize step keeps a copy of each user record for up to a minute. A claim check merges the session's claims with the user record's, and where both have groups, the user record wins. So until that copy expires, Pomerium decides with your old groups. Try again shortly.",
+        hint: 'Try again in a moment. Once the cached copy expires, Pomerium reads your updated user record and the gate opens.',
       }
     : refusal(zone, method, id)
 
@@ -192,7 +193,7 @@ function denyView(
     who: who(id),
     lines,
     hint,
-    links: stale ? [link('refresh'), link('claims')] : [link('authz'), link('defaultDeny')],
+    links: stale ? STALE_DOCS : [link('authz'), link('defaultDeny')],
     ...fromPomerium,
     ...fromCache,
   }

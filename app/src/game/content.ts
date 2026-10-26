@@ -105,6 +105,13 @@ export const SIGN_TEXT: Partial<Record<ZoneId, string>> = {
   keep: 'The Royal Keep. One rule, three checks: a citizen who is both a knight and a scholar. In an and rule, every check must pass.',
 }
 
+/** Where Pomerium documents the session and user records, and the cache in front of them. */
+export const STALE_DOCS: readonly DocLink[] = [
+  { label: 'Sessions: session and user data', href: `${DOCS}/internals/sessions#data` },
+  { label: 'Persistence: the databroker and its caches', href: `${DOCS}/internals/data-storage#design` },
+  LESSONS.claims.link,
+]
+
 export const SIGN_DOCS: Partial<Record<ZoneId, readonly DocLink[]>> = {
   fields: [
     link('route'),
