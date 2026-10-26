@@ -330,7 +330,7 @@ function Kingdom() {
             <TouchControls />
           ) : (
             <p className="m-0 text-[0.85rem] text-muted [grid-area:hint]">
-              Move: arrows or WASD · Talk and read: E or Enter · Sword: Space or J · Menu: Esc
+              Move: arrow keys or W A S D · Talk and read: E or Enter · Sword: Space or J · Menu: Esc
               {!wide && ' · Journal: I'}
             </p>
           )}
