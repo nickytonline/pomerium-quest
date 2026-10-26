@@ -14,7 +14,7 @@ Chapter one covers the fundamentals:
 | The town only admits `kingdom.com` citizens                    | The `domain` criterion                                                   |
 | The Captain makes you a knight; the armory checks it           | `claim/groups`, and claims coming from the IdP                           |
 | Being knighted doesn't open the armory until you sign in again | Your session holds the claims from sign-in until Pomerium refreshes it   |
-| You may look at the scriptorium's ledger but not write in it   | Allow rules can check `http_method`                                      |
+| Citizens may read the books; only scribes may enter to write   | Allow rules can check `http_method`                                      |
 | The access log and the denial screen                           | Every request is checked, and denied by default                          |
 | The game server knows who you are                              | Pomerium's signed `X-Pomerium-Jwt-Assertion` header, verified by the app |
 
@@ -60,8 +60,7 @@ browser ──► Pomerium ──┬─ /zones/oracle/*       authenticated_user
                        ├─ /zones/town/*         domain is kingdom.com            │
                        ├─ /zones/guild/*        domain is kingdom.com            ├─► quest (TanStack Start, Node)
                        ├─ /zones/armory/*       claim/groups: knights            │      verifies Pomerium's JWT
-                       ├─ /zones/library/*      domain is kingdom.com            │
-                       ├─ /zones/scriptorium/*  citizen GET, or scribes          │
+                       ├─ /zones/library/*      citizen GET, or scribes          │
                        ├─ /zones/keep/*         citizen, knights and scholars    │
                        └─ /* (game shell)       public                          ─┘
                        oracle.localhost.pomerium.io ──► keycloak (OIDC IdP, realm "kingdom")

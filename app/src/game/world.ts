@@ -1,3 +1,4 @@
+import type { SignId } from './content.ts'
 import type { ZoneId } from './zones.ts'
 
 // The kingdom map: a 40x30 tile grid built from a few drawing helpers, plus where every
@@ -74,12 +75,15 @@ export interface Point {
   readonly y: number
 }
 
+/** A gate asks its zone's route with `method`; its guard follows the rules on sign `signId`. */
 export interface Gate extends Point {
   readonly zoneId: ZoneId
+  readonly signId: SignId
+  readonly method: 'GET' | 'POST'
 }
 
 export interface Sign extends Point {
-  readonly signId: ZoneId
+  readonly signId: SignId
 }
 
 export interface Npc extends Point {
@@ -242,7 +246,7 @@ export function buildWorld(): World {
   fill(20, 19, 33, 19, TILE.cobble)
   // The road south to the Royal Keep, the quest's last gate.
   fill(21, 19, 21, 28, TILE.cobble)
-  // The library, with the scriptorium walled off at its west end behind a door of its own.
+  // The library: a reading room, and the scriptorium walled off at its west end behind a door of its own.
   room(24, 20, 37, 27)
   fill(29, 21, 29, 26, TILE.wall)
   fill(30, 22, 32, 22, TILE.shelf)
@@ -259,13 +263,14 @@ export function buildWorld(): World {
   )
 
   const gates: Gate[] = [
-    { x: 8, y: 17, zoneId: 'fields' },
-    { x: 16, y: 12, zoneId: 'town' },
-    { x: 21, y: 7, zoneId: 'guild' },
-    { x: 33, y: 7, zoneId: 'armory' },
-    { x: 33, y: 20, zoneId: 'library' },
-    { x: 29, y: 24, zoneId: 'scriptorium' },
-    { x: 21, y: 29, zoneId: 'keep' },
+    { x: 8, y: 17, zoneId: 'fields', signId: 'fields', method: 'GET' },
+    { x: 16, y: 12, zoneId: 'town', signId: 'town', method: 'GET' },
+    { x: 21, y: 7, zoneId: 'guild', signId: 'guild', method: 'GET' },
+    { x: 33, y: 7, zoneId: 'armory', signId: 'armory', method: 'GET' },
+    { x: 33, y: 20, zoneId: 'library', signId: 'library', method: 'GET' },
+    // Going into the scriptorium means writing in the ledger, so its guard asks with a POST.
+    { x: 29, y: 24, zoneId: 'library', signId: 'scriptorium', method: 'POST' },
+    { x: 21, y: 29, zoneId: 'keep', signId: 'keep', method: 'GET' },
   ]
 
   for (const gate of gates) set(gate.x, gate.y, TILE.gateClosed)

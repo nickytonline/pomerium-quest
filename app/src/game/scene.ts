@@ -527,7 +527,7 @@ export class KingdomScene extends Phaser.Scene {
 
   /** A guard's post is the tile in front of their gate, on the outside, where the gate's sign stands. */
   private postOf(gate: Gate): Point {
-    const sign = this.world.signs.find((candidate) => candidate.signId === gate.zoneId) ?? gate
+    const sign = this.world.signs.find((candidate) => candidate.signId === gate.signId) ?? gate
     const roadRunsAcross = PLAYER_TERRAIN.has(this.tileAt({ x: gate.x - 1, y: gate.y }))
 
     if (roadRunsAcross) return { x: sign.x < gate.x ? gate.x - 1 : gate.x + 1, y: gate.y }
@@ -542,7 +542,7 @@ export class KingdomScene extends Phaser.Scene {
   private asideOf(guard: Guard): Point {
     const { gate, post } = guard
     const across = { x: post.y - gate.y, y: post.x - gate.x }
-    const sign = this.world.signs.find((candidate) => candidate.signId === gate.zoneId) ?? post
+    const sign = this.world.signs.find((candidate) => candidate.signId === gate.signId) ?? post
     const awayFromSign = (sign.x - post.x) * across.x + (sign.y - post.y) * across.y > 0 ? -1 : 1
 
     const choices = [
@@ -559,7 +559,7 @@ export class KingdomScene extends Phaser.Scene {
   /** Asks Pomerium on the player's behalf; if it allows them, the guard steps aside and they walk on. */
   private askGuard(guard: Guard, target: Point) {
     this.mode.send({ type: 'GATE' })
-    void enterGate(guard.gate.zoneId).then((allowed) => {
+    void enterGate(guard.gate.zoneId, guard.gate.method).then((allowed) => {
       if (!allowed) {
         this.mode.send({ type: 'GATE_DENIED' })
 
@@ -647,7 +647,7 @@ export class KingdomScene extends Phaser.Scene {
     )
 
     if (guard) {
-      readSign(guard.gate.zoneId)
+      readSign(guard.gate.signId)
 
       return
     }

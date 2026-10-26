@@ -6,11 +6,14 @@ import {
   LESSONS,
   LESSON_ORDER,
   SIGN_DOCS,
+  SIGN_NAME,
   STALE_DOCS,
   SIGN_TEXT,
   link,
+  zoneOfSign,
   type LessonId,
   type Page,
+  type SignId,
 } from './content.ts'
 import { decide, routeYaml, type Identity } from './ppl.ts'
 import { KNIGHT_QUOTA, hasSteel, isAtLeast, stage, type QuestStage } from './quest-machine.ts'
@@ -111,17 +114,15 @@ function refusal(zone: Zone, method: 'GET' | 'POST', id: Identity): Refusal {
     case 'keep':
       return keepRefusal(id)
     case 'library':
-      return citizensOnly('The library')
-    case 'scriptorium':
       return method === 'POST'
         ? {
             story: {
               title: 'Scribes only',
-              text: 'The scriptorium guard calls over from the door. "Look all you like, but my orders say only scribes may write in the Royal Ledger, and your papers don\'t say scribe."',
+              text: 'The scriptorium guard bars the door. "This room is for writing in the Royal Ledger, and my orders say only scribes may write. Your papers say you may read, not write."',
             },
-            hint: "Writing in the ledger is a POST. The rule for visitors only allows GET, so it doesn't match, and the other rule needs the scribes group, which you aren't in. This denial is the lesson.",
+            hint: "Going in to write is a POST. The rule for readers only allows GET, so it doesn't match, and the other rule needs the scribes group, which you aren't in. This denial is the lesson.",
           }
-        : citizensOnly('The scriptorium')
+        : citizensOnly('The library')
     default:
       return {
         story: { title: "The guard won't let you pass", text: '"Sorry, my orders don\'t cover you."' },
@@ -231,12 +232,14 @@ async function attempt(zone: Zone, method: 'GET' | 'POST', action: string): Prom
   return outcome
 }
 
-export async function enterGate(zoneId: ZoneId): Promise<boolean> {
+/** Asks a gate's route to let the player through: a GET to enter, or for the scriptorium a POST to write. */
+export async function enterGate(zoneId: ZoneId, method: 'GET' | 'POST' = 'GET'): Promise<boolean> {
   const zone = zoneById(zoneId)
-  const outcome = await attempt(zone, 'GET', 'enter')
+  const action = method === 'POST' ? 'ledger' : 'enter'
+  const outcome = await attempt(zone, method, action)
 
   if (outcome.kind !== 'allow') return false
-  quest.toast(`ALLOW · GET ${zone.prefix}/enter`, 'allow')
+  quest.toast(`ALLOW · ${method} ${zone.prefix}/${action}`, 'allow')
   learn('every')
   learn('route')
 
@@ -251,15 +254,18 @@ export async function enterGate(zoneId: ZoneId): Promise<boolean> {
   return true
 }
 
-const signPage = (zone: Zone): Page => ({
-  who: `Sign · ${zone.name}`,
-  text: SIGN_TEXT[zone.id] ?? '',
+const signPage = (signId: SignId, zone: Zone): Page => ({
+  who: `Sign · ${SIGN_NAME[signId] ?? zone.name}`,
+  text: SIGN_TEXT[signId] ?? '',
   code: routeYaml(zone, location.host, UPSTREAM),
-  links: SIGN_DOCS[zone.id] ?? [],
+  links: SIGN_DOCS[signId] ?? [],
 })
 
-export function readSign(signId: ZoneId) {
-  quest.say([signPage(zoneById(signId))], () => learn('route'))
+/** Shows a sign: its own words above the route config of the zone it belongs to. */
+export function readSign(signId: SignId) {
+  const zone = zoneById(zoneOfSign(signId))
+
+  quest.say([signPage(signId, zone)], () => learn('route'))
 }
 
 /** Runs a Pomerium sign-in in a frame over the game, then reads the session it left behind. */
@@ -598,7 +604,7 @@ const LIBRARIAN_INTRO: Page[] = [
   },
   {
     who: 'Librarian',
-    text: "The Royal Ledger is next door, in the scriptorium, and that room has a guard of its own. Any citizen may go in and look, but writing in the ledger sends a POST, and that guard's orders only let scribes do that. Go ahead and try: the denial will show you which rule failed.",
+    text: "The Royal Ledger is next door, in the scriptorium, and that room has a guard of its own. Going in means writing, so that guard asks Pomerium with a POST, and the library's rules only let scribes do that. Go ahead and try: the denial will show you which rule failed.",
     links: [link('request')],
   },
   {
@@ -752,7 +758,7 @@ export async function readBook(index: number) {
 }
 
 export async function writeLedger() {
-  const outcome = await attempt(zoneById('scriptorium'), 'POST', 'ledger')
+  const outcome = await attempt(zoneById('library'), 'POST', 'ledger')
 
   if (outcome.kind === 'allow')
     quest.say([{ who: 'Royal Ledger', text: 'Your words are recorded. You must be a scribe.' }])

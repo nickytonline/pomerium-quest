@@ -25,7 +25,7 @@ export interface AllowRule {
 
 export type ClaimName = 'groups' | 'email'
 
-export type ZoneId = 'oracle' | 'fields' | 'town' | 'guild' | 'armory' | 'library' | 'scriptorium' | 'keep'
+export type ZoneId = 'oracle' | 'fields' | 'town' | 'guild' | 'armory' | 'library' | 'keep'
 
 export interface Zone {
   readonly id: ZoneId
@@ -58,12 +58,11 @@ export const ZONES: readonly Zone[] = [
   { id: 'town', name: 'Town Gate', prefix: '/zones/town', policy: [all(citizen)] },
   { id: 'guild', name: "Knights' Guild", prefix: '/zones/guild', policy: [all(citizen)] },
   { id: 'armory', name: 'Armory', prefix: '/zones/armory', policy: [all(inGroup('knights'))] },
-  { id: 'library', name: 'Royal Library', prefix: '/zones/library', policy: [all(citizen)] },
   {
-    id: 'scriptorium',
-    name: 'Scriptorium',
-    prefix: '/zones/scriptorium',
-    // Citizens may come in and look (GET); only scribes may write in the ledger (POST).
+    id: 'library',
+    name: 'Royal Library',
+    prefix: '/zones/library',
+    // Citizens may read (GET); scribes may also write (POST). Each rule has its own guard in the game.
     policy: [all(citizen, { kind: 'http_method', is: 'GET' }), all(citizen, inGroup('scribes'))],
   },
   // The end of the quest: one rule, and every check in it must pass.

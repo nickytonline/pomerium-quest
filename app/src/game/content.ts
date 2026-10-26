@@ -1,6 +1,15 @@
 // Everything the characters say, what the signs show and what each lesson links to.
 import { KINGDOM_DOMAIN, type ZoneId } from './zones.ts'
 
+/** Every gate has a sign. Most are named for their zone; the scriptorium's door is the library's second rule. */
+export type SignId = ZoneId | 'scriptorium'
+
+/** The zone whose route a sign shows: the zone of the same name, or the library for the scriptorium. */
+export const zoneOfSign = (signId: SignId): ZoneId => (signId === 'scriptorium' ? 'library' : signId)
+
+/** A sign's heading, where it isn't its zone's name. */
+export const SIGN_NAME: Partial<Record<SignId, string>> = { scriptorium: 'Scriptorium' }
+
 const DOCS = 'https://www.pomerium.com/docs'
 
 export interface DocLink {
@@ -94,15 +103,16 @@ export const LESSON_ORDER: readonly LessonId[] = [
 export const link = (lesson: LessonId) => LESSONS[lesson].link
 
 /** What each gate's sign says above its route config. */
-export const SIGN_TEXT: Partial<Record<ZoneId, string>> = {
+export const SIGN_TEXT: Partial<Record<SignId, string>> = {
   fields:
     "This gate is a route, and its guard follows the route's policy. Pomerium checks every request for this path against the policy below, and forwards the ones it allows to the app behind the route.",
   town: `The town only lets in citizens: people whose email domain is ${KINGDOM_DOMAIN}.`,
   guild: "The Knights' Guild hall. Any citizen may enter.",
   armory: 'Only knights. The guard reads the groups claim your identity provider put in your session.',
-  library: 'The reading room. Any citizen may come in and read.',
+  library:
+    'Two allow rules on one route. Citizens may read (GET); scribes may also write (POST). This guard lets readers in; the guard at the scriptorium checks writers.',
   scriptorium:
-    'The scriptorium, where the Royal Ledger is kept. Two allow rules on one route: citizens may look (GET); scribes may also write (POST). Pomerium lets a request in when any rule matches.',
+    'The scriptorium, where the Royal Ledger is written. Going in means writing, so this guard asks Pomerium with a POST. The readers rule only allows GET, so only the scribes rule can let you in.',
   keep: 'The Royal Keep. One rule, three checks: a citizen who is both a knight and a scholar. In an and rule, every check must pass.',
 }
 
@@ -113,7 +123,7 @@ export const STALE_DOCS: readonly DocLink[] = [
   LESSONS.claims.link,
 ]
 
-export const SIGN_DOCS: Partial<Record<ZoneId, readonly DocLink[]>> = {
+export const SIGN_DOCS: Partial<Record<SignId, readonly DocLink[]>> = {
   fields: [
     link('route'),
     { label: 'authenticated_user', href: `${DOCS}/internals/ppl#supported-ppl-criteria` },
@@ -121,8 +131,8 @@ export const SIGN_DOCS: Partial<Record<ZoneId, readonly DocLink[]>> = {
   town: [{ label: 'The domain criterion', href: `${DOCS}/internals/ppl#supported-ppl-criteria` }],
   guild: [link('route')],
   armory: [link('claims'), link('refresh')],
-  library: [link('route'), { label: 'Path matching', href: `${DOCS}/reference/routes/path-matching` }],
-  scriptorium: [link('request')],
+  library: [link('request'), { label: 'Path matching', href: `${DOCS}/reference/routes/path-matching` }],
+  scriptorium: [link('request'), link('defaultDeny')],
   keep: [link('allOf'), link('claims')],
 }
 

@@ -60,7 +60,7 @@ export const handleZone = (request: Request, splat: string) =>
         return json(200, { granted: 'scholars', refreshRequired: true, verifiedBy })
       }
 
-      case 'POST scriptorium/ledger':
+      case 'POST library/ledger':
         return json(200, { written: true, verifiedBy })
       default:
         return json(200, {
