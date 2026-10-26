@@ -2,7 +2,14 @@
 // become a real Pomerium route; nothing here decides access.
 import { useEffect, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { LESSONS, link, type LessonId } from '../game/content.ts'
-import { HOUSE_LIMITS, HOUSE_VALUE, VISITORS, type HouseCriterion, type HouseRule } from '../game/house.ts'
+import {
+  HOUSE_LIMITS,
+  HOUSE_VALUE,
+  VISITOR_IDS,
+  VISITORS,
+  type HouseCriterion,
+  type HouseRule,
+} from '../game/house.ts'
 import { currentLetter, houseRouteYaml, saveDoorRules } from '../game/house-story.ts'
 import { quest, useQuest } from '../game/store.ts'
 import { KINGDOM_DOMAIN } from '../game/zones.ts'
@@ -75,6 +82,15 @@ function withValue(criterion: HouseCriterion, value: string): HouseCriterion {
       return { ...criterion, is: value }
   }
 }
+
+/** The email picker's choice for an address that isn't anyone's the game knows; the player types it. */
+const SOMEONE_ELSE = ''
+
+/** Whose email an email check can pick: the player's, or a visitor's. */
+const peopleWith = (email: string) => [
+  { name: 'you', email },
+  ...VISITOR_IDS.map((id) => VISITORS[id]).filter((visitor) => visitor.email !== email),
+]
 
 const valid = (rules: readonly HouseRule[]) =>
   rules.every((rule) =>
@@ -383,6 +399,8 @@ function CheckRow({
   readonly onRemove: (() => void) | undefined
 }) {
   const value = valueOf(criterion)
+  const people = peopleWith(email)
+  const known = criterion.kind === 'email' && people.some((person) => person.email === criterion.is)
 
   return (
     <div className="flex flex-wrap items-center gap-2 pl-2">
@@ -413,7 +431,22 @@ function CheckRow({
           <option value="POST">POST (knock)</option>
         </select>
       )}
-      {value !== null && (
+      {criterion.kind === 'email' && (
+        <select
+          className={field}
+          aria-label={`${label}: whose email`}
+          value={known ? criterion.is : SOMEONE_ELSE}
+          onChange={(event) => onChange({ ...criterion, is: event.target.value })}
+        >
+          {people.map((person) => (
+            <option key={person.email} value={person.email}>
+              {person.name} ({person.email})
+            </option>
+          ))}
+          <option value={SOMEONE_ELSE}>someone else…</option>
+        </select>
+      )}
+      {value !== null && !known && (
         <input
           className={`${field} min-w-0 flex-1 ${HOUSE_VALUE.test(value) ? '' : 'border-deny'}`}
           aria-label={`${label}: value`}
