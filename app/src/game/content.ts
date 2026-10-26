@@ -107,9 +107,9 @@ export const SIGN_TEXT: Partial<Record<SignId, string>> = {
   guild: "The Knights' Guild hall. Any citizen may enter.",
   armory: 'Only knights. The guard reads the groups claim your identity provider put in your session.',
   library:
-    'Two allow rules on one route. Citizens may read (GET); scribes may also write (POST). This guard lets readers in; the guard at the scriptorium checks writers.',
+    'Two allow rules on one route, shown below. Pomerium allows a request when any one of them matches. This guard asks with a GET to let readers in; the guard at the scriptorium asks with a POST to let writers in.',
   scriptorium:
-    'The scriptorium, where the Royal Ledger is written. Going in means writing, so this guard asks Pomerium with a POST. The readers rule only allows GET, so only the scribes rule can let you in.',
+    "The scriptorium, where the Royal Ledger is written. Going in means writing, so this guard asks the library's route with a POST. Read each rule below as if the request were a POST, and see which ones could still match.",
   keep: 'The Royal Keep. One rule, three checks: a citizen who is both a knight and a scholar. In an and rule, every check must pass.',
 }
 
