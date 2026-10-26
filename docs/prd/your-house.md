@@ -62,6 +62,56 @@ Later letters build on that:
 A letter counts as solved when the real visits come out the way the brief asks: the visitors are the test
 cases.
 
+## The house
+
+### Where it goes and what's inside
+
+Hearth Village is small, but the corner north of the sage's house is free apart from three trees, at
+(12, 19), (14, 19) and (14, 21), which move. The house uses the village's north wall (y = 17) and the
+region wall (x = 16) as two of its own walls. That leaves a 6 by 4 room inside, at x 10 to 15 and y 18
+to 21. The door is on the west side at (9, 20), opening onto the village road (x = 8), so the player
+passes it on the way out at the start.
+
+```
+        x: 9  10 11 12 13 14 15 16
+  y 17     #  #  #  #  #  #  #  #     # wall (the village's north wall)
+  y 18     #  .  T  T  .  .  W  #     T table with the bread, W writing desk
+  y 19     #  .  t  .  .  .  .  #     t the traveler, eating
+  y 20  →  D  m  .  .  .  s  .  #     D door, m doormat (letters), s a slime bot
+  y 21     #  .  .  .  .  .  .  #
+  y 22     #  #  #  #  #  #  #  #
+```
+
+That's 24 floor tiles, 21 of them walkable once the table and desk are placed: room for the traveler, a
+slime wandering and the player swinging a sword. If it turns out too cramped when played, the fallback is
+a separate interior map entered through the door, which the scene doesn't support yet.
+
+New art in `art/tiles.mjs`: a table with bread, the same table with crumbs, and a writing desk.
+
+### Slimes in the house
+
+- **One bot at a time.** While the house is public, the game server sends a request with no session to
+  the house route when the player walks in, and again every 20 seconds or so while they're inside. Each
+  ALLOW brings a slime bot through the door, up to one in the room at once.
+- **The sword works indoors.** The player can kill the slime as anywhere else. But another one arrives
+  with the next allowed request, so the sword only ever buys time. Fixing the policy is what stops them.
+  That's the lesson: you can't fight your way out of a public route.
+- **After the first save,** the bots' requests are denied. The next slime bumps against the door, the
+  access log shows the DENY, and it bounces back outside. No more arrive.
+- **No farming.** Slimes killed in the house don't count toward the Captain's quota, or an open house
+  would be an endless supply.
+- Monsters are kept inside a fixed area today (`FIELDS` in `scene.ts`). Each monster needs its own area
+  instead: the fields, or the house's floor.
+
+### The traveler at the table
+
+- The traveler appears at the table when their visit is allowed and stays while it is. They talk like
+  any NPC (pleased about the bread).
+- When a save stops letting them in, they get up, walk out of the door and grumble from the road. The
+  bread on the table turns to crumbs after the second letter's story.
+- The traveler in the Slime Fields stays where they are; the one in the house is the same person as far
+  as Pomerium is concerned, with the same Keycloak account.
+
 ## How it works
 
 ### The three layers that keep houses apart
@@ -251,7 +301,7 @@ again, this time from the other side of the door, so it doesn't need a lesson of
   is neither? Check during the load test.
 - **`set_request_headers` on Ingress:** confirm the annotation name and format before relying on the
   version header.
-- **Where the house goes:** next to the sage's house in Hearth Village, so it's on the way out at the start.
+- **Is 6 by 4 enough?** Play it with the traveler, a slime and the sword before adding more to the room.
 - **Hosted play:** this design is for the local k3d game. A public deployment would need the house limit
   and clean-up tuned from the load test.
 
