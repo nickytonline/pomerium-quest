@@ -80,6 +80,8 @@ export interface Gate extends Point {
   readonly zoneId: ZoneId
   readonly signId: SignId
   readonly method: 'GET' | 'POST'
+  /** The zone outside the gate, whose route is asked with a GET on the way out. Unguarded ground has none. */
+  readonly exitZoneId?: ZoneId
 }
 
 export interface Sign extends Point {
@@ -262,15 +264,17 @@ export function buildWorld(): World {
     TILE.tree,
   )
 
+  // Leaving through a gate puts the player back in the zone they passed to reach it, so its guard checks
+  // that zone's rule again. The fields open onto Hearth Village, which no route guards.
   const gates: Gate[] = [
     { x: 8, y: 17, zoneId: 'fields', signId: 'fields', method: 'GET' },
-    { x: 16, y: 12, zoneId: 'town', signId: 'town', method: 'GET' },
-    { x: 21, y: 7, zoneId: 'guild', signId: 'guild', method: 'GET' },
-    { x: 33, y: 7, zoneId: 'armory', signId: 'armory', method: 'GET' },
-    { x: 33, y: 20, zoneId: 'library', signId: 'library', method: 'GET' },
+    { x: 16, y: 12, zoneId: 'town', signId: 'town', method: 'GET', exitZoneId: 'fields' },
+    { x: 21, y: 7, zoneId: 'guild', signId: 'guild', method: 'GET', exitZoneId: 'town' },
+    { x: 33, y: 7, zoneId: 'armory', signId: 'armory', method: 'GET', exitZoneId: 'town' },
+    { x: 33, y: 20, zoneId: 'library', signId: 'library', method: 'GET', exitZoneId: 'town' },
     // Going into the scriptorium means writing in the ledger, so its guard asks with a POST.
-    { x: 29, y: 24, zoneId: 'library', signId: 'scriptorium', method: 'POST' },
-    { x: 21, y: 29, zoneId: 'keep', signId: 'keep', method: 'GET' },
+    { x: 29, y: 24, zoneId: 'library', signId: 'scriptorium', method: 'POST', exitZoneId: 'library' },
+    { x: 21, y: 29, zoneId: 'keep', signId: 'keep', method: 'GET', exitZoneId: 'town' },
   ]
 
   for (const gate of gates) set(gate.x, gate.y, TILE.gateClosed)

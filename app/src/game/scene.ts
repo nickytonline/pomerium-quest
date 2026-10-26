@@ -450,7 +450,7 @@ export class KingdomScene extends Phaser.Scene {
 
     if (guard) {
       // Once a guard has stepped aside for the player, there's nothing more to ask them.
-      if (this.openGate !== guard) this.askGuard(guard, target)
+      if (this.openGate !== guard) this.askGuard(guard, target, guard.gate)
 
       return
     }
@@ -472,10 +472,13 @@ export class KingdomScene extends Phaser.Scene {
     const tile = this.tileAt(target)
 
     if (tile === TILE.gateClosed) {
-      // From inside, the gate itself stands between the player and the guard outside.
+      // From inside, the gate itself stands between the player and the guard outside. Walking out puts
+      // the player back in the zone beyond, so the guard checks they still meet its rule.
       const gateGuard = this.guards.find((candidate) => same(candidate.gate, target))
+      const beyond = gateGuard?.gate.exitZoneId
 
-      if (gateGuard) this.askGuard(gateGuard, target)
+      if (gateGuard && beyond) this.askGuard(gateGuard, target, { zoneId: beyond, method: 'GET' })
+      else if (gateGuard) this.letOut(gateGuard, target)
 
       return
     }
@@ -557,9 +560,9 @@ export class KingdomScene extends Phaser.Scene {
   }
 
   /** Asks Pomerium on the player's behalf; if it allows them, the guard steps aside and they walk on. */
-  private askGuard(guard: Guard, target: Point) {
+  private askGuard(guard: Guard, target: Point, request: Pick<Gate, 'zoneId' | 'method'>) {
     this.mode.send({ type: 'GATE' })
-    void enterGate(guard.gate.zoneId, guard.gate.method).then((allowed) => {
+    void enterGate(request.zoneId, request.method).then((allowed) => {
       if (!allowed) {
         this.mode.send({ type: 'GATE_DENIED' })
 
@@ -570,6 +573,14 @@ export class KingdomScene extends Phaser.Scene {
       const stepMs = this.letThrough(guard, true)
       this.time.delayedCall(stepMs, () => this.walk(target))
     })
+  }
+
+  /** Opens a gate for a player on its inside, who walks out once the guard has stepped aside. */
+  private letOut(guard: Guard, target: Point) {
+    this.mode.send({ type: 'GATE' })
+    sfx('gateOpen')
+    const stepMs = this.letThrough(guard, true)
+    this.time.delayedCall(stepMs, () => this.walk(target))
   }
 
   /** Opens a gate and moves its guard aside; returns how long the guard takes to step out of the way. */
