@@ -60,16 +60,18 @@ asks Pomerium whether to let you through, so what you can reach depends on who t
 
 ### What you can do
 
-| To            | Keyboard                                  | Touch             |
-| ------------- | ----------------------------------------- | ----------------- |
-| Move          | The arrow keys, or the W, A, S and D keys | The direction pad |
-| Talk and read | E or Enter, facing someone or something   | A (Talk)          |
-| Swing a sword | Space or J                                | B (Sword)         |
-| Open the menu | Esc                                       | The Menu button   |
+| To               | Keyboard                                  | Touch              |
+| ---------------- | ----------------------------------------- | ------------------ |
+| Move             | The arrow keys, or the W, A, S and D keys | The direction pad  |
+| Talk and read    | E or Enter, facing someone or something   | A (Talk)           |
+| Swing a sword    | Space or J                                | B (Sword)          |
+| Open the menu    | Esc                                       | The Menu button    |
+| Open the journal | I (in a narrow window)                    | The Journal button |
 
 The menu saves your game, restarts it, quits to the title screen, and turns music and sound effects on
 and off. Beside the board, your identity shows the claims in your session right now, and the access log
-lists every request a guard has checked.
+lists every request a guard has checked. In a narrow window or on a phone, those panels move into the
+journal.
 
 ### Sign in with the Oracle
 
