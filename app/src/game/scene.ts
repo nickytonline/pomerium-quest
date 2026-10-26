@@ -652,10 +652,12 @@ export class KingdomScene extends Phaser.Scene {
       return
     }
 
+    // Every sign stands beside a gate, and shows the route that gate asks.
     const sign = this.world.signs.find((candidate) => same(candidate, target))
+    const signGate = sign && this.world.gates.find((candidate) => candidate.signId === sign.signId)
 
-    if (sign) {
-      readSign(sign.signId)
+    if (signGate) {
+      readSign(signGate)
 
       return
     }
@@ -666,7 +668,7 @@ export class KingdomScene extends Phaser.Scene {
     )
 
     if (guard) {
-      readSign(guard.gate.signId)
+      readSign(guard.gate)
 
       return
     }

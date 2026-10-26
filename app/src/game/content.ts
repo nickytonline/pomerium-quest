@@ -4,9 +4,6 @@ import { KINGDOM_DOMAIN, type ZoneId } from './zones.ts'
 /** Every gate has a sign. Most are named for their zone; the scriptorium's door is the library's second rule. */
 export type SignId = ZoneId | 'scriptorium'
 
-/** The zone whose route a sign shows: the zone of the same name, or the library for the scriptorium. */
-export const zoneOfSign = (signId: SignId): ZoneId => (signId === 'scriptorium' ? 'library' : signId)
-
 /** A sign's heading, where it isn't its zone's name. */
 export const SIGN_NAME: Partial<Record<SignId, string>> = { scriptorium: 'Scriptorium' }
 

@@ -10,7 +10,6 @@ import {
   STALE_DOCS,
   SIGN_TEXT,
   link,
-  zoneOfSign,
   type LessonId,
   type Page,
   type SignId,
@@ -19,7 +18,7 @@ import { decide, routeYaml, type Identity } from './ppl.ts'
 import { KNIGHT_QUOTA, hasSteel, isAtLeast, stage, type QuestStage } from './quest-machine.ts'
 import { sfx } from './sound.ts'
 import { MAX_HP, quest, type DenyView, type LogEntry } from './store.ts'
-import type { GateRequest, NpcId } from './world.ts'
+import type { Gate, GateRequest, NpcId } from './world.ts'
 import { KINGDOM_DOMAIN, zoneById, type Zone } from './zones.ts'
 
 const UPSTREAM = 'http://quest.quest.svc.cluster.local:3000'
@@ -275,11 +274,9 @@ const signPage = (signId: SignId, zone: Zone): Page => ({
   links: SIGN_DOCS[signId] ?? [],
 })
 
-/** Shows a sign: its own words above the route config of the zone it belongs to. */
-export function readSign(signId: SignId) {
-  const zone = zoneById(zoneOfSign(signId))
-
-  quest.say([signPage(signId, zone)], () => learn('route'))
+/** Shows a gate's sign: its own words above the route config of the zone the gate asks. */
+export function readSign({ signId, zoneId }: Pick<Gate, 'signId' | 'zoneId'>) {
+  quest.say([signPage(signId, zoneById(zoneId))], () => learn('route'))
 }
 
 /** Runs a Pomerium sign-in in a frame over the game, then reads the session it left behind. */
