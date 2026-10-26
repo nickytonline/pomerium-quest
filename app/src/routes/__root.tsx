@@ -1,5 +1,6 @@
 import { HeadContent, Outlet, Scripts, createRootRoute } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
+import { FAVICON } from '../game/sheets'
 import appCss from '../styles.css?url'
 
 export const Route = createRootRoute({
@@ -11,7 +12,7 @@ export const Route = createRootRoute({
       { name: 'description', content: 'Learn how Pomerium works by walking through its gates.' },
     ],
     links: [
-      { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
+      { rel: 'icon', type: 'image/svg+xml', href: FAVICON },
       { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
       { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossOrigin: 'anonymous' },
       {
