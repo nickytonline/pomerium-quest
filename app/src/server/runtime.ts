@@ -15,6 +15,16 @@ const AppLayer = Layer.mergeAll(
 
 export const runtime = ManagedRuntime.make(AppLayer)
 
+declare global {
+  var __questRuntime: { readonly dispose: () => Promise<void> } | undefined
+}
+
+// In dev, Vite reloads these modules on every change and builds a new runtime. Dispose of the old one,
+// or its house sweeper keeps running with a visit list nobody updates, and takes down every house.
+void globalThis.__questRuntime?.dispose()
+
+globalThis.__questRuntime = runtime
+
 export type AppServices = ManagedRuntime.ManagedRuntime.Services<typeof runtime>
 
 export type Json = string | number | boolean | null | readonly Json[] | { readonly [key: string]: Json }
