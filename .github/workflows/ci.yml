@@ -13,6 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 24.22.1
@@ -29,6 +31,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 24.22.1
@@ -46,7 +50,7 @@ jobs:
       - name: Show the cluster when something failed
         if: failure()
         run: |
-          kubectl --context k3d-quest get pods -A
-          kubectl --context k3d-quest -n pomerium logs deployment/pomerium --tail=100
-          kubectl --context k3d-quest -n quest logs deployment/quest --tail=100
-          kubectl --context k3d-quest -n quest logs deployment/keycloak --tail=100
+          kubectl --context k3d-quest get pods -A || true
+          kubectl --context k3d-quest -n pomerium logs deployment/pomerium --tail=100 || true
+          kubectl --context k3d-quest -n quest logs deployment/quest --tail=100 || true
+          kubectl --context k3d-quest -n quest logs deployment/keycloak --tail=100 || true
