@@ -204,80 +204,175 @@ function healChime(out: AudioNode, at: number) {
     tone(out, at + i * 0.07, { wave: 'triangle', freq: hz(name), dur: 0.2, peak: 0.16 })
 }
 
+/** A vowel as three formants: the resonances that make a buzz sound like a voice, with their levels. */
+type Vowel = readonly (readonly [freq: number, gain: number])[]
+
+const OO: Vowel = [
+  [350, 1],
+  [800, 0.4],
+  [2300, 0.1],
+]
+
+const AH: Vowel = [
+  [750, 1],
+  [1200, 0.6],
+  [2550, 0.25],
+]
+
+interface Syllable {
+  readonly pitch: number
+  readonly dur: number
+  /** The vowel it opens from, for a "mwa"; otherwise it's an "ah" throughout. */
+  readonly from?: Vowel
+  /** How far the pitch has sunk by the end. */
+  readonly fall: number
+  /** Slow vibrato, for a drawn-out note. */
+  readonly vibrato?: boolean
+}
+
+/** Turns the music down for `seconds`, so a moment like the phish's laugh is heard clearly. */
+function duck(mix: Mixer, seconds: number) {
+  const gain = mix.music.gain
+  const now = mix.ctx.currentTime
+
+  gain.cancelScheduledValues(now)
+  gain.setTargetAtTime(0, now, 0.08)
+  setTimeout(
+    () => gain.setTargetAtTime(settings.music ? LEVEL.music : 0, mix.ctx.currentTime, 0.4),
+    seconds * 1000,
+  )
+}
+
 /**
- * A sinister "mwa-ha-ha-ha-ha… haaaa": a buzzing voice through two vowel formants, each "ha" lower
- * than the last, ending in a long sinking "haaaa" that echoes away over a low drone.
+ * A diabolical "mwa-ha-ha-ha… haaaa": a voice made from a buzz shaped by vowel formants. Each "ha"
+ * lifts then falls and sits lower than the last, and the last one is drawn out and sinks, over a
+ * swelling tritone and a dark echo. The music ducks out of the way while it plays.
  */
 function laugh(mix: Mixer, out: AudioNode, at: number) {
   const ctx = mix.ctx
+  // Keeps the rumble out: small speakers break up trying to play it.
+  const voice = ctx.createBiquadFilter()
   const echo = ctx.createDelay()
   const feedback = ctx.createGain()
+  const darken = ctx.createBiquadFilter()
+  const send = ctx.createGain()
 
-  echo.delayTime.value = 0.19
-  feedback.gain.value = 0.45
-  echo.connect(feedback).connect(echo)
-  echo.connect(out)
+  voice.type = 'highpass'
+  voice.frequency.value = 250
+  voice.connect(out)
+  // The echo lands off the laugh's beat, so it trails the voice instead of smearing it.
+  echo.delayTime.value = 0.31
+  feedback.gain.value = 0.3
+  darken.type = 'lowpass'
+  darken.frequency.value = 1600
+  send.gain.value = 0.35
+  voice.connect(send).connect(echo).connect(darken).connect(out)
+  darken.connect(feedback).connect(echo)
+  duck(mix, 4)
 
-  const syllable = (
-    start: number,
-    pitch: number,
-    dur: number,
-    vowel: readonly [number, number],
-    fall = 0.8,
-  ) => {
+  const syllable = (start: number, said: Syllable) => {
+    const end = start + said.dur
     const osc = ctx.createOscillator()
-    const vibrato = ctx.createOscillator()
-    const depth = ctx.createGain()
+    const soften = ctx.createBiquadFilter()
     const env = ctx.createGain()
+    const body = ctx.createBiquadFilter()
+    const bodyLevel = ctx.createGain()
 
     osc.type = 'sawtooth'
-    osc.frequency.setValueAtTime(pitch, start)
-    osc.frequency.exponentialRampToValueAtTime(pitch * fall, start + dur)
-    vibrato.frequency.value = 7
-    depth.gain.value = pitch * 0.03
-    vibrato.connect(depth).connect(osc.frequency)
-    env.gain.setValueAtTime(0, start)
-    env.gain.linearRampToValueAtTime(1.8, start + 0.02)
-    env.gain.exponentialRampToValueAtTime(0.0001, start + dur)
+    // A laugh's "ha" scoops up and then falls away.
+    osc.frequency.setValueAtTime(said.pitch * 0.95, start)
+    osc.frequency.linearRampToValueAtTime(said.pitch * 1.08, start + said.dur * 0.3)
+    osc.frequency.exponentialRampToValueAtTime(said.pitch * said.fall, end)
 
-    for (const formant of vowel) {
-      const filter = ctx.createBiquadFilter()
+    if (said.vibrato) {
+      const lfo = ctx.createOscillator()
+      const depth = ctx.createGain()
 
-      filter.type = 'bandpass'
-      filter.frequency.value = formant
-      filter.Q.value = 4.5
-      osc.connect(filter).connect(env)
+      lfo.frequency.value = 5
+      depth.gain.value = said.pitch * 0.015
+      lfo.connect(depth).connect(osc.frequency)
+      lfo.start(start)
+      lfo.stop(end + 0.02)
     }
 
-    env.connect(out)
-    env.connect(echo)
+    soften.type = 'lowpass'
+    soften.frequency.value = 3500
+    osc.connect(soften)
+
+    for (const [i, [freq, level]] of AH.entries()) {
+      const formant = ctx.createBiquadFilter()
+      const gain = ctx.createGain()
+      const opening = said.from?.[i]
+
+      formant.type = 'bandpass'
+      formant.Q.value = 6
+      formant.frequency.setValueAtTime(opening?.[0] ?? freq, start)
+      formant.frequency.linearRampToValueAtTime(freq, start + Math.min(0.18, said.dur / 2))
+      gain.gain.value = level * 1.1
+      soften.connect(formant).connect(gain).connect(env)
+    }
+
+    // A little of the plain buzz, so the voice has a chest and isn't all whistle.
+    body.type = 'lowpass'
+    body.frequency.value = 600
+    bodyLevel.gain.value = 0.1
+    soften.connect(body).connect(bodyLevel).connect(env)
+
+    env.gain.setValueAtTime(0, start)
+    env.gain.linearRampToValueAtTime(1, start + 0.015)
+    env.gain.linearRampToValueAtTime(0.7, Math.max(start + 0.02, end - 0.06))
+    env.gain.linearRampToValueAtTime(0, end)
+    env.connect(voice)
     osc.start(start)
-    vibrato.start(start)
-    osc.stop(start + dur + 0.02)
-    vibrato.stop(start + dur + 0.02)
+    osc.stop(end + 0.02)
   }
 
-  // "Mwa": the lips open from an "oo" to an "ah".
-  syllable(at, 130, 0.5, [500, 900])
+  // The breath of an "h" before a syllable.
+  const breath = (start: number) =>
+    hiss(mix, voice, start - 0.045, {
+      filter: 'bandpass',
+      freq: 1800,
+      q: 1.2,
+      attack: 0.02,
+      dur: 0.06,
+      peak: 0.12,
+    })
+
+  syllable(at, { pitch: 135, dur: 0.45, from: OO, fall: 0.85 })
 
   const has = 7
+  const first = at + 0.6
 
   for (let i = 0; i < has; i++) {
-    const start = at + 0.58 + i * 0.21
+    const start = first + i * 0.22
 
-    // The breath of the "h", then the "a".
-    hiss(mix, out, start - 0.04, { filter: 'bandpass', freq: 1400, q: 1.5, dur: 0.06, peak: 0.2 })
-    syllable(start, 185 - i * 9, 0.17, [720, 1150])
+    breath(start)
+    syllable(start, { pitch: 190 - i * 9, dur: 0.17, fall: 0.85 })
   }
 
-  // The last "haaaa", drawn out and sinking.
-  const last = at + 0.58 + has * 0.21 + 0.08
+  const last = first + has * 0.22 + 0.1
 
-  hiss(mix, out, last - 0.05, { filter: 'bandpass', freq: 1400, q: 1.5, dur: 0.08, peak: 0.22 })
-  syllable(last, 150, 0.9, [720, 1150], 0.55)
-  tone(out, at + 0.3, { wave: 'sawtooth', freq: 55, to: 46, dur: 3.6, peak: 0.1 })
-  tone(out, at + 0.3, { wave: 'sawtooth', freq: 58.3, to: 49, dur: 3.6, peak: 0.07 })
-  setTimeout(() => echo.disconnect(), 7000)
+  breath(last)
+  syllable(last, { pitch: 150, dur: 1.0, fall: 0.6, vibrato: true })
+
+  // A soft, swelling tritone underneath: the devil's interval.
+  for (const name of ['D3', 'Ab3']) {
+    const osc = ctx.createOscillator()
+    const env = ctx.createGain()
+    const end = last + 1.4
+
+    osc.type = 'triangle'
+    osc.frequency.value = hz(name)
+    env.gain.setValueAtTime(0, at)
+    env.gain.linearRampToValueAtTime(0.05, at + 1.2)
+    env.gain.setValueAtTime(0.05, end - 1)
+    env.gain.linearRampToValueAtTime(0, end)
+    osc.connect(env).connect(out)
+    osc.start(at)
+    osc.stop(end + 0.02)
+  }
+
+  setTimeout(() => voice.disconnect(), 8000)
 }
 
 const EFFECTS: Record<Effect, (mix: Mixer, out: AudioNode, at: number) => void> = {
