@@ -1,6 +1,14 @@
 import { Context, Effect, Layer, Option, Schedule, Schema } from 'effect'
 import { createHash } from 'node:crypto'
-import { HOUSE_LIMITS, HOUSE_PREFIX, HOUSE_VALUE, type HouseRule, type HouseState } from '../game/house.ts'
+import {
+  HOUSE_LIMITS,
+  HOUSE_PREFIX,
+  HOUSE_VALUE,
+  deedGroup,
+  deedRule,
+  type HouseRule,
+  type HouseState,
+} from '../game/house.ts'
 import { policyDocument } from '../game/ppl.ts'
 import { QuestConfig } from './config.ts'
 import { BuildersBusy, KubeUnavailable } from './errors.ts'
@@ -38,10 +46,7 @@ const HouseRuleSchema = Schema.Struct({
 })
 
 /** What the editor may send. Anything else is refused before it gets near Kubernetes. */
-export const HouseRules = Schema.Array(HouseRuleSchema).check(
-  Schema.isNonEmpty(),
-  Schema.isMaxLength(HOUSE_LIMITS.rules),
-)
+export const HouseRules = Schema.Array(HouseRuleSchema).check(Schema.isMaxLength(HOUSE_LIMITS.rules))
 
 const IngressMeta = Schema.Struct({
   metadata: Schema.Struct({
@@ -73,8 +78,12 @@ const hash = (text: string) => createHash('sha256').update(text).digest('hex').s
 /** A house's id: a hash of its owner's email, so it's DNS-safe and keeps the email out of URLs. */
 export const houseId = (owner: string) => hash(owner.toLowerCase())
 
+/** The group the Oracle adds the owner to for their deed. */
+export const deedGroupOf = (owner: string) => deedGroup(houseId(owner))
+
 /** Which rules a house is enforcing; Pomerium hands it to the house as X-House-Version. */
-const versionOf = (rules: readonly HouseRule[] | null) => (rules ? hash(JSON.stringify(rules)) : 'public')
+const versionOf = (rules: readonly HouseRule[] | null) =>
+  rules ? hash(`deed:${JSON.stringify(rules)}`) : 'public'
 
 export class Houses extends Context.Service<
   Houses,
@@ -170,7 +179,7 @@ export const HousesLive = Layer.effect(
         // A new house is public: Pomerium lets every request through, signed in or not. Once the player
         // saves, the policy replaces the public flag. Pomerium doesn't allow both on one route.
         const door = rules
-          ? { [`${ANNOTATION}/policy`]: JSON.stringify(policyDocument(rules)) }
+          ? { [`${ANNOTATION}/policy`]: JSON.stringify(policyDocument([deedRule(id), ...rules])) }
           : { [`${ANNOTATION}/allow_public_unauthenticated_access`]: 'true' }
 
         const ingress = {

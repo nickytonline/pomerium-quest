@@ -8,7 +8,8 @@ import { OracleUnavailable } from './errors.ts'
 export class OracleAdmin extends Context.Service<
   OracleAdmin,
   {
-    readonly grant: (email: string, group: string) => Effect.Effect<void, OracleUnavailable>
+    /** Adds the player to a group. `create` makes the group first if the Oracle doesn't have it yet. */
+    readonly grant: (email: string, group: string, create?: boolean) => Effect.Effect<void, OracleUnavailable>
   }
 >()('OracleAdmin') {}
 
@@ -48,12 +49,21 @@ export const OracleAdminLive = Layer.effect(
         Effect.flatMap(readJson(Found)),
       )
 
-    const grant = (email: string, group: string) =>
+    const grant = (email: string, group: string, create = false) =>
       Effect.gen(function* () {
         const accessToken = yield* token
         const [user] = yield* find('users', { email, exact: 'true' }, accessToken)
-        const groups = yield* find('groups', { search: group, exact: 'true' }, accessToken)
-        const found = groups.find((candidate) => candidate.name === group)
+        const lookup = () => find('groups', { search: group, exact: 'true' }, accessToken)
+        let found = (yield* lookup()).find((candidate) => candidate.name === group)
+
+        if (!found && create) {
+          yield* HttpClientRequest.post(`${adminUrl}/groups`).pipe(
+            HttpClientRequest.bearerToken(accessToken),
+            HttpClientRequest.bodyJsonUnsafe({ name: group }),
+            client.execute,
+          )
+          found = (yield* lookup()).find((candidate) => candidate.name === group)
+        }
 
         if (!user || !found) {
           return yield* new OracleUnavailable({

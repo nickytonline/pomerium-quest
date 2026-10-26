@@ -160,6 +160,9 @@ async function builder<T>(action: string, body: BuilderRequest): Promise<Built<T
 export const openHouse = (rules: readonly HouseRule[] | null) => builder<HouseState>('open', { rules })
 export const saveHouse = (rules: readonly HouseRule[]) => builder<HouseState>('save', { rules })
 
+/** The sage's deed: the Oracle adds the group that opens this player's own door. */
+export const claimDeed = () => builder<{ granted: string }>('deed', {})
+
 /** The house as it stands, and whether Pomerium has taken up its latest rules. */
 export const houseStatus = () => builder<HouseState>('status', {})
 

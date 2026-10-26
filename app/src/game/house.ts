@@ -1,5 +1,6 @@
 // The player's house: a route whose policy the player writes (docs/prd/your-house.md). Shared by the
 // editor in the browser and the server that turns the rules into a real Pomerium route.
+import { decide, type Identity } from './ppl.ts'
 import { KINGDOM_DOMAIN, type Criterion, type PolicyRule } from './zones.ts'
 
 /** Every house is a route under this prefix, followed by its id. */
@@ -13,6 +14,26 @@ export const HOUSE_LIMITS = { rules: 6, criteria: 6 } as const
  * server writes: no quotes, colons, spaces or newlines.
  */
 export const HOUSE_VALUE = /^[A-Za-z0-9@._-]{1,254}$/
+
+/** The Oracle group that holds a house's deed: whoever carries it in their session always gets in. */
+export const deedGroup = (houseId: string) => `deed-${houseId}`
+
+/** The rule every saved house starts with, so its owner needs no rule of their own. */
+export const deedRule = (houseId: string): PolicyRule => ({
+  action: 'allow',
+  match: 'or',
+  criteria: [{ kind: 'claim', claim: 'groups', value: deedGroup(houseId) }],
+})
+
+/**
+ * Whether these rules would turn the owner away at their own door despite the deed: a deny that matches
+ * them always wins over the deed's allow. The desk refuses to save such rules.
+ */
+export function turnsAwayOwner(rules: readonly HouseRule[], owner: Identity) {
+  const anyone: PolicyRule = { action: 'allow', match: 'or', criteria: [{ kind: 'accept' }] }
+
+  return !decide({ policy: [anyone, ...rules] }, owner, { method: 'GET', path: '/' }).allow
+}
 
 /** The checks the editor offers. All of them work in open-source Pomerium. */
 export type HouseCriterion = Exclude<Criterion, { readonly claim: 'email' }>

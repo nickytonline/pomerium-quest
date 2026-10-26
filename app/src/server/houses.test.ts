@@ -54,10 +54,11 @@ describe('the rules a player may save', () => {
     expect(accepts([rule([{ kind: 'email', is: 'a@x.io' }], 'maybe')])).toBe(false)
   })
 
-  it('refuses no rules, empty rules, and more than the house may hold', () => {
+  // No rules is a door only the deed's owner can open.
+  it('accepts no rules, but refuses empty rules and more than the house may hold', () => {
     const one = rule([{ kind: 'accept' }])
 
-    expect(accepts([])).toBe(false)
+    expect(accepts([])).toBe(true)
     expect(accepts([rule([])])).toBe(false)
     expect(accepts(Array.from({ length: HOUSE_LIMITS.rules }, () => one))).toBe(true)
     expect(accepts(Array.from({ length: HOUSE_LIMITS.rules + 1 }, () => one))).toBe(false)

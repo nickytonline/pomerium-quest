@@ -2,7 +2,7 @@ import { Effect, Schema } from 'effect'
 import { SIGNED_IN_MESSAGE, ZONES } from '../game/zones.ts'
 import { QuestConfig } from './config.ts'
 import { InvalidRules } from './errors.ts'
-import { HouseRules, Houses } from './houses.ts'
+import { HouseRules, Houses, deedGroupOf } from './houses.ts'
 import { Visitors } from './visitors.ts'
 import { PomeriumIdentity, type Player } from './identity.ts'
 import { OracleAdmin } from './oracle-admin.ts'
@@ -118,6 +118,15 @@ export const handleZone = (request: Request, splat: string) =>
         return json(200, { granted: 'scholars', refreshRequired: true, verifiedBy })
       }
 
+      // The sage's deed: the Oracle puts the player in the group that opens their own door, and only theirs.
+      case 'POST builder/deed': {
+        const oracle = yield* OracleAdmin
+        const group = deedGroupOf(player.email)
+        yield* oracle.grant(player.email, group, true)
+
+        return json(200, { granted: group, refreshRequired: true, verifiedBy })
+      }
+
       // The owner is always the verified player, never something the request says.
       case 'POST builder/open': {
         const houses = yield* Houses
@@ -130,7 +139,7 @@ export const handleZone = (request: Request, splat: string) =>
         const houses = yield* Houses
         const { rules } = yield* readRules(request)
 
-        if (!rules) return json(400, { error: 'a saved house needs at least one rule' })
+        if (!rules) return json(400, { error: 'a saved house needs its rules' })
 
         return json(200, yield* houses.save(player.email, rules))
       }
