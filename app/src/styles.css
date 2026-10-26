@@ -114,38 +114,34 @@
     image-rendering: pixelated;
   }
 
-  /* The game fits the screen height: its width is what the height leaves after the header,
-     stats bar and controls (--chrome), at 4:3. Wide screens put the panels beside it. */
+  /* The page fills the window: the header, then the game, with the Journal beside it on wide screens.
+     The game's row takes whatever height is left, and the board sizes itself to it (useBoard). */
   .kingdom {
-    --chrome: 150px;
-    --game-w: max(256px, calc((100dvh - var(--chrome)) * 4 / 3));
-  }
-
-  .kingdom[data-touch] {
-    --chrome: 330px;
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
   }
 
   .kingdom-layout {
+    flex: 1;
+    min-height: 0;
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     gap: 20px;
-    align-items: start;
   }
 
   @media (min-width: 960px) {
     .kingdom-layout {
-      grid-template-columns: minmax(0, var(--game-w)) 340px;
-      justify-content: center;
+      grid-template-columns: minmax(0, 1fr) 340px;
     }
   }
 
   .play {
     display: grid;
     gap: 8px;
-    width: 100%;
-    max-width: var(--game-w);
-    margin-inline: auto;
+    min-height: 0;
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
     grid-template-areas: 'hud' 'game' 'hint';
     -webkit-touch-callout: none;
     user-select: none;
@@ -160,15 +156,10 @@
 
   /* A phone on its side: the game takes the height, with the pad and buttons either side. */
   @media (orientation: landscape) and (max-height: 600px) {
-    .kingdom[data-touch] {
-      --chrome: 96px;
-    }
-
     .kingdom[data-touch] .play {
-      max-width: none;
-      grid-template-columns: auto minmax(0, var(--game-w)) auto;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      grid-template-rows: auto minmax(0, 1fr);
       grid-template-areas: 'dpad hud actions' 'dpad game actions';
-      justify-content: center;
       column-gap: 16px;
     }
   }

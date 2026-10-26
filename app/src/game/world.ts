@@ -65,6 +65,12 @@ export const PLAYER_TERRAIN: ReadonlySet<number> = new Set([...WALKABLE, TILE.wa
 export const MAP_WIDTH = 40
 export const MAP_HEIGHT = 30
 
+/** A tile's size in game pixels. */
+export const TILE_PX = 16
+
+/** The game board shows at least this many tiles across and down, and at most the whole map. */
+export const BOARD_TILES = { cols: 16, rows: 12 } as const
+
 export type NpcId = 'sage' | 'oracle' | 'traveler' | 'captain' | 'armorer' | 'librarian' | 'baker'
 
 /** Frame index of each NPC in npcs.png. */

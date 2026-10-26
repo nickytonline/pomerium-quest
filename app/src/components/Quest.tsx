@@ -19,6 +19,7 @@ import { KNIGHT_QUOTA, questMachine, type QuestStage } from '../game/quest-machi
 import { MAX_HP, SETTLE_MS, quest, useQuest, type DenyView, type Dir } from '../game/store.ts'
 import { decide, type Identity } from '../game/ppl.ts'
 import { sound, startSound, useSound, type SoundSettings } from '../game/sound.ts'
+import { BOARD_TILES, MAP_HEIGHT, MAP_WIDTH, TILE_PX } from '../game/world.ts'
 import { KINGDOM_DOMAIN, SIGNED_IN_MESSAGE, zoneById } from '../game/zones.ts'
 
 /** Wide enough for the panels beside the game. The game fits the height, so width alone decides. */
@@ -334,19 +335,67 @@ function SplashSound() {
   )
 }
 
+/** The frame around the board, in CSS pixels: its border-4. */
+const BOARD_BORDER = 4
+
+interface Board {
+  /** The board's size on the page, in CSS pixels. */
+  readonly width: number
+  readonly height: number
+  /** How much of the world it shows, in game pixels. */
+  readonly view: { readonly width: number; readonly height: number }
+}
+
+/**
+ * Sizes the board to the space it's given: as big as fits, showing at least the usual 16 by 12 tiles,
+ * more of the map in whichever direction has room, and never more than the whole map.
+ */
+function useBoard() {
+  const slot = useRef<HTMLDivElement>(null)
+  const [board, setBoard] = useState<Board | null>(null)
+
+  useEffect(() => {
+    const element = slot.current
+
+    if (!element) return
+
+    const measure = () => {
+      const space = element.getBoundingClientRect()
+      const width = space.width - 2 * BOARD_BORDER
+      const height = space.height - 2 * BOARD_BORDER
+      const scale = Math.min(width / (BOARD_TILES.cols * TILE_PX), height / (BOARD_TILES.rows * TILE_PX))
+
+      if (scale <= 0) return
+      const fitWidth = Math.floor(Math.min(width, MAP_WIDTH * TILE_PX * scale))
+      const fitHeight = Math.floor(Math.min(height, MAP_HEIGHT * TILE_PX * scale))
+
+      setBoard({
+        width: fitWidth + 2 * BOARD_BORDER,
+        height: fitHeight + 2 * BOARD_BORDER,
+        view: { width: Math.round(fitWidth / scale), height: Math.round(fitHeight / scale) },
+      })
+    }
+
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+
+    return () => observer.disconnect()
+  }, [])
+
+  return { slot, board }
+}
+
 function Kingdom() {
   const wide = useMedia(SIDE_BY_SIDE)
   const touch = useTouchControls()
+  const { slot, board } = useBoard()
 
   useEffect(() => {
     if (wide) quest.closeJournal()
   }, [wide])
 
   return (
-    <div
-      className={`kingdom mx-auto max-w-[1240px] pt-[18px] pb-4 ${gutter}`}
-      data-touch={touch || undefined}
-    >
+    <div className={`kingdom pt-[18px] pb-4 ${gutter}`} data-touch={touch || undefined}>
       <header className="mb-3.5 flex flex-wrap items-center gap-x-4 gap-y-1">
         <h1 className="m-0 font-display text-[1.7rem] leading-tight font-bold text-sun max-sm:text-[1.3rem]">
           Pomerium Quest
@@ -366,14 +415,19 @@ function Kingdom() {
           <div className="[grid-area:hud]">
             <Hud />
           </div>
-          <div className="relative aspect-[4/3] w-full overflow-hidden rounded-md border-4 border-night-deep bg-night-deep shadow-[0_0_0_2px_var(--color-panel-edge),0_18px_50px_rgb(0_0_0/0.45)] [grid-area:game]">
-            <GameCanvas />
-            <Toast />
-            <DialogBox />
-            <DenyScreen />
-            <HouseEditor />
-            <VisitsScreen />
-            <PauseMenu />
+          <div className="grid min-h-0 min-w-0 place-items-center [grid-area:game]" ref={slot}>
+            <div
+              className="relative overflow-hidden rounded-md border-4 border-night-deep bg-night-deep shadow-[0_0_0_2px_var(--color-panel-edge),0_18px_50px_rgb(0_0_0/0.45)]"
+              style={board ? { width: board.width, height: board.height } : { visibility: 'hidden' }}
+            >
+              <GameCanvas view={board?.view} />
+              <Toast />
+              <DialogBox />
+              <DenyScreen />
+              <HouseEditor />
+              <VisitsScreen />
+              <PauseMenu />
+            </div>
           </div>
           {touch ? (
             <TouchControls />
@@ -423,7 +477,12 @@ function Journal({ drawer }: { readonly drawer: boolean }) {
     </>
   )
 
-  if (!drawer) return <aside className="grid min-w-0 gap-3.5">{panels}</aside>
+  if (!drawer)
+    return (
+      <aside className="grid min-h-0 min-w-0 content-start gap-3.5 overflow-y-auto overscroll-contain">
+        {panels}
+      </aside>
+    )
 
   return open ? <JournalDrawer>{panels}</JournalDrawer> : null
 }
@@ -616,16 +675,19 @@ function SoundToggle({ setting, label }: { readonly setting: keyof SoundSettings
   )
 }
 
-function GameCanvas() {
+function GameCanvas({ view }: { readonly view: Board['view'] | undefined }) {
   const host = useRef<HTMLDivElement>(null)
+  const [game, setGame] = useState<import('phaser').Game | null>(null)
+
   useEffect(() => {
     let destroyed = false
     let destroy = () => {}
 
     void import('../game/scene.ts').then(({ startGame }) => {
       if (destroyed || !host.current) return
-      const game = startGame(host.current)
-      destroy = () => game.destroy(true)
+      const started = startGame(host.current)
+      setGame(started)
+      destroy = () => started.destroy(true)
     })
 
     return () => {
@@ -633,6 +695,12 @@ function GameCanvas() {
       destroy()
     }
   }, [])
+
+  // The board changed size: show that much of the world.
+  useEffect(() => {
+    if (!game || !view) return
+    void import('../game/scene.ts').then(({ resizeGame }) => resizeGame(game, view))
+  }, [game, view])
 
   // Tapping the scene above an open dialog advances it, as A does.
   return <div className="pixelated" ref={host} onClick={() => quest.get().dialog && quest.advance()} />

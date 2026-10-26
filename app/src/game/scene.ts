@@ -30,6 +30,7 @@ import {
   talk,
 } from './story.ts'
 import {
+  BOARD_TILES,
   GUARD_FRAME,
   HOUSE,
   MAP_HEIGHT,
@@ -39,6 +40,7 @@ import {
   PLAYER_TERRAIN,
   FOUNTAIN_FRAMES,
   TILE,
+  TILE_PX,
   WALKABLE,
   isFountain,
   buildWorld,
@@ -51,9 +53,9 @@ import {
   type Point,
 } from './world.ts'
 
-const T = 16
+const T = TILE_PX
 const STEP_MS = 140
-const VIEW = { width: 16 * T, height: 12 * T }
+const VIEW = { width: BOARD_TILES.cols * T, height: BOARD_TILES.rows * T }
 
 const STEP: Record<Dir, Point> = {
   down: { x: 0, y: 1 },
@@ -2039,4 +2041,11 @@ export function startGame(parent: HTMLElement) {
   globalThis.__quest = { game, quest }
 
   return game
+}
+
+/** Shows this many game pixels across and down: the board's size, in tiles, times the tile size. */
+export function resizeGame(game: Phaser.Game, view: { readonly width: number; readonly height: number }) {
+  // Measure the board first: Phaser checks its size on a timer, which may not have caught this change yet.
+  game.scale.getParentBounds()
+  game.scale.setGameSize(view.width, view.height)
 }
