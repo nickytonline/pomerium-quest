@@ -25,6 +25,8 @@ export type Effect =
   | 'laugh'
   | 'victory'
   | 'clang'
+  | 'dialogOpen'
+  | 'dialogNext'
   | 'smash'
 
 const STORAGE_KEY = 'pomerium-quest/sound/v1'
@@ -366,6 +368,13 @@ const EFFECTS: Record<Effect, (mix: Mixer, out: AudioNode, at: number) => void> 
     tone(out, at + 0.72, { wave: 'triangle', freq: hz('G3'), dur: 0.26, peak: 0.3, hold: true })
     tone(out, at + 1.0, { wave: 'triangle', freq: hz('C3'), dur: 1.3, peak: 0.3, hold: true })
   },
+  /** A text box popping open: two quick rising blips. */
+  dialogOpen: (_mix, out, at) => {
+    tone(out, at, { wave: 'square', freq: hz('E5'), dur: 0.05, peak: 0.07, hold: true })
+    tone(out, at + 0.055, { wave: 'square', freq: hz('B5'), dur: 0.07, peak: 0.07, hold: true })
+  },
+  /** Turning to the next page of a text box: one soft tick. */
+  dialogNext: (_mix, out, at) => tone(out, at, { wave: 'square', freq: hz('A5'), dur: 0.04, peak: 0.05 }),
   clang: (_mix, out, at) => {
     tone(out, at, { wave: 'square', freq: 1180, dur: 0.25, peak: 0.05 })
     tone(out, at, { wave: 'triangle', freq: 1770, dur: 0.3, peak: 0.12 })
@@ -522,6 +531,19 @@ function syncMusic() {
   playing = wanted && startTrack(mixer, wanted)
 }
 
+let shownDialog: QuestState['dialog'] = null
+
+/** Text boxes blip as they open and as each page turns, whoever opened them. */
+function syncDialog() {
+  const { dialog } = quest.get()
+  const before = shownDialog
+
+  shownDialog = dialog
+
+  if (!dialog || dialog === before) return
+  sfx(before && before.pages === dialog.pages ? 'dialogNext' : 'dialogOpen')
+}
+
 // ── Setup ───────────────────────────────────────────────────────────────────────────────────
 
 /** Browsers only let audio start after a key press or tap, so the mixer is built on the first one. */
@@ -573,7 +595,11 @@ export function startSound() {
 
   for (const gesture of gestures) addEventListener(gesture, unlock, { capture: true })
   document.addEventListener('visibilitychange', onVisibility)
-  const unsubscribe = quest.subscribe(syncMusic)
+
+  const unsubscribe = quest.subscribe(() => {
+    syncMusic()
+    syncDialog()
+  })
 
   return () => {
     for (const gesture of gestures) removeEventListener(gesture, unlock, { capture: true })
