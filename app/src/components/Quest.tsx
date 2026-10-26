@@ -279,6 +279,7 @@ function Splash() {
             ))}
         </>
       )}
+      <SplashSound />
       <p className="m-0 text-[0.85rem] text-muted">
         {mode === 'loading' && 'Looking for Pomerium…'}
         {mode === 'pomerium' && 'Connected to a real Pomerium. Every gate is a live route.'}
@@ -286,6 +287,34 @@ function Splash() {
           "No Pomerium in front of this game, so there's nothing to play. Run ./quest dev and open the URL it prints."}
       </p>
     </main>
+  )
+}
+
+/** The browser may hold the title music back until a click, so offer one; then the two switches. */
+function SplashSound() {
+  const { blocked, music, effects } = useSound()
+
+  if (blocked && music)
+    return (
+      <button className={linkButton} type="button" onClick={() => sound.unlock()}>
+        ♪ Play music
+      </button>
+    )
+
+  return (
+    <p className="m-0 flex gap-3.5 text-[0.85rem]">
+      <button className={linkButton} type="button" aria-pressed={music} onClick={() => sound.toggle('music')}>
+        Music: {music ? 'on' : 'off'}
+      </button>
+      <button
+        className={linkButton}
+        type="button"
+        aria-pressed={effects}
+        onClick={() => sound.toggle('effects')}
+      >
+        Sound effects: {effects ? 'on' : 'off'}
+      </button>
+    </p>
   )
 }
 
