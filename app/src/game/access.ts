@@ -1,5 +1,6 @@
 // How the game asks for access: every gate is a real HTTP request through Pomerium, and the
 // status code is the answer.
+import type { HouseRule, HouseState, Knock, Knocker } from './house.ts'
 import { type Identity } from './ppl.ts'
 import { ANONYMOUS, type Mode } from './store.ts'
 import { type Zone } from './zones.ts'
@@ -100,16 +101,78 @@ export async function requestZone(zone: Zone, method: 'GET' | 'POST', action: st
 /** Where to send the browser to sign in through Pomerium, landing back in the game. */
 export const signInUrl = () => '/zones/oracle/signin'
 
-/**
- * Sign out of the Pomerium session, and with it the Oracle's (Keycloak ends its session too).
- * Pomerium's signout_redirect_url sends the player straight back to sign in, which picks up
- * fresh claims from the Oracle.
- */
-export const refreshClaimsUrl = () => '/.pomerium/sign_out'
+/** Signs out of Pomerium, landing at `path`. Any landing page needs the allow_any_sign_out_redirect_uri flag. */
+const signOutTo = (path: string) =>
+  `/.pomerium/sign_out?pomerium_redirect_uri=${encodeURIComponent(`${location.origin}${path}`)}`
 
 /**
- * Sign out of Pomerium and the Oracle, landing back on the title screen signed out.
- * Overriding signout_redirect_url needs Pomerium's allow_any_sign_out_redirect_uri flag.
+ * Sign out of the Pomerium session, and with it the Oracle's (Keycloak ends its session too), landing
+ * straight back at sign-in, which picks up fresh claims from the Oracle.
  */
-export const signOutUrl = () =>
-  `/.pomerium/sign_out?pomerium_redirect_uri=${encodeURIComponent(`${location.origin}/`)}`
+export const refreshClaimsUrl = () => signOutTo(signInUrl())
+
+/** Sign out of Pomerium and the Oracle, landing back on the title screen signed out. */
+export const signOutUrl = () => signOutTo('/')
+
+/** The builder's answer: the value it sent, or why it couldn't. */
+export type Built<T> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly message: string }
+
+/** What the Builders' Yard accepts: the door rules, or who should knock and how. */
+type BuilderRequest =
+  | { readonly rules: readonly HouseRule[] | null }
+  | { readonly knocker: Knocker; readonly method: 'GET' | 'POST' }
+
+interface BuilderError {
+  readonly error?: string
+  readonly reason?: string
+}
+
+/**
+ * Asks the Builders' Yard (a Pomerium route like any other) to do something with the player's house.
+ * The server always works on the house of whoever Pomerium signed in.
+ */
+async function builder<T>(action: string, body: BuilderRequest): Promise<Built<T>> {
+  try {
+    const response = await fetch(`/zones/builder/${action}`, {
+      method: 'POST',
+      redirect: 'manual',
+      headers: { accept: 'application/json', 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+
+    if (response.ok) {
+      // SAFETY: our own server route answers with this JSON shape (app/src/server/zones.ts).
+      return { ok: true, value: (await response.json()) as T }
+    }
+
+    // SAFETY: the builder's error responses carry error and reason; anything else yields the status.
+    const error = (await response.json().catch(() => ({}))) as BuilderError
+
+    return { ok: false, message: error.error ?? `${response.status} ${response.statusText}` }
+  } catch (error) {
+    return { ok: false, message: String(error) }
+  }
+}
+
+export const openHouse = (rules: readonly HouseRule[] | null) => builder<HouseState>('open', { rules })
+export const saveHouse = (rules: readonly HouseRule[]) => builder<HouseState>('save', { rules })
+
+export const knockAs = (knocker: Knocker, method: 'GET' | 'POST') =>
+  builder<Knock>('knock', { knocker, method })
+
+/** The player at their own door: a real request with their own session, straight from the browser. */
+export async function knockYourself(path: string, method: 'GET' | 'POST'): Promise<number> {
+  try {
+    const response = await fetch(`${path}knock`, {
+      method,
+      redirect: 'manual',
+      headers: { accept: 'application/json' },
+    })
+
+    return response.type === 'opaqueredirect' ? 302 : response.status
+  } catch {
+    return 0
+  }
+}

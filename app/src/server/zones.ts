@@ -1,6 +1,9 @@
-import { Effect } from 'effect'
+import { Effect, Schema } from 'effect'
 import { SIGNED_IN_MESSAGE, ZONES } from '../game/zones.ts'
 import { QuestConfig } from './config.ts'
+import { InvalidRules } from './errors.ts'
+import { HouseRules, Houses } from './houses.ts'
+import { Visitors } from './visitors.ts'
 import { PomeriumIdentity, type Player } from './identity.ts'
 import { OracleAdmin } from './oracle-admin.ts'
 import { json } from './runtime.ts'
@@ -25,12 +28,59 @@ const signedInFrame = (origin: string) =>
 
 const greeting = (zoneName: string, player: Player) => `${zoneName} welcomes ${player.email}.`
 
+/** What the editor sends: the player's door rules, or null for a house that hasn't been saved yet. */
+const HouseRequest = Schema.Struct({ rules: Schema.NullOr(HouseRules) })
+
+/** Who knocks, and how: a GET looks in through the window, a POST knocks on the door. */
+const KnockRequest = Schema.Struct({
+  knocker: Schema.Literals(['slime', 'baker', 'traveler', 'captain', 'librarian']),
+  method: Schema.Literals(['GET', 'POST']),
+})
+
+/** Reads a request's JSON body against a schema; anything else is refused as invalid. */
+const readBody =
+  <S extends Schema.Top>(schema: S) =>
+  (request: Request) =>
+    Effect.tryPromise({
+      try: () => request.json(),
+      catch: () => new InvalidRules({ reason: 'not JSON' }),
+    }).pipe(
+      Effect.flatMap(Schema.decodeUnknownEffect(schema)),
+      Effect.mapError((error) =>
+        error instanceof InvalidRules ? error : new InvalidRules({ reason: error.message }),
+      ),
+    )
+
+const readKnock = readBody(KnockRequest)
+const readRules = readBody(HouseRequest)
+
+/**
+ * A house answers whoever Pomerium let in, with the rules version Pomerium enforced (X-House-Version).
+ * A public house lets in requests with no session, so a missing identity is an anonymous visitor.
+ */
+const answerHouse = (request: Request, id: string) => {
+  const version = request.headers.get('x-house-version')
+
+  // Only a house's own route sets X-House-Version. Without it, the request came through the public
+  // game route because the house isn't standing, and an answer here would look like an open door.
+  if (!version) return Effect.succeed(json(404, { error: 'no house stands here', house: id }))
+
+  return currentPlayer(request).pipe(
+    Effect.map((player) => player.email),
+    Effect.catchTag('MissingAssertion', () => Effect.succeed(null)),
+    Effect.map((visitor) => json(200, { house: id, version, visitor })),
+  )
+}
+
 export const handleZone = (request: Request, splat: string) =>
   Effect.gen(function* () {
     const config = yield* QuestConfig
     const [zoneId = '', ...rest] = splat.split('/')
     const action = rest.join('/')
     const zone = ZONES.find((candidate) => candidate.id === zoneId)
+
+    // Houses aren't in ZONES: each is a route the player wrote (see houses.ts).
+    if (zoneId === 'home') return yield* answerHouse(request, rest[0] ?? '')
 
     if (!zone) return json(404, { error: 'unknown zone', path: splat })
 
@@ -60,6 +110,34 @@ export const handleZone = (request: Request, splat: string) =>
         return json(200, { granted: 'scholars', refreshRequired: true, verifiedBy })
       }
 
+      // The owner is always the verified player, never something the request says.
+      case 'POST builder/open': {
+        const houses = yield* Houses
+        const { rules } = yield* readRules(request)
+
+        return json(200, yield* houses.open(player.email, rules))
+      }
+
+      case 'POST builder/save': {
+        const houses = yield* Houses
+        const { rules } = yield* readRules(request)
+
+        if (!rules) return json(400, { error: 'a saved house needs at least one rule' })
+
+        return json(200, yield* houses.save(player.email, rules))
+      }
+
+      case 'POST builder/knock': {
+        const houses = yield* Houses
+        const visitors = yield* Visitors
+        const { knocker, method } = yield* readKnock(request)
+        const house = yield* houses.state(player.email)
+
+        if (!house) return json(404, { error: 'no house is standing; open it first' })
+
+        return json(200, yield* visitors.knock(house.path, knocker, method, house.version))
+      }
+
       case 'POST library/ledger':
         return json(200, { written: true, verifiedBy })
       default:
@@ -79,5 +157,18 @@ export const handleZone = (request: Request, splat: string) =>
         Effect.succeed(json(401, { error: 'invalid Pomerium JWT', reason: error.reason })),
       OracleUnavailable: (error) =>
         Effect.succeed(json(502, { error: 'the Oracle is unreachable', reason: error.reason })),
+      InvalidRules: (error) =>
+        Effect.succeed(json(400, { error: 'invalid door rules', reason: error.reason })),
+      BuildersBusy: (error) =>
+        Effect.succeed(
+          Response.json(
+            { error: error.reason, retryAfterSeconds: error.retryAfterSeconds },
+            { status: 503, headers: { 'retry-after': String(error.retryAfterSeconds) } },
+          ),
+        ),
+      VisitorLost: (error) =>
+        Effect.succeed(json(502, { error: 'the visitor got lost', reason: error.reason })),
+      KubeUnavailable: (error) =>
+        Effect.succeed(json(502, { error: 'the builders are unreachable', reason: error.reason })),
     }),
   )

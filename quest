@@ -18,6 +18,7 @@ cd "$(dirname "$0")"
 CLUSTER=quest
 CONTEXT="k3d-${CLUSTER}"
 NAMESPACE=quest
+POMERIUM_NAMESPACE=pomerium
 PORT="${QUEST_PORT:-443}"
 DOMAIN="${QUEST_DOMAIN:-localhost.pomerium.io}"
 STATE=.quest
@@ -96,12 +97,20 @@ require_source_mount() {
 }
 
 deploy() {
-  say "Rendering Pomerium config and manifests from app/src/game/zones.ts"
+  say "Rendering the Pomerium Ingress Controller and an Ingress per zone from app/src/game/zones.ts"
   QUEST_DEV="${QUEST_DEV:-0}" node scripts/render.ts
+  # Clusters from before the Ingress Controller ran Pomerium from a config file in the game's namespace,
+  # and clusters from before Keycloak still run the old Node Oracle.
+  kc -n "$NAMESPACE" delete deployment/pomerium service/pomerium secret/pomerium-config \
+    deployment/oracle service/oracle pvc/oracle-data networkpolicy/oracle-from-pomerium-and-quest \
+    --ignore-not-found >/dev/null 2>&1 || true
+  kc apply -f deploy/.generated/pomerium.yaml >/dev/null
+  kc wait --for condition=established crd/pomerium.ingress.pomerium.io --timeout=60s >/dev/null
+  kc -n "$POMERIUM_NAMESPACE" create secret tls quest-tls --cert="${CERTS}/tls.crt" --key="${CERTS}/tls.key" \
+    --dry-run=client -o yaml | kc apply -f -
+  kc -n "$POMERIUM_NAMESPACE" create secret generic quest-ca --from-file=ca.crt="${CERTS}/ca.crt" \
+    --dry-run=client -o yaml | kc apply -f -
   kc apply -f deploy/.generated/manifests.yaml
-  # Clusters from before Keycloak still run the old Node Oracle.
-  kc -n "$NAMESPACE" delete deployment/oracle service/oracle pvc/oracle-data \
-    networkpolicy/oracle-from-pomerium-and-quest --ignore-not-found >/dev/null
   kc -n "$NAMESPACE" create secret generic quest-tls \
     --from-file=tls.crt="${CERTS}/tls.crt" \
     --from-file=tls.key="${CERTS}/tls.key" \
@@ -112,13 +121,31 @@ deploy() {
   kc -n "$NAMESPACE" rollout restart deployment
   say "Waiting for Pomerium, the Oracle (Keycloak) and the game"
   kc -n kube-system rollout status deployment/coredns --timeout=120s
-  for d in keycloak quest pomerium; do kc -n "$NAMESPACE" rollout status "deployment/${d}" --timeout=300s; done
+  for d in keycloak quest; do kc -n "$NAMESPACE" rollout status "deployment/${d}" --timeout=300s; done
+  kc -n "$POMERIUM_NAMESPACE" rollout status deployment/pomerium --timeout=300s
+  townsfolk
   # Pomerium needs a few seconds after the rollout to load certificates and policies.
   for _ in $(seq 1 60); do
     if curl -fsS -o /dev/null "$(url)/" 2>/dev/null; then return; fi
     sleep 1
   done
   fail "Pomerium didn't answer at $(url). Check: ./quest logs pomerium"
+}
+
+# The townsfolk who visit players' houses get real Oracle accounts, imported (and reset) at every deploy.
+townsfolk() {
+  local password
+  password="$(node -p "require('./${STATE}/secrets.json').keycloakAdminPassword")"
+  kc -n "$NAMESPACE" exec -i deploy/keycloak -- sh -c '
+    cat >/tmp/townsfolk.json
+    kcadm=/opt/keycloak/bin/kcadm.sh
+    $kcadm config credentials --config /tmp/kcadm.config --server http://localhost:8080 \
+      --realm master --user admin --password "$1" >/dev/null 2>&1 &&
+    $kcadm create partialImport --config /tmp/kcadm.config -r kingdom -f /tmp/townsfolk.json >/dev/null
+    status=$?
+    rm -f /tmp/townsfolk.json
+    exit $status
+  ' sh "$password" <deploy/.generated/townsfolk.json || fail "Couldn't add the townsfolk to the Oracle"
 }
 
 case "${1:-up}" in
@@ -150,13 +177,15 @@ case "${1:-up}" in
     k3d cluster delete "$CLUSTER"
     ;;
   status)
-    kc -n "$NAMESPACE" get pods,svc
+    kc -n "$POMERIUM_NAMESPACE" get pods,svc
+    kc -n "$NAMESPACE" get pods,svc,ingress
     ;;
   test)
     bash scripts/e2e.sh
     ;;
   logs)
-    kc -n "$NAMESPACE" logs -f "deployment/${2:-pomerium}"
+    if [ "${2:-pomerium}" = pomerium ]; then kc -n "$POMERIUM_NAMESPACE" logs -f deployment/pomerium
+    else kc -n "$NAMESPACE" logs -f "deployment/$2"; fi
     ;;
   admin)
     password="$(node -p "require('./${STATE}/secrets.json').keycloakAdminPassword")"

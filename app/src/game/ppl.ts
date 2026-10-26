@@ -1,6 +1,6 @@
 // A small PPL evaluator for the criteria the game uses. The real decision comes from
 // Pomerium; this evaluator only explains it (which line passed, which failed).
-import type { AllowRule, Criterion, Zone } from './zones.ts'
+import type { Criterion, PolicyRule, Zone } from './zones.ts'
 
 export interface Identity {
   readonly authenticated: boolean
@@ -65,9 +65,9 @@ function criterionLabel(node: Criterion): string {
 }
 
 /** A route's policy as YAML lines, starting at `indent`. */
-export function policyYaml(policy: readonly AllowRule[], indent: number): string[] {
+export function policyYaml(policy: readonly PolicyRule[], indent: number): string[] {
   return policy.flatMap((rule) => [
-    `${pad(indent)}- allow:`,
+    `${pad(indent)}- ${rule.action}:`,
     `${pad(indent + 4)}${rule.match}:`,
     ...rule.criteria.flatMap((criterion) => {
       const [first = '', ...rest] = criterionYaml(criterion)
@@ -100,33 +100,68 @@ function check(node: Criterion, id: Identity, req: RequestInfo, whose: Viewpoint
   }
 }
 
-function evaluateRule(rule: AllowRule, id: Identity, req: RequestInfo, whose: Viewpoint): Decision {
+/** How each operator combines its criteria. */
+const COMBINE: Record<PolicyRule['match'], (results: readonly boolean[]) => boolean> = {
+  and: (results) => results.every(Boolean),
+  or: (results) => results.some(Boolean),
+  not: (results) => !results.some(Boolean),
+}
+
+interface RuleResult extends Decision {
+  readonly rule: PolicyRule
+}
+
+function evaluateRule(rule: PolicyRule, id: Identity, req: RequestInfo, whose: Viewpoint): RuleResult {
   const checks = rule.criteria.map((criterion) => ({ criterion, ...check(criterion, id, req, whose) }))
-  const ok = rule.match === 'and' ? checks.every((c) => c.ok) : checks.some((c) => c.ok)
 
   return {
-    allow: ok,
+    rule,
+    allow: COMBINE[rule.match](checks.map((c) => c.ok)),
     lines: [
-      { text: '- allow:' },
+      { text: `- ${rule.action}:` },
       { text: `    ${rule.match}:` },
       ...checks.map((c) => ({ text: `      - ${criterionLabel(c.criterion)}`, ok: c.ok, actual: c.actual })),
     ],
   }
 }
 
-/** Allowed when any allow rule matches; with no matching rule, Pomerium denies. */
-export function decide(zone: Zone, id: Identity, req: RequestInfo, whose: Viewpoint = 'your'): Decision {
-  const rules = zone.policy.map((rule) => evaluateRule(rule, id, req, whose))
+/** Allowed when an allow rule matches and no deny rule does; with no matching allow rule, Pomerium denies. */
+/** Anything with a policy: a zone, or the player's house. */
+export type Policed = Pick<Zone, 'policy'>
 
-  return { allow: rules.some((rule) => rule.allow), lines: rules.flatMap((rule) => rule.lines) }
+export function decide(zone: Policed, id: Identity, req: RequestInfo, whose: Viewpoint = 'your'): Decision {
+  const rules = zone.policy.map((rule) => evaluateRule(rule, id, req, whose))
+  const matched = (action: PolicyRule['action']) => rules.some((r) => r.rule.action === action && r.allow)
+
+  return { allow: matched('allow') && !matched('deny'), lines: rules.flatMap((rule) => rule.lines) }
 }
 
 /** For each allow rule in order, the criteria the request fails, labelled as on the denial screen. */
-export function failedChecks(zone: Zone, id: Identity, req: RequestInfo): string[][] {
-  return zone.policy.map((rule) =>
-    rule.criteria.filter((criterion) => !check(criterion, id, req, 'your').ok).map(criterionLabel),
-  )
+export function failedChecks(zone: Policed, id: Identity, req: RequestInfo): string[][] {
+  return zone.policy
+    .filter((rule) => rule.action === 'allow')
+    .map((rule) =>
+      rule.criteria.filter((criterion) => !check(criterion, id, req, 'your').ok).map(criterionLabel),
+    )
 }
+
+/** A criterion as the structure Pomerium reads; JSON is YAML, so it can go straight into a config. */
+function criterionDocument(node: Criterion) {
+  switch (node.kind) {
+    case 'authenticated_user':
+      return { authenticated_user: true }
+    case 'claim':
+      return { [`claim/${node.claim}`]: node.value }
+    case 'domain':
+    case 'email':
+    case 'http_method':
+      return { [node.kind]: { is: node.is } }
+  }
+}
+
+/** A route policy as the structure Pomerium reads. */
+export const policyDocument = (rules: readonly PolicyRule[]) =>
+  rules.map((rule) => ({ [rule.action]: { [rule.match]: rule.criteria.map(criterionDocument) } }))
 
 /** Route config as YAML, the way it appears in the Pomerium config file. */
 export function routeYaml(zone: Zone, host: string, upstream: string): string {

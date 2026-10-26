@@ -1,11 +1,17 @@
 import { Effect, Layer, ManagedRuntime } from 'effect'
 import { QuestConfigLive } from './config.ts'
+import { HousesLive } from './houses.ts'
 import { PomeriumIdentityLive } from './identity.ts'
+import { KubeLive } from './kube.ts'
 import { OracleAdminLive } from './oracle-admin.ts'
+import { VisitorsLive } from './visitors.ts'
 
-const AppLayer = Layer.mergeAll(PomeriumIdentityLive, OracleAdminLive).pipe(
-  Layer.provideMerge(QuestConfigLive),
-)
+const AppLayer = Layer.mergeAll(
+  PomeriumIdentityLive,
+  OracleAdminLive,
+  HousesLive.pipe(Layer.provide(KubeLive)),
+  VisitorsLive,
+).pipe(Layer.provideMerge(QuestConfigLive))
 
 export const runtime = ManagedRuntime.make(AppLayer)
 

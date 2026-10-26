@@ -1,15 +1,18 @@
-// Renders the Pomerium config and the Kubernetes manifests from app/src/game/zones.ts, so the
-// policies Pomerium enforces are the same ones the game shows on its signs.
+// Renders the Kubernetes manifests from app/src/game/zones.ts: the Pomerium Ingress Controller, its
+// global settings and one Ingress per zone, so the policies Pomerium enforces are the same ones the
+// game shows on its signs.
 //
-//   node scripts/render.ts            → deploy/.generated/*.yaml
+//   node scripts/render.ts            → deploy/.generated/pomerium.yaml and manifests.yaml
 //
 // Environment: QUEST_DOMAIN (default localhost.pomerium.io), QUEST_PORT (default 443),
 // QUEST_KINGDOM_DOMAIN (citizens' email domain, default kingdom.com), and QUEST_DEV=1 to run the game's Vite dev server from the source mounted into the cluster.
 import { generateKeyPairSync, randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { stringify } from 'yaml'
-import { KINGDOM_DOMAIN, ZONES, type AllowRule, type Criterion } from '../app/src/game/zones.ts'
+import { parseAllDocuments, stringify } from 'yaml'
+import { VISITORS, VISITOR_IDS, visitorPassword } from '../app/src/game/house.ts'
+import { policyDocument } from '../app/src/game/ppl.ts'
+import { KINGDOM_DOMAIN, ZONES } from '../app/src/game/zones.ts'
 
 type Yaml = string | number | boolean | readonly Yaml[] | { readonly [key: string]: Yaml }
 
@@ -17,7 +20,21 @@ const ROOT = new URL('..', import.meta.url).pathname
 const OUT = join(ROOT, 'deploy/.generated')
 const STATE = join(ROOT, '.quest')
 const NAMESPACE = 'quest'
-const POMERIUM_IMAGE = 'pomerium/pomerium:v0.33.4'
+
+/** Where the game writes players' houses: one Ingress each, and nothing else (docs/prd/your-house.md). */
+const HOUSES_NAMESPACE = 'quest-houses'
+
+/** How many houses may stand at once; the PRD's load test is behind the number. */
+const HOUSE_LIMIT = 100
+
+/** Where the Ingress Controller runs: Pomerium itself, reading routes from Ingresses. */
+const POMERIUM_NAMESPACE = 'pomerium'
+
+/**
+ * The Ingress Controller's install, pinned to the release that embeds Pomerium v0.33.4. Regenerate with
+ * kubectl kustomize 'github.com/pomerium/ingress-controller/config/default?ref=0-33-0'.
+ */
+const CONTROLLER = join(ROOT, 'deploy/pomerium/ingress-controller.yaml')
 const APP_IMAGE = 'pomerium-quest/app:dev'
 const APP_DEV_IMAGE = 'pomerium-quest/app-dev:dev'
 
@@ -53,6 +70,8 @@ interface Secrets {
   readonly questClientSecret: string
   /** Keycloak's own admin console (master realm), reached with `./quest admin`. */
   readonly keycloakAdminPassword: string
+  /** The start of the townsfolk's passwords at the Oracle, for knocking on players' houses. */
+  readonly visitorPassword: string
 }
 
 /**
@@ -75,6 +94,7 @@ function loadSecrets(): Secrets {
     clientSecret: saved.clientSecret ?? randomBytes(24).toString('hex'),
     questClientSecret: saved.questClientSecret ?? randomBytes(24).toString('hex'),
     keycloakAdminPassword: saved.keycloakAdminPassword ?? randomBytes(12).toString('hex'),
+    visitorPassword: saved.visitorPassword ?? randomBytes(18).toString('hex'),
   }
 
   mkdirSync(STATE, { recursive: true })
@@ -83,85 +103,142 @@ function loadSecrets(): Secrets {
   return secrets
 }
 
-/** A criterion as the YAML structure Pomerium reads. */
-function criterion(node: Criterion): Yaml {
-  switch (node.kind) {
-    case 'authenticated_user':
-      return { authenticated_user: true }
-    case 'claim':
-      return { [`claim/${node.claim}`]: node.value }
-    case 'domain':
-    case 'email':
-    case 'http_method':
-      return { [node.kind]: { is: node.is } }
+const toYaml = (value: Yaml) => stringify(value, { lineWidth: 0 }).trimEnd()
+
+const ANNOTATION = 'ingress.pomerium.io'
+
+/** Pomerium route options as Ingress annotations. Structured values (maps, policies) are YAML strings. */
+const annotations = (options: { readonly [key: string]: string }) =>
+  Object.fromEntries(Object.entries(options).map(([key, value]) => [`${ANNOTATION}/${key}`, value]))
+
+interface IngressPath {
+  readonly path: string
+  readonly service: string
+  readonly port: number
+}
+
+function ingress(
+  name: string,
+  host: string,
+  paths: readonly IngressPath[],
+  options: { readonly [key: string]: string },
+): Yaml {
+  return {
+    apiVersion: 'networking.k8s.io/v1',
+    kind: 'Ingress',
+    metadata: { name, namespace: NAMESPACE, annotations: annotations(options) },
+    spec: {
+      ingressClassName: 'pomerium',
+      rules: [
+        {
+          host,
+          http: {
+            paths: paths.map(({ path, service, port }) => ({
+              path,
+              pathType: 'Prefix',
+              backend: { service: { name: service, port: { number: port } } },
+            })),
+          },
+        },
+      ],
+    },
   }
 }
 
-/** A route policy: a list of allow rules, any of which lets the request through. */
-const policy = (rules: readonly AllowRule[]): Yaml =>
-  rules.map((rule) => ({ allow: { [rule.match]: rule.criteria.map(criterion) } }))
-
-const toYaml = (value: Yaml) => stringify(value, { lineWidth: 0 }).trimEnd()
-
-function pomeriumConfig(secrets: Secrets): Yaml {
-  const app = svc('quest', 3000)
-  const game = publicUrl('game')
-
+/** Pomerium's global settings. Routes come from the Ingresses below, not from here. */
+function pomeriumSettings(): Yaml {
   return {
-    address: ':8443',
-    authenticate_service_url: publicUrl('authenticate'),
-    // After signing out, go straight back to sign-in: the new session carries fresh claims.
-    // This is how the game refreshes a player's groups.
-    signout_redirect_url: `${game}/zones/oracle/signin`,
-    // Restarting the game signs out to the title screen instead, through pomerium_redirect_uri.
-    runtime_flags: { allow_any_sign_out_redirect_uri: true },
-    idp_provider: 'oidc',
-    idp_provider_url: oracleIssuer,
-    idp_client_id: 'pomerium',
-    idp_client_secret: secrets.clientSecret,
-    // Keycloak adds the groups claim through a mapper on Pomerium's client, not through a scope.
-    idp_scopes: ['openid', 'email', 'profile'],
-    shared_secret: secrets.sharedSecret,
-    cookie_secret: secrets.cookieSecret,
-    signing_key: secrets.signingKey,
-    certificate_file: '/certs/tls.crt',
-    certificate_key_file: '/certs/tls.key',
-    // Forward the identity provider's groups claim to the app as a header too.
-    jwt_claims_headers: { 'X-Pomerium-Claim-Groups': 'groups' },
-    routes: [
-      // Only the game's realm and Keycloak's static files are public. The admin console and the
-      // master realm stay inside the cluster (`./quest admin` forwards a port to them).
-      ...[`/realms/${REALM}/`, '/resources/'].map((prefix) => ({
-        from: publicUrl('oracle'),
-        prefix,
-        to: svc('keycloak', 8080),
-        allow_public_unauthenticated_access: true,
-        preserve_host_header: true,
-        // The game opens the Oracle's sign-in page in a frame, so the player never leaves the
-        // game. Browsers let frame-ancestors override X-Frame-Options.
-        set_response_headers: {
-          'Content-Security-Policy': `frame-src 'self'; frame-ancestors 'self' ${game}; object-src 'none';`,
-        },
-      })),
-      // One route per zone: same host, its own path prefix, its own policy.
-      ...ZONES.map((zone) => ({
-        from: game,
-        prefix: zone.prefix,
-        to: app,
-        pass_identity_headers: true,
-        policy: policy(zone.policy),
-      })),
-      // Everything else (the game shell and its assets) is public.
-      // In dev it also carries Vite's hot-reload websocket.
-      {
-        from: game,
-        to: app,
-        allow_public_unauthenticated_access: true,
-        pass_identity_headers: true,
-        allow_websockets: DEV,
+    apiVersion: 'ingress.pomerium.io/v1',
+    kind: 'Pomerium',
+    metadata: { name: 'global' },
+    spec: {
+      secrets: `${POMERIUM_NAMESPACE}/bootstrap`,
+      authenticate: { url: publicUrl('authenticate') },
+      identityProvider: {
+        provider: 'oidc',
+        url: oracleIssuer,
+        secret: `${POMERIUM_NAMESPACE}/idp`,
+        // Keycloak adds the groups claim through a mapper on Pomerium's client, not through a scope.
+        scopes: ['openid', 'email', 'profile'],
       },
-    ],
+      certificates: [`${POMERIUM_NAMESPACE}/quest-tls`],
+      // Pomerium fetches the Oracle's sign-in metadata over HTTPS, signed by the local mkcert CA.
+      caSecrets: [`${POMERIUM_NAMESPACE}/quest-ca`],
+      // Signing out can land anywhere in the game: back at sign-in to refresh claims, or at the title
+      // screen to start over (see app/src/game/access.ts).
+      runtimeFlags: { allow_any_sign_out_redirect_uri: true },
+      // Forward the identity provider's groups claim to the app as a header too.
+      jwtClaimHeaders: { 'X-Pomerium-Claim-Groups': 'groups' },
+    },
   }
+}
+
+function routes(): Yaml[] {
+  const game = publicUrl('game')
+  const gameHost = new URL(game).hostname
+  const app = { service: 'quest', port: 3000 }
+
+  return [
+    // Only the game's realm and Keycloak's static files are public. The admin console and the master
+    // realm stay inside the cluster (`./quest admin` forwards a port to them).
+    ingress(
+      'oracle',
+      new URL(publicUrl('oracle')).hostname,
+      [`/realms/${REALM}/`, '/resources/'].map((path) => ({ path, service: 'keycloak', port: 8080 })),
+      {
+        allow_public_unauthenticated_access: 'true',
+        preserve_host_header: 'true',
+        // The game opens the Oracle's sign-in page in a frame, so the player never leaves the game.
+        // Browsers let frame-ancestors override X-Frame-Options.
+        set_response_headers: JSON.stringify({
+          'Content-Security-Policy': `frame-src 'self'; frame-ancestors 'self' ${game}; object-src 'none';`,
+        }),
+      },
+    ),
+    // One route per zone: same host, its own path prefix, its own policy.
+    ...ZONES.map((zone) =>
+      ingress(`zone-${zone.id}`, gameHost, [{ path: zone.prefix, ...app }], {
+        pass_identity_headers: 'true',
+        policy: stringify(policyDocument(zone.policy), { lineWidth: 0 }).trimEnd(),
+      }),
+    ),
+    // Everything else (the game shell and its assets) is public. In dev it also carries Vite's
+    // hot-reload websocket.
+    ingress('game', gameHost, [{ path: '/', ...app }], {
+      allow_public_unauthenticated_access: 'true',
+      pass_identity_headers: 'true',
+      allow_websockets: String(DEV),
+    }),
+  ]
+}
+
+/** The controller's manifests it would make itself: its secrets (written below) and its load balancer. */
+const REPLACED = new Set(['pomerium-gen-secrets', 'pomerium-proxy'])
+
+/** The controller's install, with the k3d load balancer sending QUEST_PORT to Pomerium's HTTPS port. */
+function controller(): Yaml[] {
+  const kept = parseAllDocuments(readFileSync(CONTROLLER, 'utf8')).filter(
+    (doc) => !REPLACED.has(String(doc.getIn(['metadata', 'name']))),
+  )
+
+  // SAFETY: the vendored install is plain Kubernetes YAML: maps, lists, strings, numbers and booleans.
+  const docs = kept.map((doc) => doc.toJS() as Yaml)
+
+  const proxy = { 'app.kubernetes.io/name': 'pomerium', 'app.kubernetes.io/component': 'proxy' }
+
+  return [
+    ...docs,
+    {
+      apiVersion: 'v1',
+      kind: 'Service',
+      metadata: { name: 'pomerium-proxy', namespace: POMERIUM_NAMESPACE, labels: proxy },
+      spec: {
+        type: 'LoadBalancer',
+        selector: proxy,
+        ports: [{ name: 'https', port: PORT, protocol: 'TCP', targetPort: 'https' }],
+      },
+    },
+  ]
 }
 
 const labels = (name: string) => ({ app: name })
@@ -346,11 +423,78 @@ function realm(secrets: Secrets): Yaml {
   }
 }
 
+/**
+ * Players' houses: a namespace for their Ingresses, a way back to the game from there, and the game's
+ * permission to manage those Ingresses and nothing else.
+ */
+function houses(): Yaml[] {
+  const ingresses = { apiGroups: ['networking.k8s.io'], resources: ['ingresses'] }
+
+  return [
+    { apiVersion: 'v1', kind: 'Namespace', metadata: { name: HOUSES_NAMESPACE } },
+    // An Ingress can only point at a Service in its own namespace, so this one forwards to the game.
+    {
+      apiVersion: 'v1',
+      kind: 'Service',
+      metadata: { name: 'quest', namespace: HOUSES_NAMESPACE },
+      spec: {
+        type: 'ExternalName',
+        externalName: `quest.${NAMESPACE}.svc.cluster.local`,
+        ports: [{ name: 'http', port: 3000 }],
+      },
+    },
+    { apiVersion: 'v1', kind: 'ServiceAccount', metadata: { name: 'quest', namespace: NAMESPACE } },
+    {
+      apiVersion: 'rbac.authorization.k8s.io/v1',
+      kind: 'Role',
+      metadata: { name: 'quest-builder', namespace: HOUSES_NAMESPACE },
+      rules: [
+        { ...ingresses, verbs: ['get', 'list', 'create', 'update', 'patch', 'delete'] },
+        // To see when the Ingress Controller has applied a house (it records an event on each one).
+        { apiGroups: [''], resources: ['events'], verbs: ['list'] },
+      ],
+    },
+    {
+      apiVersion: 'rbac.authorization.k8s.io/v1',
+      kind: 'RoleBinding',
+      metadata: { name: 'quest-builder', namespace: HOUSES_NAMESPACE },
+      roleRef: { apiGroup: 'rbac.authorization.k8s.io', kind: 'Role', name: 'quest-builder' },
+      subjects: [{ kind: 'ServiceAccount', name: 'quest', namespace: NAMESPACE }],
+    },
+  ]
+}
+
+/** Pomerium's pods, in the controller's namespace. */
+const fromPomerium: Yaml = {
+  namespaceSelector: { matchLabels: { 'kubernetes.io/metadata.name': POMERIUM_NAMESPACE } },
+  podSelector: { matchLabels: { 'app.kubernetes.io/name': 'pomerium' } },
+}
+
 function manifests(secrets: Secrets): Yaml[] {
   const escapedDomain = DOMAIN.replace(/\./g, '\\.')
 
   return [
     { apiVersion: 'v1', kind: 'Namespace', metadata: { name: NAMESPACE } },
+    // Pomerium's own secrets, saved in .quest/ so sessions survive a redeploy. The controller wants
+    // the raw bytes, and the saved values are already base64, so they go in `data` as they are.
+    {
+      apiVersion: 'v1',
+      kind: 'Secret',
+      metadata: { name: 'bootstrap', namespace: POMERIUM_NAMESPACE },
+      data: {
+        shared_secret: secrets.sharedSecret,
+        cookie_secret: secrets.cookieSecret,
+        signing_key: secrets.signingKey,
+      },
+    },
+    {
+      apiVersion: 'v1',
+      kind: 'Secret',
+      metadata: { name: 'idp', namespace: POMERIUM_NAMESPACE },
+      stringData: { client_id: 'pomerium', client_secret: secrets.clientSecret },
+    },
+    pomeriumSettings(),
+    ...routes(),
     {
       apiVersion: 'v1',
       kind: 'Secret',
@@ -358,34 +502,9 @@ function manifests(secrets: Secrets): Yaml[] {
       stringData: {
         'quest-client-secret': secrets.questClientSecret,
         'keycloak-admin-password': secrets.keycloakAdminPassword,
+        'visitor-password': secrets.visitorPassword,
       },
     },
-    {
-      apiVersion: 'v1',
-      kind: 'Secret',
-      metadata: { name: 'pomerium-config', namespace: NAMESPACE },
-      stringData: { 'config.yaml': `${toYaml(pomeriumConfig(secrets))}\n` },
-    },
-    deployment(
-      'pomerium',
-      POMERIUM_IMAGE,
-      8443,
-      {
-        args: ['-config', '/pomerium/config.yaml'],
-        env: [{ name: 'SSL_CERT_DIR', value: '/etc/ssl/certs:/certs' }],
-        volumeMounts: [
-          { name: 'config', mountPath: '/pomerium', readOnly: true },
-          { name: 'certs', mountPath: '/certs', readOnly: true },
-        ],
-      },
-      {
-        volumes: [
-          { name: 'config', secret: { secretName: 'pomerium-config' } },
-          { name: 'certs', secret: { secretName: 'quest-tls' } },
-        ],
-      },
-    ),
-    service('pomerium', PORT, 8443, 'LoadBalancer'),
     deployment(
       'quest',
       DEV ? APP_DEV_IMAGE : APP_IMAGE,
@@ -399,6 +518,9 @@ function manifests(secrets: Secrets): Yaml[] {
           { name: 'KEYCLOAK_CLIENT_ID', value: 'quest-admin' },
           secretEnv('KEYCLOAK_CLIENT_SECRET', 'quest-client-secret'),
           { name: 'NODE_EXTRA_CA_CERTS', value: '/certs/ca.crt' },
+          { name: 'QUEST_HOUSES_NAMESPACE', value: HOUSES_NAMESPACE },
+          { name: 'QUEST_HOUSE_LIMIT', value: String(HOUSE_LIMIT) },
+          secretEnv('QUEST_VISITOR_PASSWORD', 'visitor-password'),
           ...(DEV ? [{ name: 'QUEST_HMR_PORT', value: String(PORT) }] : []),
         ],
         volumeMounts: [
@@ -408,6 +530,7 @@ function manifests(secrets: Secrets): Yaml[] {
         readinessProbe: { httpGet: { path: '/', port: 3000 }, periodSeconds: 3 },
       },
       {
+        serviceAccountName: 'quest',
         volumes: [
           caVolume,
           ...(DEV
@@ -420,6 +543,7 @@ function manifests(secrets: Secrets): Yaml[] {
       },
     ),
     service('quest', 3000, 3000),
+    ...houses(),
     {
       apiVersion: 'v1',
       kind: 'Secret',
@@ -495,7 +619,7 @@ function manifests(secrets: Secrets): Yaml[] {
       spec: {
         podSelector: { matchLabels: labels('quest') },
         policyTypes: ['Ingress'],
-        ingress: [{ from: [{ podSelector: { matchLabels: labels('pomerium') } }] }],
+        ingress: [{ from: [fromPomerium] }],
       },
     },
     {
@@ -507,10 +631,7 @@ function manifests(secrets: Secrets): Yaml[] {
         policyTypes: ['Ingress'],
         ingress: [
           {
-            from: [
-              { podSelector: { matchLabels: labels('pomerium') } },
-              { podSelector: { matchLabels: labels('quest') } },
-            ],
+            from: [fromPomerium, { podSelector: { matchLabels: labels('quest') } }],
           },
         ],
       },
@@ -522,7 +643,7 @@ function manifests(secrets: Secrets): Yaml[] {
       kind: 'ConfigMap',
       metadata: { name: 'coredns-custom', namespace: 'kube-system' },
       data: {
-        'quest.override': `rewrite name regex (.*)\\.${escapedDomain} pomerium.${NAMESPACE}.svc.cluster.local answer auto\n`,
+        'quest.override': `rewrite name regex (.*)\\.${escapedDomain} pomerium-proxy.${POMERIUM_NAMESPACE}.svc.cluster.local answer auto\n`,
       },
     },
   ]
@@ -532,13 +653,32 @@ const secrets = loadSecrets()
 
 mkdirSync(OUT, { recursive: true })
 
-writeFileSync(join(OUT, 'pomerium-config.yaml'), `${toYaml(pomeriumConfig(secrets))}\n`)
+/**
+ * The townsfolk who visit players' houses, as a Keycloak partial import. ./quest imports it at every
+ * deploy, overwriting them, so their passwords and groups always match. An import skips the user
+ * profile's kingdom-only email rule, which is how the traveler from outlands.net gets an account.
+ */
+const townsfolk = (secrets: Secrets) => ({
+  ifResourceExists: 'OVERWRITE',
+  users: VISITOR_IDS.map((id) => ({
+    username: VISITORS[id].email,
+    email: VISITORS[id].email,
+    enabled: true,
+    emailVerified: true,
+    credentials: [
+      { type: 'password', value: visitorPassword(secrets.visitorPassword, id), temporary: false },
+    ],
+    groups: VISITORS[id].groups.map((group) => `/${group}`),
+  })),
+})
 
-writeFileSync(
-  join(OUT, 'manifests.yaml'),
-  `${manifests(secrets)
-    .map((doc) => toYaml(doc))
-    .join('\n---\n')}\n`,
-)
+const documents = (docs: readonly Yaml[]) => `${docs.map((doc) => toYaml(doc)).join('\n---\n')}\n`
+
+// The controller goes first: its custom resource definition must exist before the Pomerium resource.
+writeFileSync(join(OUT, 'pomerium.yaml'), documents(controller()))
+
+writeFileSync(join(OUT, 'manifests.yaml'), documents(manifests(secrets)))
+
+writeFileSync(join(OUT, 'townsfolk.json'), JSON.stringify(townsfolk(secrets)), { mode: 0o600 })
 
 console.log(`rendered ${OUT}/manifests.yaml for ${publicUrl('game')}`)

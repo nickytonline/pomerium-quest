@@ -55,11 +55,12 @@ sign_in_from() {
     --data-urlencode "password=${PASSWORD}" "$action"
 }
 
-# Signs out of Pomerium (and the Oracle), which goes straight back to the Oracle's sign-in page,
-# then signs in again so the new session carries fresh claims.
+# Signs out of Pomerium (and the Oracle), landing straight back at the Oracle's sign-in page, as the
+# game does, then signs in again so the new session carries fresh claims.
 sign_in_again() {
   local jar="$1" email="$2"
-  sign_in_from "$jar" "$email" "$(curl -s -L -c "$jar" -b "$jar" "${GAME}/.pomerium/sign_out")"
+  sign_in_from "$jar" "$email" \
+    "$(curl -s -L -c "$jar" -b "$jar" "${GAME}/.pomerium/sign_out?pomerium_redirect_uri=${GAME}/zones/oracle/signin")"
 }
 
 echo "Anonymous"
@@ -113,6 +114,91 @@ echo "Outsider"
 outsider="${JAR_DIR}/outsider"
 sign_up "$outsider" "wanderer-${RUN}@outlands.net" >/dev/null
 check "sign-up refused outside ${KINGDOM}" 401 "$(status "$outsider" /zones/fields/enter)"
+
+echo "Your house"
+# The Builders' Yard: the game server writes the house of whoever Pomerium signed in.
+builder() { curl -s -b "$1" -H "$JSON" -H 'content-type: application/json' -X POST "${GAME}/zones/builder/$2" -d "$3"; }
+builder_status() {
+  curl -s -o /dev/null -w '%{http_code}' -b "$1" -H "$JSON" -H 'content-type: application/json' -X POST \
+    "${GAME}/zones/builder/$2" -d "$3"
+}
+field() { node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{console.log(JSON.parse(s)[process.argv[1]])}catch{console.log("")}})' "$1"; }
+knock() { builder "$1" knock "{\"knocker\":\"$2\",\"method\":\"${3:-GET}\"}" | field status; }
+rules() { printf '{"rules":%s}' "$1"; }
+email_is() { printf '{"kind":"email","is":"%s"}' "$1"; }
+
+owner="house-${RUN}@${KINGDOM}"
+home="${JAR_DIR}/home"
+sign_up "$home" "$owner" >/dev/null
+opened="$(builder "$home" open '{"rules":null}')"
+path="$(printf '%s' "$opened" | field path)"
+check "a new house is public" public "$(printf '%s' "$opened" | field version)"
+check "a slime (no session) walks into a public house" 200 \
+  "$(curl -s -o /dev/null -w '%{http_code}' -H "$JSON" "${GAME}${path}knock")"
+check "the server's slime knock agrees" 200 "$(knock "$home" slime)"
+
+first="$(rules "[{\"action\":\"allow\",\"match\":\"or\",\"criteria\":[$(email_is "$owner"),$(email_is wanderer@outlands.net)]}]")"
+check "letter 1: save you or the traveler" 200 "$(builder_status "$home" save "$first")"
+check "letter 1: the slime is turned away" 401 "$(knock "$home" slime)"
+check "letter 1: the traveler is let in" 200 "$(knock "$home" traveler)"
+check "letter 1: you are let in" 200 "$(status "$home" "${path}knock")"
+check "saving again straight away waits for the builders" 503 "$(builder_status "$home" save "$first")"
+sleep 11
+
+# Bodies go into variables first: nested in "$(...)", bash would brace-expand the JSON.
+only_you="$(rules "[{\"action\":\"allow\",\"match\":\"or\",\"criteria\":[$(email_is "$owner")]}]")"
+check "letter 2: save only you" 200 "$(builder_status "$home" save "$only_you")"
+check "letter 2: the traveler is refused" 403 "$(knock "$home" traveler)"
+check "letter 2: you are let in" 200 "$(status "$home" "${path}knock")"
+sleep 11
+
+knights='{"kind":"claim","claim":"groups","value":"knights"}'
+guild="$(rules "[{\"action\":\"allow\",\"match\":\"or\",\"criteria\":[$(email_is "$owner"),${knights}]}]")"
+check "letter 3: save you or the knights" 200 "$(builder_status "$home" save "$guild")"
+check "letter 3: the Captain (a knight) is let in" 200 "$(knock "$home" captain)"
+check "letter 3: the Librarian is refused" 403 "$(knock "$home" librarian)"
+sleep 11
+
+open_house="$(rules "[{\"action\":\"allow\",\"match\":\"and\",\"criteria\":[{\"kind\":\"domain\",\"is\":\"${KINGDOM}\"}]},{\"action\":\"deny\",\"match\":\"or\",\"criteria\":[$(email_is "baker@${KINGDOM}")]}]")"
+check "letter 4: save citizens, but deny the baker" 200 "$(builder_status "$home" save "$open_house")"
+check "letter 4: the baker matches the allow, but the deny wins" 403 "$(knock "$home" baker)"
+check "letter 4: the Librarian is let in" 200 "$(knock "$home" librarian)"
+sleep 11
+
+window="$(rules "[{\"action\":\"allow\",\"match\":\"or\",\"criteria\":[$(email_is "$owner")]},{\"action\":\"allow\",\"match\":\"and\",\"criteria\":[${knights},{\"kind\":\"http_method\",\"is\":\"GET\"}]}]")"
+check "letter 5: save you, and the knights for GET only" 200 "$(builder_status "$home" save "$window")"
+check "letter 5: the Captain may look in (GET)" 200 "$(knock "$home" captain GET)"
+check "letter 5: the Captain may not knock (POST)" 403 "$(knock "$home" captain POST)"
+check "letter 5: you may knock (POST)" 200 "$(status "$home" "${path}knock" POST)"
+
+echo "Keeping houses apart"
+sleep 11
+quoted="$(rules "[{\"action\":\"allow\",\"match\":\"or\",\"criteria\":[$(email_is "x'y@${KINGDOM}")]}]")"
+check "rules with a quote are refused" 400 "$(builder_status "$home" save "$quoted")"
+newline='{"rules":[{"action":"allow","match":"or","criteria":[{"kind":"email","is":"a@b\nallow_public_unauthenticated_access: true"}]}]}'
+check "rules with a newline are refused" 400 "$(builder_status "$home" save "$newline")"
+unknown='{"rules":[{"action":"allow","match":"or","criteria":[{"kind":"groups","is":"knights"}]}]}'
+check "an unknown criterion is refused" 400 "$(builder_status "$home" save "$unknown")"
+neighbor="${JAR_DIR}/neighbor"
+sign_up "$neighbor" "neighbor-${RUN}@${KINGDOM}" >/dev/null
+neighbor_path="$(builder "$neighbor" open '{"rules":null,"owner":"'"$owner"'"}' | field path)"
+check "a neighbor's house is their own, whatever they claim" yes "$([ -n "$neighbor_path" ] && [ "$neighbor_path" != "$path" ] && echo yes || echo no)"
+check "the neighbor's public house doesn't open yours" 401 \
+  "$(curl -s -o /dev/null -w '%{http_code}' -H "$JSON" "${GAME}${path}knock")"
+check "only citizens reach the Builders' Yard" 401 "$(builder_status "$anon" open '{"rules":null}')"
+
+echo "Idle houses"
+house_id="$(printf '%s' "$path" | cut -d/ -f4)"
+kubectl --context k3d-quest -n quest-houses delete ingress "house-${house_id}" >/dev/null
+gone=200
+for _ in $(seq 1 30); do
+  gone="$(status "$home" "${path}knock")"
+  [ "$gone" = 404 ] && break
+  sleep 1
+done
+check "a removed house has no route" 404 "$gone"
+check "walking back in rebuilds it from the saved rules" 200 "$(builder_status "$home" open "$only_you")"
+check "and it answers its owner again" 200 "$(status "$home" "${path}knock")"
 
 echo
 if [ "$failures" -eq 0 ]; then echo "All checks passed."; else echo "${failures} check(s) failed."; fi

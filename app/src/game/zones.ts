@@ -14,25 +14,27 @@ export type Criterion =
   | { readonly kind: 'claim'; readonly claim: ClaimName; readonly value: string }
 
 /**
- * One allow rule: `allow: { and: [...] }` or `allow: { or: [...] }`. PPL operators hold
- * criteria, not other operators, so "A and (B or C)" is written as two rules instead:
- * [A and B] and [A and C]. A request is allowed when any rule matches.
+ * One rule: `allow: { and: [...] }`, `deny: { or: [...] }` and so on. PPL operators hold criteria, not
+ * other operators, so "A and (B or C)" is written as two rules instead: [A and B] and [A and C]. A
+ * request is allowed when any allow rule matches and no deny rule does.
  */
-export interface AllowRule {
-  readonly match: 'and' | 'or'
+export interface PolicyRule {
+  readonly action: 'allow' | 'deny'
+  /** `not` matches when none of its criteria do. */
+  readonly match: 'and' | 'or' | 'not'
   readonly criteria: readonly Criterion[]
 }
 
 export type ClaimName = 'groups' | 'email'
 
-export type ZoneId = 'oracle' | 'fields' | 'town' | 'guild' | 'armory' | 'library' | 'keep'
+export type ZoneId = 'oracle' | 'fields' | 'town' | 'guild' | 'armory' | 'library' | 'keep' | 'builder'
 
 export interface Zone {
   readonly id: ZoneId
   readonly name: string
   /** Path prefix Pomerium matches, e.g. /zones/armory */
   readonly prefix: string
-  readonly policy: readonly AllowRule[]
+  readonly policy: readonly PolicyRule[]
 }
 
 /**
@@ -47,7 +49,7 @@ export const KINGDOM_DOMAIN: string =
 /** Posted to the game by the sign-in frame once Pomerium hands it back with a session. */
 export const SIGNED_IN_MESSAGE = 'pomerium-quest/signed-in'
 
-const all = (...criteria: Criterion[]): AllowRule => ({ match: 'and', criteria })
+const all = (...criteria: Criterion[]): PolicyRule => ({ action: 'allow', match: 'and', criteria })
 const signedIn: Criterion = { kind: 'authenticated_user' }
 const citizen: Criterion = { kind: 'domain', is: KINGDOM_DOMAIN }
 const inGroup = (value: string): Criterion => ({ kind: 'claim', claim: 'groups', value })
@@ -65,6 +67,9 @@ export const ZONES: readonly Zone[] = [
     // Citizens may read (GET); scribes may also write (POST). Each rule has its own guard in the game.
     policy: [all(citizen, { kind: 'http_method', is: 'GET' }), all(citizen, inGroup('scribes'))],
   },
+  // Where players save their own house's door rules (docs/prd/your-house.md). The game server only ever
+  // writes the house of the player Pomerium signed in.
+  { id: 'builder', name: "Builders' Yard", prefix: '/zones/builder', policy: [all(citizen)] },
   // The end of the quest: one rule, and every check in it must pass.
   {
     id: 'keep',

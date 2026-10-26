@@ -11,6 +11,12 @@ export class QuestConfig extends Context.Service<
     /** The game's own Keycloak client, whose service account may add players to groups. */
     readonly keycloakClientId: string
     readonly keycloakClientSecret: Redacted.Redacted<string>
+    /** The namespace the game writes house Ingresses into, and the only one its Role covers. */
+    readonly housesNamespace: string
+    /** How many houses may stand at once (docs/prd/your-house.md has the load test behind it). */
+    readonly houseLimit: number
+    /** The start of every townsperson's password at the Oracle; each adds their own name. */
+    readonly visitorPassword: Redacted.Redacted<string>
   }
 >()('QuestConfig') {}
 
@@ -32,6 +38,25 @@ export const QuestConfigLive = Layer.effect(
       Config.withDefault(Redacted.make('dev-only-client-secret')),
     )
 
-    return { publicOrigin, keycloakUrl, keycloakRealm, keycloakClientId, keycloakClientSecret }
+    const housesNamespace = yield* Config.String('QUEST_HOUSES_NAMESPACE').pipe(
+      Config.withDefault('quest-houses'),
+    )
+
+    const houseLimit = yield* Config.Int('QUEST_HOUSE_LIMIT').pipe(Config.withDefault(100))
+
+    const visitorPassword = yield* Config.Redacted('QUEST_VISITOR_PASSWORD').pipe(
+      Config.withDefault(Redacted.make('dev-only-visitor-password')),
+    )
+
+    return {
+      publicOrigin,
+      keycloakUrl,
+      keycloakRealm,
+      keycloakClientId,
+      keycloakClientSecret,
+      housesNamespace,
+      houseLimit,
+      visitorPassword,
+    }
   }),
 )

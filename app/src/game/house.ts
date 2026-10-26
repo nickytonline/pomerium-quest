@@ -1,0 +1,68 @@
+// The player's house: a route whose policy the player writes (docs/prd/your-house.md). Shared by the
+// editor in the browser and the server that turns the rules into a real Pomerium route.
+import { KINGDOM_DOMAIN, type Criterion, type PolicyRule } from './zones.ts'
+
+/** Every house is a route under this prefix, followed by its id. */
+export const HOUSE_PREFIX = '/zones/home'
+
+/** The most rules a house may have, and the most checks in each. */
+export const HOUSE_LIMITS = { rules: 6, criteria: 6 } as const
+
+/**
+ * Emails, domains and group names a player may type. Nothing that could break out of the YAML the
+ * server writes: no quotes, colons, spaces or newlines.
+ */
+export const HOUSE_VALUE = /^[A-Za-z0-9@._-]{1,254}$/
+
+/** The checks the editor offers. All of them work in open-source Pomerium. */
+export type HouseCriterion = Exclude<Criterion, { readonly claim: 'email' }>
+
+export type HouseRule = PolicyRule & { readonly criteria: readonly HouseCriterion[] }
+
+/** Who knocks when the player rings the bell. Each is a real account at the Oracle. */
+export type VisitorId = 'baker' | 'traveler' | 'captain' | 'librarian'
+
+export interface Visitor {
+  readonly name: string
+  readonly email: string
+  /** The groups the Oracle puts in the visitor's groups claim. */
+  readonly groups: readonly string[]
+}
+
+/**
+ * The townsfolk who visit. They have real accounts at the Oracle, so each knock is a real request with a
+ * real session. The traveler comes from outside the kingdom, as at the town gate.
+ */
+export const VISITORS: Record<VisitorId, Visitor> = {
+  baker: { name: 'the baker', email: `baker@${KINGDOM_DOMAIN}`, groups: [] },
+  traveler: { name: 'the traveler', email: 'wanderer@outlands.net', groups: [] },
+  captain: { name: 'the Captain', email: `captain@${KINGDOM_DOMAIN}`, groups: ['knights'] },
+  librarian: { name: 'the Librarian', email: `librarian@${KINGDOM_DOMAIN}`, groups: ['scholars'] },
+}
+
+export const VISITOR_IDS: readonly VisitorId[] = ['baker', 'traveler', 'captain', 'librarian']
+
+/** Each visitor's password at the Oracle: the deploy's shared secret and their name. */
+export const visitorPassword = (secret: string, id: VisitorId) => `${secret}-${id}`
+
+/** A slime bot is a request with no session at all. */
+export type Knocker = VisitorId | 'slime'
+
+// The server sends these as JSON, so they're type aliases (not interfaces) to stay assignable to Json.
+
+/** What the server reports after a knock: Pomerium's real answer, and which house rules it used. */
+export type Knock = {
+  readonly knocker: Knocker
+  readonly method: 'GET' | 'POST'
+  readonly status: number
+  /** The version of the rules Pomerium enforced, or null when it never reached the house. */
+  readonly version: string | null
+}
+
+/** What the server says about a house after opening or saving it. */
+export type HouseState = {
+  readonly id: string
+  readonly path: string
+  /** A short hash of the rules, or "public" before the first save. */
+  readonly version: string
+}
