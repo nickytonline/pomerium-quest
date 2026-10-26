@@ -68,9 +68,9 @@ operators.
 3. Inside, a writing desk opens the **door rules** editor. The player builds rules from blocks (who, what
    check, allow or deny). The editor shows the PPL it will produce as they go.
 4. The player saves. A builder NPC says the work takes a moment while Pomerium picks up the new route.
-5. The player rings a bell to **invite visitors**. The baker, the traveler, the captain and the librarian
-   each knock. Each visit is a real request through Pomerium, and each shows up in the access log as an
-   ALLOW or DENY. A refused visitor gets the same denial screen as the player does at a gate.
+5. Once Pomerium enforces the new rules, **visitors come by**: whoever the letter names knocks. Each
+   visit is a real request through Pomerium, and each shows up in the access log as an ALLOW or
+   DENY. A refused visitor gets the same denial screen as the player does at a gate.
 6. Puzzles come as letters on the doormat, each one a small brief:
 
 The first two letters tell one story:
@@ -333,7 +333,7 @@ Each step stands on its own and is committed separately.
 3. **The builder API.** The `/zones/builder` zone, the `quest-houses` namespace, the ServiceAccount and
    Role, rule checking, Ingress writes, clean-up, limits.
 4. **Visitors.** Realm users in `render.ts`, server-side sign-in and visits, the NetworkPolicy changes.
-5. **The house in the game.** The map, the deed from the sage, the desk and editor, the bell, the letters,
+5. **The house in the game.** The map, the deed from the sage, the desk and editor, the letters,
    the new lessons, signs and README updates.
 6. **End-to-end checks** in `scripts/e2e.sh`:
    - each letter's answer gives the expected visits;

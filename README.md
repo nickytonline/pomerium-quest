@@ -28,7 +28,7 @@ Then the sage gives you a house in the Slime Fields, and you write the policy on
 | You drop the traveler's line, and they're refused              | No matching allow rule means no entry                                                 |
 | Every citizen may visit, except the baker                      | A `deny` rule beats any `allow`                                                       |
 | Knights may look in (GET) but not knock (POST)                 | `http_method`                                                                         |
-| Ringing the bell sends the townsfolk and a slime to your door  | Real requests through Pomerium, with real sessions (or none)                          |
+| Saving door rules sends the townsfolk and a slime to your door | Real requests through Pomerium, with real sessions (or none)                          |
 
 ## Play it on a real Pomerium (local k3d)
 

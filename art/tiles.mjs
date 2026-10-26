@@ -543,19 +543,7 @@ const painters = [
   },
   // 37 the same desk with a letter waiting on it, sealed
   (rect) => desk(rect, 'letter'),
-  // 38 bell beside the door, to invite visitors
-  (rect) => {
-    floor(rect)
-    rect(7, 0, 2, 4, '#5b3a22')
-    rect(4, 3, 8, 2, '#241a2e')
-    rect(3, 5, 10, 7, '#241a2e')
-    rect(4, 4, 8, 7, '#e3b341')
-    rect(5, 5, 2, 4, '#f6d97a')
-    rect(2, 11, 12, 2, '#241a2e')
-    rect(3, 11, 10, 1, '#c99a2e')
-    rect(7, 13, 2, 2, '#241a2e')
-  },
-  // 39 the house's door, shut: it opens for whoever walks through, and closes behind them
+  // 38 the house's door, shut: it opens for whoever walks through, and closes behind them
   (rect) => {
     floor(rect)
     rect(0, 0, 16, 16, '#5b3a22')
@@ -564,9 +552,9 @@ const painters = [
     for (const x of [5, 9]) rect(x, 2, 1, 14, '#5b3a22')
     rect(11, 8, 1, 2, '#241a2e')
   },
-  // 40 the loaf, half eaten
+  // 39 the loaf, half eaten
   (rect) => eatenLoaf(rect, 3),
-  // 41 the heel of the loaf, nearly gone
+  // 40 the heel of the loaf, nearly gone
   (rect) => eatenLoaf(rect, 2),
 ]
 

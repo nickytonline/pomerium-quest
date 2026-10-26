@@ -10,7 +10,7 @@ import {
 import { probe } from '../game/access.ts'
 import { SHEETS } from '../game/sheets.ts'
 import { Celebration, playAgain } from './Celebration.tsx'
-import { HouseEditor, VisitsScreen } from './House.tsx'
+import { HouseEditor } from './House.tsx'
 import { Phished } from './Phished.tsx'
 import { PolicyLines } from './PolicyLines.tsx'
 import { TAB_EVENT, TabbedScreen, switchTab, tabHint } from './TabbedScreen.tsx'
@@ -132,21 +132,11 @@ function useDialogKeys() {
       // A handled key (like the Enter that starts the game) must not also advance a dialog.
       if (event.repeat) return
 
-      const {
-        celebrating,
-        deny,
-        dialog,
-        finale,
-        houseEditor,
-        journalOpen,
-        menuOpen,
-        phished,
-        signIn,
-        visits,
-      } = quest.get()
+      const { celebrating, deny, dialog, finale, houseEditor, journalOpen, menuOpen, phished, signIn } =
+        quest.get()
 
-      // The celebration and phished screens, and the house's desk and visitors, handle their own keys.
-      if (celebrating || phished || houseEditor || visits) return
+      // The celebration and phished screens, and the house's desk, handle their own keys.
+      if (celebrating || phished || houseEditor) return
       const journalKey = event.key === 'i' || event.key === 'I'
       const confirm = event.key === 'Enter' || event.key === ' ' || event.key === 'e' || event.key === 'E'
 
@@ -432,7 +422,6 @@ function Kingdom() {
               <DialogBox />
               <DenyScreen />
               <HouseEditor />
-              <VisitsScreen />
               <PauseMenu />
             </div>
           </div>

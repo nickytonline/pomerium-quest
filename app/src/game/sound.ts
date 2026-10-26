@@ -36,7 +36,6 @@ export type Effect =
   | 'denied'
   | 'dialogNext'
   | 'smash'
-  | 'bell'
   | 'doorOpen'
   | 'doorClose'
   | 'munch'
@@ -469,13 +468,6 @@ const EFFECTS: Record<Effect, (mix: Mixer, out: AudioNode, at: number) => void> 
     tone(out, at + 0.8, { wave: 'sine', freq: hz('D7'), dur: 0.5, peak: 0.06 })
   },
   laugh,
-  // The house's doorbell: two bright strikes, each ringing on with a quieter overtone.
-  bell: (_mix, out, at) => {
-    for (const [i, name] of ['E6', 'C6'].entries()) {
-      tone(out, at + i * 0.32, { wave: 'sine', freq: hz(name), dur: 0.9, peak: 0.16 })
-      tone(out, at + i * 0.32, { wave: 'triangle', freq: hz(name) * 2.76, dur: 0.4, peak: 0.04 })
-    }
-  },
   victory: (_mix, out, at) => {
     const lead: readonly (readonly [string, number, number])[] = [
       ['C5', 0, 0.1],

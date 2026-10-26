@@ -35,10 +35,9 @@ export const TILE = {
   door: 35,
   doorLocked: 36,
   deskLetter: 37,
-  bell: 38,
-  doorClosed: 39,
-  tableHalf: 40,
-  tableHeel: 41,
+  doorClosed: 38,
+  tableHalf: 39,
+  tableHeel: 40,
 } as const
 
 export type TileId = (typeof TILE)[keyof typeof TILE]
@@ -125,7 +124,6 @@ export interface House {
   /** The path outside the door, where slimes and visitors knock. */
   readonly doorstep: Point
   readonly desk: Point
-  readonly bell: Point
   /** The table, with the loaf on it. */
   readonly table: Point
   /** Just above the table, where the traveler stands to eat, facing it. */
@@ -140,7 +138,6 @@ export const HOUSE: House = {
   door: { x: 7, y: 12 },
   doorstep: { x: 8, y: 12 },
   desk: { x: 2, y: 10 },
-  bell: { x: 6, y: 10 },
   table: { x: 4, y: 13 },
   seat: { x: 4, y: 12 },
   sign: { x: 8, y: 11 },
@@ -239,7 +236,6 @@ export function buildWorld(): World {
   room(1, 9, 7, 15)
   set(HOUSE.door.x, HOUSE.door.y, TILE.doorLocked)
   set(HOUSE.desk.x, HOUSE.desk.y, TILE.desk)
-  set(HOUSE.bell.x, HOUSE.bell.y, TILE.bell)
   set(HOUSE.table.x, HOUSE.table.y, TILE.tableBread)
   set(HOUSE.sign.x, HOUSE.sign.y, TILE.sign)
   fill(8, 12, 8, 16, TILE.path)

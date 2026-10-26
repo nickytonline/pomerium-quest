@@ -171,7 +171,7 @@ export const VisitorsLive = Layer.effect(
         }
       })
 
-    // Sign everyone in up front, so the first ring of the bell is quick. A failure here is retried on
+    // Sign everyone in up front, so the first visit is quick. A failure here is retried on
     // the first knock.
     yield* Effect.forEach(VISITOR_IDS, (id) => Effect.ignore(signIn(id)), { discard: true }).pipe(
       Effect.forkDetach,

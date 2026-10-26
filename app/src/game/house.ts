@@ -19,7 +19,7 @@ export type HouseCriterion = Exclude<Criterion, { readonly claim: 'email' }>
 
 export type HouseRule = PolicyRule & { readonly criteria: readonly HouseCriterion[] }
 
-/** Who knocks when the player rings the bell. Each is a real account at the Oracle. */
+/** Who knocks on the player's door. Each is a real account at the Oracle. */
 export type VisitorId = 'baker' | 'traveler' | 'captain' | 'librarian'
 
 export interface Visitor {

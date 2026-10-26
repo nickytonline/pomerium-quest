@@ -1,13 +1,13 @@
-// The player's house: the deed, the letters, the desk, the bell and the visitors (docs/prd/your-house.md).
+// The player's house: the deed, the letters, the desk and the visitors (docs/prd/your-house.md).
 // Every knock is a real request through Pomerium; the server writes the house's route from the player's
 // door rules, and the explanations below come from the same rules.
 import { houseStatus, knockAs, knockYourself, openHouse, saveHouse } from './access.ts'
 import { LESSONS, LETTERS, link, type Caller, type LessonId, type Letter } from './content.ts'
-import { VISITORS, type HouseRule, type HouseState, type Knocker, type VisitorId } from './house.ts'
+import { VISITORS, type HouseRule, type HouseState, type VisitorId } from './house.ts'
 import { houseStage, type LetterStage } from './house-machine.ts'
-import { decide, policyYaml, type EvalLine, type Identity } from './ppl.ts'
+import { policyYaml, type Identity } from './ppl.ts'
 import { sfx } from './sound.ts'
-import { ANONYMOUS, quest, type VisitResult } from './store.ts'
+import { ANONYMOUS, quest } from './store.ts'
 
 const learn = (lesson: LessonId) => quest.learn(lesson, LESSONS[lesson].title)
 const rules = () => quest.get().progress.houseRules
@@ -36,22 +36,6 @@ const nameOf = (who: Caller) => {
   if (who === 'slime') return 'A slime bot'
 
   return VISITORS[who].name.replace(/^the /, 'The ')
-}
-
-/** How the door decided, line by line: the player's rules, or a public route that lets everyone in. */
-function doorLines(who: Caller, method: 'GET' | 'POST', path: string): readonly EvalLine[] {
-  const saved = rules()
-
-  if (!saved)
-    return [
-      {
-        text: 'allow_public_unauthenticated_access: true',
-        ok: true,
-        actual: 'open to all, no session needed',
-      },
-    ]
-
-  return decide({ policy: saved }, identityOf(who), { method, path }, who === 'you' ? 'your' : 'their').lines
 }
 
 /** The house's route as Pomerium has it, for the sign outside and the editor. */
@@ -171,7 +155,7 @@ export async function saveDoorRules(next: readonly HouseRule[]) {
   sfx('gateClose')
   learn('writePolicy')
 
-  if (built.value.live) quest.toast(TOOK_HOLD, 'allow')
+  if (built.value.live) tookHold()
   else {
     quest.toast('Your rules are on the route. Waiting for Pomerium to take them up…', 'info')
     void watchForPomerium(built.value.version)
@@ -180,7 +164,11 @@ export async function saveDoorRules(next: readonly HouseRule[]) {
   return built
 }
 
-const TOOK_HOLD = 'Pomerium is enforcing your new door rules. Ring the bell to see who gets in.'
+/** Pomerium enforces the new rules: the letter's visitors come by to try them. */
+function tookHold() {
+  quest.toast('Pomerium is enforcing your new door rules.', 'allow')
+  void checkLetter()
+}
 
 /** How often, and for how long, the game asks whether Pomerium has taken up a save yet. */
 const STATUS_EVERY_MS = 1_000
@@ -197,20 +185,26 @@ async function watchForPomerium(version: string) {
 
     if (status.ok && status.value.live) {
       quest.setHouse(status.value)
-      quest.toast(TOOK_HOLD, 'allow')
+      tookHold()
 
       return
     }
   }
 
-  quest.toast(
-    "Pomerium hasn't confirmed your new rules yet. Ring the bell: each knock waits for them.",
-    'info',
-  )
+  // Each knock waits for the rules, so the letter's visitors can still try them.
+  quest.toast("Pomerium hasn't confirmed your new rules yet.", 'info')
+  void checkLetter()
+}
+
+/** One knock on the player's house, as Pomerium answered it: 200 let in, 401 no session, 403 refused. */
+interface Visit {
+  readonly who: Caller
+  readonly method: 'GET' | 'POST'
+  readonly status: number
 }
 
 /** One knock, through Pomerium: the server knocks as a townsperson or slime; the player knocks as themselves. */
-async function knock(who: Caller, method: 'GET' | 'POST', house: HouseState): Promise<VisitResult> {
+async function knock(who: Caller, method: 'GET' | 'POST', house: HouseState): Promise<Visit> {
   const path = `${house.path}knock`
   let status = 0
 
@@ -229,7 +223,7 @@ async function knock(who: Caller, method: 'GET' | 'POST', house: HouseState): Pr
     who: id.authenticated ? id.email : 'anonymous (a slime bot)',
   })
 
-  return { who, method, status, lines: doorLines(who, method, path) }
+  return { who, method, status }
 }
 
 /** A slime on the doorstep tries the door; true when Pomerium lets it in. */
@@ -252,63 +246,54 @@ export async function visitorWelcome(who: VisitorId): Promise<boolean> {
 
 export const travelerWelcome = () => visitorWelcome('traveler')
 
-const EVERYONE: readonly Knocker[] = ['baker', 'traveler', 'captain', 'librarian', 'slime']
+/** What one visit should have done but didn't, as the house tells it. */
+function missed(result: Visit & { readonly wanted: boolean }) {
+  const visit = result.method === 'POST' ? ' knocking (a POST)' : ''
+  const kept = result.who === 'you' ? 'were kept out' : 'was kept out'
+  const got = result.status === 200 ? 'got in' : kept
+
+  return `${nameOf(result.who)}${visit} ${got}, but the letter wants them ${result.wanted ? 'let in' : 'kept out'}.`
+}
 
 /**
- * Rings the bell: everyone the letter names knocks, for real. With no letter, all the townsfolk and a
- * slime come by. The results screen shows Pomerium's answers next to what the letter asked for.
+ * Everyone the letter names knocks, for real, once Pomerium enforces new rules. The letter is solved
+ * when Pomerium's answers match what it asks for.
  */
-export async function ringBell() {
-  const house = quest.get().house ?? (await enterHouse())
-
-  if (!house) return
-  sfx('bell')
-  quest.toast('You ring the bell. Footsteps outside…', 'info')
+async function checkLetter() {
+  const { house } = quest.get()
   const letter = currentLetter()
 
-  const calls = letter
-    ? letter.expect
-    : [
-        { who: 'you' as const, method: 'GET' as const },
-        ...EVERYONE.map((who) => ({ who, method: 'GET' as const })),
-      ]
+  if (!house || !letter) return
 
   const results = await Promise.all(
-    calls.map(async (call) => {
-      const result = await knock(call.who, call.method, house)
-
-      return 'allowed' in call ? { ...result, wanted: call.allowed } : result
-    }),
+    letter.expect.map(async (call) => ({
+      ...(await knock(call.who, call.method, house)),
+      wanted: call.allowed,
+    })),
   )
 
-  const visitsRight = results.every(
-    (result) => result.wanted === undefined || (result.status === 200) === result.wanted,
-  )
+  // The player may have saved again while the visitors were on their way: that save checks for itself.
+  if (currentLetter() !== letter || quest.get().house?.version !== house.version) return
 
+  const wrong = results.filter((result) => (result.status === 200) !== result.wanted)
   const usesDeny = rules()?.some((rule) => rule.action === 'deny') ?? false
-  const missingDeny = Boolean(letter?.needsDeny) && !usesDeny
-  const solved = Boolean(letter) && visitsRight && !missingDeny
+  const who = `Letter · ${letter.title}`
 
-  const story = storyOf(letter, solved)
+  if (wrong.length > 0) {
+    quest.say([{ who, text: `Not quite. ${wrong.map(missed).join(' ')} Change your rules at the desk.` }])
 
-  if (visitsRight && missingDeny)
-    quest.showVisits({ story, results, solved, note: 'Right visitors, but this letter wants a deny rule.' })
-  else quest.showVisits({ story, results, solved })
+    return
+  }
 
-  if (!solved || !letter) return
-  quest.sendHouse({ type: 'LETTER_SOLVED' })
-  learn(letter.lesson)
+  if (letter.needsDeny && !usesDeny) {
+    quest.say([{ who, text: 'The right visitors got in, but this letter wants a deny rule.' }])
+
+    return
+  }
+
   sfx('victory')
+  quest.say([{ who, text: letter.solved }], () => {
+    quest.sendHouse({ type: 'LETTER_SOLVED' })
+    learn(letter.lesson)
+  })
 }
-
-/** Who came by, as the kingdom tells it. */
-function storyOf(letter: Letter | null, solved: boolean) {
-  if (!letter)
-    return 'The townsfolk come by one by one, and a slime bounces up the path. Here is how your door answered.'
-
-  if (solved) return letter.solved
-
-  return `Not quite: "${letter.title}". Compare who got in with what the letter asked, change your rules at the desk and ring again.`
-}
-
-export const callerName = nameOf

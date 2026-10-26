@@ -12,7 +12,6 @@ import {
   readHouseSign,
   readLetter,
   readTable,
-  ringBell,
   slimeKnocks,
   travelerWelcome,
   visitorWelcome,
@@ -293,7 +292,7 @@ interface Intruder {
 /** How long the Captain stays when they drop by. */
 const CAPTAIN_STAYS_MS = 40_000
 
-/** Where the Captain stands while visiting: by the bell, to say hello. */
+/** Where the Captain stands while visiting, just inside the door, to say hello. */
 const CAPTAIN_SPOT = { x: 5, y: 11 }
 
 /** Where a guard leaves an intruder: the path just past the doorstep. */
@@ -907,8 +906,6 @@ export class KingdomScene extends Phaser.Scene {
     // A letter waiting on the desk is read first, then the door rules open.
     if (tile === TILE.desk || tile === TILE.deskLetter) readLetter(() => quest.openHouseEditor())
 
-    if (tile === TILE.bell) void ringBell()
-
     if (LOAF.includes(tile)) readTable(this.bread, WHOLE_LOAF)
 
     if (tile === TILE.doorLocked) this.lockedHint()
@@ -1215,7 +1212,7 @@ export class KingdomScene extends Phaser.Scene {
 
   /** Follows the house's story and its door rules: new rules mean the traveler may come or go. */
   private watchHouse() {
-    let { houseStage: stage, progress, visits, letterRead } = quest.get()
+    let { houseStage: stage, progress, letterRead } = quest.get()
     let rules = progress.houseRules
 
     return quest.subscribe(() => {
@@ -1234,11 +1231,8 @@ export class KingdomScene extends Phaser.Scene {
         this.dressHouse()
       }
 
-      // Saving rules, or closing the bell's results, is when the traveler finds out if they're welcome.
-      const closedVisits = visits !== null && next.visits === null
-      visits = next.visits
-
-      if (next.progress.houseRules !== rules || closedVisits) {
+      // Saving rules is when the traveler finds out if they're welcome.
+      if (next.progress.houseRules !== rules) {
         rules = next.progress.houseRules
         void this.recheckHouse()
       }
