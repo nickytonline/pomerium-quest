@@ -273,10 +273,18 @@ function Editor() {
         when any allow rule matches and no deny rule does. If no allow rule matches, it says no.
       </p>
       {saved === null && (
-        <p className="m-0 text-[0.9rem]">
-          Until you save, the route is public: it has allow_public_unauthenticated_access and no policy, so
-          Pomerium lets in every request, signed in or not. The route below replaces it.
-        </p>
+        <>
+          <p className="m-0 text-[0.72rem] tracking-[0.08em] text-paper-muted uppercase">
+            The route Pomerium has right now
+          </p>
+          <pre className="m-0 overflow-x-auto rounded bg-paper-tint px-3 py-2.5 text-[0.8rem] leading-[1.45]">
+            {houseRouteYaml(house, null)}
+          </pre>
+          <p className="m-0 text-[0.9rem]">
+            It's public: no policy, so Pomerium lets in every request, signed in or not. Saving replaces it
+            with the route below.
+          </p>
+        </>
       )}
       <p className="m-0 text-[0.72rem] tracking-[0.08em] text-paper-muted uppercase">
         The route Pomerium will get
