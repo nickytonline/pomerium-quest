@@ -59,7 +59,7 @@ operators.
 
 ## What the player does
 
-1. At first sign-in the Oracle tells the player that every citizen is entitled to a house outside the walls: an empty one in the Slime Fields, just below the pond. He adds its deed to their claims (a group named for the house) and signs them in again so their session carries it.
+1. After first sign-in the Oracle sends the player to the sage, who says they're about to become a citizen and entitled to a house outside the walls: an empty one in the Slime Fields, just below the pond. Back at the Oracle, he adds two claims: the `citizen` group and the house's deed (a group named for the house). He signs them in again so their session carries both.
 2. **The house starts open to everyone.** Its route is public
    (`allow_public_unauthenticated_access`), so Pomerium lets every request through, signed in or not.
    When the player arrives, slime bots are bouncing around inside and the traveler is at the table eating
@@ -91,11 +91,11 @@ The first two letters tell one story:
 
 Later letters build on that:
 
-| Letter                                                           | What it teaches                       | One answer                                      |
-| ---------------------------------------------------------------- | ------------------------------------- | ----------------------------------------------- |
-| "Let in your friends from the Knights' Guild"                    | `claim/groups`                        | `allow: { or: [claim/groups: knights] }`        |
-| "Any citizen may visit, except the baker"                        | `deny` beats `allow`                  | allow `domain`, then `deny` the baker's `email` |
-| "Friends may look in through the window (GET), not knock (POST)" | `http_method`, two rules on one route | as the library does                             |
+| Letter                                                           | What it teaches                       | One answer                                                     |
+| ---------------------------------------------------------------- | ------------------------------------- | -------------------------------------------------------------- |
+| "Let in your friends from the Knights' Guild"                    | `claim/groups`                        | `allow: { or: [claim/groups: knights] }`                       |
+| "Any citizen may visit, except the baker"                        | `deny` beats `allow`                  | allow `claim/groups: citizen`, then `deny` the baker's `email` |
+| "Friends may look in through the window (GET), not knock (POST)" | `http_method`, two rules on one route | as the library does                                            |
 
 A letter counts as solved when the real visits come out the way the brief asks: the visitors are the test
 cases.

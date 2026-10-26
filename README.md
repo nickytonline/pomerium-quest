@@ -9,14 +9,13 @@ Pomerium Pomeranian, and every gate in the kingdom is a real Pomerium route. The
 follows the route's real policy, and when a guard turns you away, the game shows you the exact policy rule
 that failed.
 
-Chapter one covers the fundamentals. (`game.localhost.pomerium.io` is the default citizens' domain; set
-`QUEST_KINGDOM_DOMAIN` to use your own, as described in [Settings](#settings).)
+Chapter one covers the fundamentals.
 
 | In the game                                                    | In Pomerium                                                              |
 | -------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | The Oracle signs you in                                        | Your identity provider (Keycloak, over OIDC)                             |
 | Each gate's guard, and the sign beside it                      | A route and its policy                                                   |
-| The town only admits `game.localhost.pomerium.io` citizens     | The `domain` criterion                                                   |
+| The Oracle makes you a citizen, and the town only admits them  | `claim/groups`, set by the IdP, not guessed from your email address      |
 | The Captain makes you a knight; the armory checks it           | `claim/groups`, and claims coming from the IdP                           |
 | Being knighted doesn't open the armory until you sign in again | Your session holds the claims from sign-in until Pomerium refreshes it   |
 | Citizens may read the books, but not write in them             | Allow rules can check `http_method`                                      |
@@ -52,7 +51,7 @@ asks Pomerium whether to let you through, so what you can reach depends on who t
 | <img src="docs/images/legend/captain.png" width="48" alt="">     | **The Captain**     | Runs the Knights' Guild. Beat three bot slimes and they have the Oracle add you to `knights`  |
 | <img src="docs/images/legend/armorer.png" width="48" alt="">     | **The Armorer**     | Keeps the forge. The armory's guard, not the Armorer, decides who gets the steel sword        |
 | <img src="docs/images/legend/librarian.png" width="48" alt="">   | **The Librarian**   | Read every book in the library and they have the Oracle add you to `scholars`                 |
-| <img src="docs/images/legend/baker.png" width="48" alt="">       | **The baker**       | `baker@game.localhost.pomerium.io`, a citizen, so the town gate lets them in                  |
+| <img src="docs/images/legend/baker.png" width="48" alt="">       | **The baker**       | `baker@game.localhost.pomerium.io`, in the citizen group, so the town gate lets them in       |
 | <img src="docs/images/legend/traveler.png" width="48" alt="">    | **The traveler**    | `wanderer@outlands.net`: signed in, but not a citizen, so the town gate turns them away       |
 | <img src="docs/images/legend/phish.png" width="48" alt="">       | **A phish**         | Dresses as the Oracle and offers to sign you in. Hand over your password and you lose         |
 | <img src="docs/images/legend/bot-slime.gif" width="48" alt="">   | **A bot slime**     | Roams the Slime Fields and bites. It never signs in, so it's a request with no session at all |
@@ -211,16 +210,14 @@ Port 443 already in use? Run `QUEST_PORT=8443 ./quest up` and open `https://game
 `./quest` reads these environment variables. Set them the same way for every command, since each deploy
 renders the config again:
 
-| Variable               | Default                      | What it sets                                                                            |
-| ---------------------- | ---------------------------- | --------------------------------------------------------------------------------------- |
-| `QUEST_KINGDOM_DOMAIN` | `game.localhost.pomerium.io` | The citizens' email domain: the sign-up form, every `domain` policy and the game's text |
-| `QUEST_PORT`           | `443`                        | The port Pomerium listens on                                                            |
-| `QUEST_DOMAIN`         | `localhost.pomerium.io`      | The domain the game, the Oracle and Pomerium's sign-in live under                       |
+| Variable       | Default                 | What it sets                                                      |
+| -------------- | ----------------------- | ----------------------------------------------------------------- |
+| `QUEST_PORT`   | `443`                   | The port Pomerium listens on                                      |
+| `QUEST_DOMAIN` | `localhost.pomerium.io` | The domain the game, the Oracle and Pomerium's sign-in live under |
 
-For example, `QUEST_KINGDOM_DOMAIN=example.org ./quest up` makes the town admit `example.org` citizens,
-and the townsfolk become `baker@example.org` and so on. Keycloak only imports its realm on first start,
-so after changing any of these on an existing cluster, run `./quest reset-oracle` too. After changing
-`QUEST_DOMAIN`, also delete `.quest/certs` so mkcert makes a certificate for the new domain.
+Keycloak only imports its realm on first start, so after changing either of these on an existing cluster,
+run `./quest reset-oracle` too. After changing `QUEST_DOMAIN`, also delete `.quest/certs` so mkcert makes a
+certificate for the new domain.
 
 The game only plays behind Pomerium. Opened directly (say, `npm run dev -w app` on
 http://localhost:3000), it says so and won't start: use `./quest dev` for hot reload behind
@@ -240,13 +237,13 @@ flowchart LR
       direction TB
       oracleRoute["/zones/oracle/* · authenticated_user"]
       fields["/zones/fields/* · authenticated_user"]
-      town["/zones/town/* · domain is game.localhost.pomerium.io"]
-      guild["/zones/guild/* · domain is game.localhost.pomerium.io"]
+      town["/zones/town/* · claim/groups: citizen"]
+      guild["/zones/guild/* · claim/groups: citizen"]
       armory["/zones/armory/* · claim/groups: knights"]
       scriptorium["/zones/library/scriptorium/* · citizen, scribes"]
       library["/zones/library/* · citizen, GET only"]
       keep["/zones/keep/* · citizen, knights and scholars"]
-      builder["/zones/builder/* · domain is game.localhost.pomerium.io"]
+      builder["/zones/builder/* · claim/groups: citizen"]
       home["/zones/home/{id}/ · the rules each player wrote"]
       shell["/* game shell · public"]
       idpRoute["oracle.localhost.pomerium.io"]
@@ -394,13 +391,13 @@ allowed it.
 
 ### Things worth knowing
 
-- **Anyone can sign up as any citizen.** The realm takes any `game.localhost.pomerium.io` email without verifying
-  it, because the address is what the game's guards check. Set `QUEST_KINGDOM_DOMAIN` to use another
-  domain in the sign-up form, the policies, and the game's text. That's fine for a learning game. Never reuse the realm, or
-  this Pomerium, for anything real.
+- **Anyone can sign up, and the game makes them a citizen.** The realm takes any email without verifying it.
+  Being a citizen is the `citizen` group, which the Oracle grants in the game (see `POST /zones/oracle/citizen`),
+  not something an address proves. That's fine for a learning game. Never reuse the realm, or this
+  Pomerium, for anything real.
 - **Keycloak runs in dev mode** (`start-dev`) with its H2 database on a volume, so players survive a
   redeploy. It imports the realm on first start only: after changing the realm in `render.ts`, or
-  `QUEST_DOMAIN`/`QUEST_PORT`/`QUEST_KINGDOM_DOMAIN`, run `./quest reset-oracle`. A public deployment should run
+  `QUEST_DOMAIN`/`QUEST_PORT`, run `./quest reset-oracle`. A public deployment should run
   `start` with a real database.
 - **Signing in again signs you out of Keycloak too.** Pomerium's sign-out calls Keycloak's
   end-session endpoint, so refreshing your claims asks for your password again.
