@@ -43,7 +43,13 @@ function doorLines(who: Caller, method: 'GET' | 'POST', path: string): readonly 
   const saved = rules()
 
   if (!saved)
-    return [{ text: 'allow_public_unauthenticated_access: true', ok: true, actual: 'no rules: public' }]
+    return [
+      {
+        text: 'allow_public_unauthenticated_access: true',
+        ok: true,
+        actual: 'open to all, no session needed',
+      },
+    ]
 
   return decide({ policy: saved }, identityOf(who), { method, path }, who === 'you' ? 'your' : 'their').lines
 }
@@ -73,7 +79,7 @@ export function giveDeed() {
       },
       {
         who: 'Sage',
-        text: "Its door is a Pomerium route like every gate in the kingdom, but you write its rules. Right now it has none, so it's public, and I hear the slimes have noticed.",
+        text: 'Its door is a Pomerium route like every gate in the kingdom, but you write its rules. The builders left it wide open, with allow_public_unauthenticated_access: everyone gets in, even with no session at all. I hear the slimes have noticed.',
         links: [link('publicRoute')],
       },
     ],
@@ -128,7 +134,7 @@ export function readHouseSign() {
       who: 'Sign · Your house',
       text: progress.houseRules
         ? 'Your door is a route, and its policy is the rules you wrote at the desk.'
-        : 'Your door is a route with no rules yet, so it is public: Pomerium lets in every request, signed in or not.',
+        : 'Your door is a route left wide open with allow_public_unauthenticated_access, so Pomerium lets in every request, signed in or not. The rules you write at the desk replace it. A route with no rules at all would let no one in.',
       code: houseRouteYaml(house, progress.houseRules),
       links: [link('publicRoute'), link('writePolicy')],
     },

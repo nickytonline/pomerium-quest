@@ -220,7 +220,7 @@ const visit = (who: Caller, allowed: boolean, method: 'GET' | 'POST' = 'GET'): E
 export const LETTERS: Record<LetterStage, Letter> = {
   slimes: {
     title: 'Slimes in the house!',
-    text: "Welcome home! Your house is a route with no rules yet, so it's public: Pomerium lets in every request, even ones with no session at all. That's how the slimes got in. The traveler is a friend, though, so they can stay. Write door rules at the desk that let in you and the traveler, then ring the bell to check.",
+    text: "Welcome home! The builders left your door wide open: its route has allow_public_unauthenticated_access, so Pomerium lets in every request, even ones with no session at all. That's how the slimes got in. The traveler is a friend, though, so they can stay. Write door rules at the desk that let in you and the traveler, then ring the bell to check.",
     expect: [visit('you', true), visit('traveler', true), visit('slime', false)],
     lesson: 'anyOf',
     solved:

@@ -22,7 +22,7 @@ Then the sage gives you a house in the Slime Fields, and you write the policy on
 
 | At your house                                                  | In Pomerium                                                  |
 | -------------------------------------------------------------- | ------------------------------------------------------------ |
-| Slimes walk in, because a new house has no rules               | A public route (`allow_public_unauthenticated_access`)       |
+| Slimes walk in, because a new house is left open to everyone   | A public route (`allow_public_unauthenticated_access`)       |
 | You write door rules at the desk                               | Your route's policy: `allow` and `deny`, `and`, `or`, `not`  |
 | You let in yourself or the traveler, and the slimes bounce off | `or`, and a request with no session matches no rule          |
 | You drop the traveler's line, and they're refused              | No matching allow rule means no entry                        |
