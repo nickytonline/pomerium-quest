@@ -159,6 +159,13 @@ The server checks them with an Effect Schema before writing anything:
   No quotes, colons, newlines or spaces can reach the YAML.
 - **Size:** at most 6 rules with 6 criteria each.
 
+PPL has no variables, so a rule can't say "the owner" and have Pomerium work out who that is. The editor
+handles it instead: an email block starts filled in with the player's own email, read from the `email`
+claim in their session, and the player can change it or type someone else's. The saved policy always
+holds a plain email, the same as the server writes and the sign shows. In the letters, `<you>` stands for
+that filled-in email. The server doesn't need to check that it's the player's own: letting in anyone you
+like is the point of the house.
+
 The server then renders the PPL with the same `policyYaml` code the signs use, extended for `deny`.
 Players' text is never passed through as YAML. That's the main security property of the feature: if
 anything raw could reach the annotation, a player could write policy for routes that aren't theirs.
