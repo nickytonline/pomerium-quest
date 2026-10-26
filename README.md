@@ -161,23 +161,61 @@ Pomerium and Keycloak.
 Three services run in a local k3d cluster: Pomerium, the game (`quest`), and Keycloak (the Oracle).
 Every request from the browser goes through Pomerium first, including the game itself:
 
-```
-browser ──► Pomerium ──┬─ /zones/oracle/*       authenticated_user              ─┐
-   (k3d LB :443)       ├─ /zones/fields/*       authenticated_user               │
-                       ├─ /zones/town/*         domain is kingdom.com            │
-                       ├─ /zones/guild/*        domain is kingdom.com            ├─► quest (TanStack Start, Node)
-                       ├─ /zones/armory/*       claim/groups: knights            │      verifies Pomerium's JWT
-                       ├─ /zones/library/*      citizen GET, or scribes          │
-                       ├─ /zones/keep/*         citizen, knights and scholars    │
-                       ├─ /zones/builder/*      domain is kingdom.com            │      writes house Ingresses
-                       ├─ /zones/home/<id>/     the rules each player wrote      │
-                       └─ /* (game shell)       public                          ─┘
-                       oracle.localhost.pomerium.io ──► keycloak (OIDC IdP, realm "kingdom")
+```mermaid
+flowchart LR
+  browser([Browser])
+
+  subgraph k3d["k3d cluster"]
+    subgraph pomerium["Pomerium Ingress Controller"]
+      direction TB
+      oracleRoute["/zones/oracle/* · authenticated_user"]
+      fields["/zones/fields/* · authenticated_user"]
+      town["/zones/town/* · domain is kingdom.com"]
+      guild["/zones/guild/* · domain is kingdom.com"]
+      armory["/zones/armory/* · claim/groups: knights"]
+      library["/zones/library/* · citizen GET, or scribes"]
+      keep["/zones/keep/* · citizen, knights and scholars"]
+      builder["/zones/builder/* · domain is kingdom.com"]
+      home["/zones/home/{id}/ · the rules each player wrote"]
+      shell["/* game shell · public"]
+      idpRoute["oracle.localhost.pomerium.io"]
+    end
+
+    quest["quest<br/>TanStack Start + Effect<br/>verifies Pomerium's JWT"]
+    keycloak[("Keycloak<br/>the Oracle, realm kingdom")]
+    kube["Kubernetes API<br/>quest-houses namespace"]
+  end
+
+  browser --> pomerium
+  oracleRoute & fields & town & guild & armory & library & keep & builder & home & shell --> quest
+  idpRoute --> keycloak
+  pomerium -. "OIDC sign-in" .-> keycloak
+  quest -- "adds you to knights or scholars" --> keycloak
+  quest -- "writes house Ingresses" --> kube
+  kube -. "new routes" .-> pomerium
 ```
 
 ### What happens at a gate
 
 The game never decides who gets in. When the dog walks into a gate:
+
+```mermaid
+sequenceDiagram
+  participant Game as Game (browser)
+  participant Pomerium
+  participant Quest as quest server
+
+  Game->>Pomerium: GET /zones/armory/enter (session cookie)
+  Pomerium->>Pomerium: check the route's policy against the session's claims
+  alt policy allows
+    Pomerium->>Quest: forward, with X-Pomerium-Jwt-Assertion
+    Quest->>Quest: verify the JWT against Pomerium's JWKS
+    Quest-->>Game: 200, the guard steps aside
+  else policy denies
+    Pomerium-->>Game: 403 and a request ID (401 with no session)
+    Game->>Game: show the story, then the failed policy line
+  end
+```
 
 1. The scene ([`scene.ts`](app/src/game/scene.ts)) hands the gate to [`story.ts`](app/src/game/story.ts),
    which asks [`access.ts`](app/src/game/access.ts) to make a real request through Pomerium:
