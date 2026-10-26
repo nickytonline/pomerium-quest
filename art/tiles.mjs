@@ -310,6 +310,32 @@ const WORKBENCH_COLORS = {
   S: '#4a2f18', // floor shadow
 }
 
+const CHAIR = [
+  '................',
+  '...KKK..........',
+  '...KBK..........',
+  '...KBK..........',
+  '...KbK..........',
+  '...KBK..........',
+  '...KBK..........',
+  '...KBKKKKKKKK...',
+  '...KBBBBBBBBBK..',
+  '...KbbbbbbbbbK..',
+  '...KKKKKKKKKKK..',
+  '...KbK.....KbK..',
+  '...KbK.....KbK..',
+  '...KbK.....KbK..',
+  '...KKK.....KKK..',
+  '...SSS.....SSS..',
+]
+
+const CHAIR_COLORS = {
+  K: '#241a2e', // outline
+  B: '#a87a45', // wood
+  b: '#6b4226', // shaded wood
+  S: '#4a2f18', // floor shadow
+}
+
 /** A small table on the floor: its top, front edge and legs. */
 const table = (rect) => {
   floor(rect)
@@ -481,15 +507,10 @@ const painters = [
     rect(10, 7, 1, 1, '#e3b06a')
     rect(6, 4, 1, 1, '#e3b06a')
   },
-  // 33 a chair at the table, its back toward the room, for whoever sits down to eat
+  // 33 a chair at the table, seen from the side, facing the table on its right
   (rect) => {
     floor(rect)
-    rect(2, 2, 12, 9, '#241a2e')
-    rect(3, 3, 10, 6, '#a87a45')
-    rect(2, 9, 12, 4, '#241a2e')
-    rect(3, 10, 10, 2, '#6b4226')
-    rect(3, 13, 2, 2, '#4a2f18')
-    rect(11, 13, 2, 2, '#4a2f18')
+    pixels(rect, CHAIR, CHAIR_COLORS)
   },
   // 34 writing desk, where the player writes their door rules
   (rect) => {

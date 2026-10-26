@@ -137,8 +137,8 @@ export const HOUSE: House = {
   mat: { x: 6, y: 12 },
   desk: { x: 2, y: 10 },
   bell: { x: 6, y: 10 },
-  table: { x: 3, y: 11 },
-  seat: { x: 3, y: 12 },
+  table: { x: 4, y: 13 },
+  seat: { x: 3, y: 13 },
   sign: { x: 8, y: 11 },
   inside: { x0: 2, y0: 10, x1: 6, y1: 14 },
 }
