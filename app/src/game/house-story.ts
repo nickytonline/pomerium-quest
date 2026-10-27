@@ -279,7 +279,7 @@ export function doorRefusesYou() {
   quest.say([
     {
       who: 'Your door',
-      text: "Your door won't open for you. Pomerium checks each request against the route's rules, and the one that lets in the deed's owner needs the deed in your session. The Oracle can sign you in again so it carries it.",
+      text: "Your door won't open for you. Pomerium checks each request against the route's rules, and the one that lets in the deed's owner needs the deed in your session. Talk to the Oracle at his temple: he can sign you in again so your session carries it.",
       links: [link('refresh')],
     },
   ])
@@ -315,6 +315,13 @@ async function checkLetter() {
   if (currentLetter() !== letter || quest.get().house?.version !== house.version) return
 
   const wrong = results.filter((result) => (result.status === 200) !== result.wanted)
+
+  // The player's own door turned them away: their session lacks the deed, which rewriting rules can't fix.
+  if (results.some((result) => result.who === 'you' && result.wanted && result.status === 403)) {
+    doorRefusesYou()
+
+    return
+  }
 
   const usesDeny = rules()?.some((rule) => rule.action === 'deny') ?? false
   const who = `Letter · ${letter.title}`

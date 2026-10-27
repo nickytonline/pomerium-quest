@@ -310,8 +310,15 @@ const SAGE_HINT: Page = {
   text: 'Before you go anywhere, speak with the sage. They have news for you.',
 }
 
+/** True while the Oracle is granting citizenship, so talking to him again can't start a second grant. */
+let granting = false
+
 /** The Oracle makes an invited newcomer a citizen and grants their deed, then signs them in again to carry both. */
-const grantCitizenship = () =>
+const grantCitizenship = () => {
+  if (granting) return
+
+  granting = true
+
   quest.say(
     [
       ...citizenshipPages(),
@@ -325,6 +332,8 @@ const grantCitizenship = () =>
       learn('refresh')
 
       void addDeed().then((added) => {
+        granting = false
+
         if (!added) {
           quest.toast("The Oracle couldn't grant your claims. Talk to him again.", 'deny')
 
@@ -336,6 +345,7 @@ const grantCitizenship = () =>
       })
     },
   )
+}
 
 const welcome = (next: Identity) =>
   quest.say([
@@ -443,10 +453,12 @@ function oracle() {
   }
 
   const stale = staleGroups()
+  // The deed isn't a group, but it reaches the session the same way: only at the next sign-in.
+  const missing = [...stale, ...(isAtLeast('granted') && !id.deed ? ['your deed'] : [])]
 
-  if (stale.length > 0) {
+  if (missing.length > 0) {
     quest.say(
-      [{ who: 'Oracle', text: `I have added ${stale.join(' and ')} to your groups.` }, refreshPage()],
+      [{ who: 'Oracle', text: `I have added ${missing.join(' and ')} to your claims.` }, refreshPage()],
       () => {
         learn('refresh')
         refreshClaims(() => {})
