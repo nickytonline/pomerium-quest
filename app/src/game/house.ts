@@ -42,9 +42,12 @@ export function turnsAwayOwner(rules: readonly HouseRule[], owner: Identity) {
 }
 
 /** The checks the editor offers. All of them work in open-source Pomerium. */
-export type HouseCriterion = Exclude<Criterion, { readonly claim: 'email' }>
+export type HouseCriterion = Exclude<Criterion, { readonly kind: 'claim' }> | HouseClaimCriterion
 
-export type HouseRule = PolicyRule & { readonly criteria: readonly HouseCriterion[] }
+/** The deed claim is the house's own door; the editor offers the groups claim only, as the server allows. */
+type HouseClaimCriterion = Extract<Criterion, { readonly kind: 'claim' }> & { readonly claim: 'groups' }
+
+export type HouseRule = Omit<PolicyRule, 'criteria'> & { readonly criteria: readonly HouseCriterion[] }
 
 /** The townsfolk's email domain. Citizenship comes from the Oracle's citizen group, never from an address. */
 export const TOWNSFOLK_DOMAIN = 'game.localhost.pomerium.io'
