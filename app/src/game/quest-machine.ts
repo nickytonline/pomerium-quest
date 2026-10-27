@@ -118,7 +118,13 @@ export const questMachine = setup({
     },
     knighted: {
       description: "The identity provider lists 'knights', but the Pomerium session holds older claims.",
-      on: { SIGNED_IN: { guard: 'hasKnightsClaim', target: 'knight' } },
+      on: {
+        // A session from before citizens were a claim: the Oracle grants it the next time they visit.
+        SIGNED_IN: [
+          { guard: 'lacksCitizenClaim', target: 'invited' },
+          { guard: 'hasKnightsClaim', target: 'knight' },
+        ],
+      },
     },
     knight: {
       description: 'The session carries groups: [knights]; the armory policy matches.',

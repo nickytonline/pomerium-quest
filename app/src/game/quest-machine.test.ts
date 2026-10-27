@@ -79,7 +79,7 @@ describe("chapter one's quest", () => {
     expect(actor.getSnapshot().value).toBe('knighted')
 
     // The session still holds its old claims: signing in again without the group changes nothing.
-    actor.send({ type: 'SIGNED_IN', groups: ['scholars'] })
+    actor.send({ type: 'SIGNED_IN', groups: ['citizen', 'scholars'] })
     expect(actor.getSnapshot().value).toBe('knighted')
 
     actor.send({ type: 'SIGNED_IN', groups: ['citizen', 'knights'] })
@@ -148,5 +148,11 @@ describe("the house's letters", () => {
     armed.send({ type: 'STEEL_TAKEN' })
     armed.send({ type: 'SIGNED_IN', groups: ['knights'] })
     expect(armed.getSnapshot().value).toBe('invited')
+
+    const knighted = toProven()
+
+    knighted.send({ type: 'KNIGHTED' })
+    knighted.send({ type: 'SIGNED_IN', groups: ['knights'] })
+    expect(knighted.getSnapshot().value).toBe('invited')
   })
 })
