@@ -179,7 +179,7 @@ export const BOOKS: Page[] = [
 export const INTRO: Page[] = [
   {
     who: 'Pomerium Quest',
-    text: 'Move with the arrow keys, or with the W, A, S and D keys (W up, A left, S down, D right). Press E or Enter to talk and read. Press Space or J to swing your sword.',
+    text: 'Move with the arrow keys, or with the W, A, S and D keys (W up, A left, S down, D right). Press E or Enter to talk and read. Press Space or J to swing your sword. If the keys stop working, click the game.',
   },
   {
     who: 'Pomerium Quest',
