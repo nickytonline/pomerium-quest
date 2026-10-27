@@ -68,7 +68,8 @@ asks Pomerium whether to let you through, so what you can reach depends on who t
 | Open the menu    | Esc                                       | The Menu button    |
 | Open the journal | I (in a narrow window)                    | The Journal button |
 
-The game takes the keys while it has focus. If they stop working, click the game.
+The game takes the keys while its board has focus. Closing a menu, dialog or panel puts focus back on the
+board. If the keys stop working, click the board.
 
 The menu saves your game, restarts it, quits to the title screen, and turns music and sound effects on
 and off. Beside the board, your identity shows the claims in your session right now, and the access log
