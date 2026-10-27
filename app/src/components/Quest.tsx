@@ -685,6 +685,8 @@ function GameCanvas({ view }: { readonly view: Board['view'] | undefined }) {
   const host = useRef<HTMLDivElement>(null)
   const [game, setGame] = useState<import('phaser').Game | null>(null)
   const waiting = useQuest(paused)
+  // Not the view itself: it's a new object on every resize, and a resize shouldn't move focus.
+  const ready = game !== null && view !== undefined
 
   useEffect(() => {
     let destroyed = false
@@ -712,8 +714,8 @@ function GameCanvas({ view }: { readonly view: Board['view'] | undefined }) {
   // The game hears keys only while this board has focus, so hand it focus whenever play starts or resumes:
   // whatever held focus until then (a menu, a dialog's answer) is gone.
   useEffect(() => {
-    if (game && view && !waiting) focusBoard(host.current)
-  }, [game, view, waiting])
+    if (ready && !waiting) focusBoard(host.current)
+  }, [ready, waiting])
 
   // A click that lands on nothing in particular is the player coming back to the game. Whatever takes focus
   // itself keeps it, and so does text being selected.
