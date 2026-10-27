@@ -224,6 +224,19 @@ function update(patch: Partial<QuestState>) {
   for (const listener of listeners) listener()
 }
 
+/** Whether something has the player's attention (a dialog, a menu, a screen), so the game waits for it. */
+export const paused = (s: QuestState) =>
+  s.dialog !== null ||
+  s.deny !== null ||
+  s.signIn !== null ||
+  s.finale ||
+  s.celebrating ||
+  s.phished ||
+  s.menuOpen ||
+  s.journalOpen ||
+  s.houseEditor ||
+  !s.started
+
 export const quest = {
   get: () => state,
   subscribe: (listener: () => void) => {
@@ -231,17 +244,7 @@ export const quest = {
 
     return () => listeners.delete(listener)
   },
-  isPaused: () =>
-    state.dialog !== null ||
-    state.deny !== null ||
-    state.signIn !== null ||
-    state.finale ||
-    state.celebrating ||
-    state.phished ||
-    state.menuOpen ||
-    state.journalOpen ||
-    state.houseEditor ||
-    !state.started,
+  isPaused: () => paused(state),
 
   start: () => update({ started: true }),
   openMenu: () => {

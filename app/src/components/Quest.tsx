@@ -16,7 +16,7 @@ import { PolicyLines } from './PolicyLines.tsx'
 import { TAB_EVENT, TabbedScreen, switchTab, tabHint } from './TabbedScreen.tsx'
 import { INTRO, LESSONS, LESSON_ORDER, type Choice } from '../game/content.ts'
 import { KNIGHT_QUOTA, questMachine, type QuestStage } from '../game/quest-machine.ts'
-import { MAX_HP, SETTLE_MS, quest, useQuest, type DenyView, type Dir } from '../game/store.ts'
+import { MAX_HP, SETTLE_MS, paused, quest, useQuest, type DenyView, type Dir } from '../game/store.ts'
 import { decide, type Identity } from '../game/ppl.ts'
 import { sound, startSound, useSound, type SoundSettings } from '../game/sound.ts'
 import { BOARD_TILES, MAP_HEIGHT, MAP_WIDTH, TILE_PX } from '../game/world.ts'
@@ -420,7 +420,7 @@ function Kingdom() {
           </div>
           <div className="grid min-h-0 min-w-0 place-items-center [grid-area:game]" ref={slot}>
             <div
-              className="relative overflow-hidden rounded-md border-4 border-night-deep bg-night-deep shadow-[0_0_0_2px_var(--color-panel-edge),0_18px_50px_rgb(0_0_0/0.45)]"
+              className="relative overflow-hidden rounded-md border-4 border-night-deep bg-night-deep shadow-[0_0_0_2px_var(--color-panel-edge),0_18px_50px_rgb(0_0_0/0.45)] has-[:focus-visible]:border-lens"
               style={board ? { width: board.width, height: board.height } : { visibility: 'hidden' }}
             >
               <GameCanvas view={board?.view} />
@@ -454,7 +454,7 @@ function JournalButton() {
   const unread = useQuest((s) => s.journalUnread)
 
   return (
-    <button id="journal-button" className={headerButton} type="button" onClick={() => quest.openJournal()}>
+    <button className={headerButton} type="button" onClick={() => quest.openJournal()}>
       Journal
       {unread && (
         <span
@@ -491,9 +491,6 @@ function Journal({ drawer }: { readonly drawer: boolean }) {
 
 function JournalDrawer({ children }: { readonly children: ReactNode }) {
   const drawer = useRef<HTMLElement>(null)
-
-  // Hand focus back to the button that opened the drawer.
-  useEffect(() => () => document.getElementById('journal-button')?.focus(), [])
 
   const trapFocus = (event: ReactKeyboardEvent) => {
     if (event.key !== 'Tab' || !drawer.current) return
@@ -677,9 +674,15 @@ function SoundToggle({ setting, label }: { readonly setting: keyof SoundSettings
   )
 }
 
+/** Whether a click landed on something that takes focus by itself: a button, a link, a field or the board. */
+const takesFocus = (target: EventTarget | null) =>
+  target instanceof Element &&
+  target.closest('a[href], button, input, select, textarea, summary, [tabindex], [contenteditable]') !== null
+
 function GameCanvas({ view }: { readonly view: Board['view'] | undefined }) {
   const host = useRef<HTMLDivElement>(null)
   const [game, setGame] = useState<import('phaser').Game | null>(null)
+  const waiting = useQuest(paused)
 
   useEffect(() => {
     let destroyed = false
@@ -704,8 +707,38 @@ function GameCanvas({ view }: { readonly view: Board['view'] | undefined }) {
     void import('../game/scene.ts').then(({ resizeGame }) => resizeGame(game, view))
   }, [game, view])
 
+  // The game hears keys only while this board has focus, so hand it focus whenever play starts or resumes:
+  // whatever held focus until then (a menu, a dialog's answer) is gone.
+  useEffect(() => {
+    if (game && view && !waiting) host.current?.focus({ preventScroll: true })
+  }, [game, view, waiting])
+
+  // A click that lands on nothing in particular is the player coming back to the game. Whatever takes focus
+  // itself keeps it, and so does text being selected.
+  useEffect(() => {
+    const onClick = (event: MouseEvent) => {
+      const selecting = window.getSelection()?.isCollapsed === false
+
+      if (quest.isPaused() || selecting || takesFocus(event.target)) return
+      host.current?.focus({ preventScroll: true })
+    }
+
+    document.addEventListener('click', onClick)
+
+    return () => document.removeEventListener('click', onClick)
+  }, [])
+
   // Tapping the scene above an open dialog advances it, as A does.
-  return <div className="pixelated" ref={host} onClick={() => quest.get().dialog && quest.advance()} />
+  return (
+    <div
+      className="pixelated outline-hidden"
+      ref={host}
+      tabIndex={0}
+      role="application"
+      aria-label="Game board"
+      onClick={() => quest.get().dialog && quest.advance()}
+    />
+  )
 }
 
 function Hud() {
