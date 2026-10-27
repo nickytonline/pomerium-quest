@@ -1,8 +1,23 @@
 # Investigation: wipe claims on a fresh login (issue #8)
 
-Status: investigated, not built. The game can remove a player's groups at the Oracle, which fixes the
-Keycloak side. Whether Pomerium's cached user record drops them too still needs a live check (see
-"Still open").
+Status: built on this branch. Restart, start over, the phish screen and running out of hearts all take the
+player's claims back at the Oracle (groups and deed) before signing them out. Still open: whether Pomerium's
+cached user record drops the old groups on the next sign-in (see "Still to check live").
+
+## What was built
+
+- **Oracle:** `OracleAdmin.wipeClaims` removes the citizens, knights and scholars groups and clears the `deed`
+  attribute, reading it back to confirm. `POST oracle/reset` runs it for the signed-in player.
+- **Client:** `startOver` in `app/src/game/restart.ts` calls the reset, then resets progress and signs out. Restart,
+  New game, Play again and the phish screen's Start over all use it. If the reset fails, the save is kept.
+- **Death:** running out of hearts now shows the Oracle dialog in `KNOCKED_OUT` and then starts over, instead of
+  waking the player in the village still signed in.
+- **Deed:** the deed is held only while the player is a citizen in the current game. The Oracle grants it again when
+  they become a citizen. It is still `houseId(email)`, so the same house comes back. A random per-game deed would
+  need houses keyed by something other than the owner's email.
+
+Checked against the cluster: the same Keycloak calls, run on a throwaway user, removed all three memberships (204s,
+no groups left), and an emptied `deed` attribute disappeared. `npm run check` and `npm test` pass.
 
 ## The problem
 
@@ -14,16 +29,12 @@ The issue's screenshot shows the Oracle's own claims view after a fresh sign-in,
 the deed. That view reads the session, so the groups were still in the identity provider when the player
 signed in. The stale groups aren't only a Pomerium cache.
 
-## What the code does today
+## What the code did before
 
 - **Restart and new game** (`playAgain` in `app/src/components/Celebration.tsx`, the Restart and "Yes, start
   over" buttons in `app/src/components/Quest.tsx`) reset the game's local state and nothing at the Oracle.
-  The confirmation text says "progress cleared", which is true only for the game.
-- **The Oracle only adds.** `app/src/server/oracle-admin.ts` has `grant` (adds a group) and `grantCitizen`
-  (sets the `deed` attribute, then adds `citizens`). Nothing removes a group or clears the attribute. The
-  game's service account already has `manage-users` and `query-groups` (`scripts/render.ts`, around line 431),
-  which is enough to remove a group membership with the same
-  `PUT/DELETE /admin/realms/{realm}/users/{id}/groups/{groupId}` endpoints the code already calls.
+- **The Oracle only added.** `app/src/server/oracle-admin.ts` had `grant` (adds a group) and `grantCitizen`
+  (sets the `deed` attribute, then adds `citizens`). Nothing removed a group or cleared the attribute.
 - **Pomerium's user record** is shared by every session of a person. The game's own lesson
   (`CachedClaims` in `app/src/components/Quest.tsx`) says a sign-in "updated your user record" with the new
   claims, but that the `claim` check reads a copy cached for up to a minute and the record wins over the
@@ -33,34 +44,20 @@ signed in. The stale groups aren't only a Pomerium cache.
   changes "will be picked up without requiring the user to go through another login flow". They don't say
   whether a claim missing from a new login replaces the stored value or is merged with it.
 
-## Options
+## Options considered
 
-1. **Remove the groups and deed at the Oracle on restart (recommended first step).** Add
-   `OracleAdmin.revoke(email, group)` and `clearDeed(email)`, calling them from a new server route the restart
-   path hits (for example `POST oracle/reset`). The route works out the player from the verified JWT, not from
-   the request. A fresh sign-in after that should show no groups, and the armory, town, keep and their
-   deed-based houses would all deny again. This needs no change to Pomerium.
+1. **Remove the groups and deed at the Oracle on restart.** Built. A fresh sign-in after that should show no groups,
+   and the armory, town, keep and their deed-based houses deny again. This needs no change to Pomerium.
 2. **Clear the Pomerium user record as well.** Only needed if option 1 leaves the cached groups in place. The
-   Pomerium OSS docs don't describe an API for deleting a user record, so this would mean restarting the
-   Pomerium databroker, which signs everyone out. Treat it as a last resort.
-3. **A fresh Keycloak account per run.** Each new game creates a new Oracle user, so there is no old user
-   record to inherit. This avoids any question about merging, but it changes the email shown in the claims
-   and leaves stray accounts behind unless they're deleted too.
+   Pomerium OSS docs don't describe an API for deleting a user record, so this would mean restarting the Pomerium
+   databroker, which signs everyone out. Treat it as a last resort.
+3. **A fresh Keycloak account per run.** Each new game creates a new Oracle user, so there is no old user record to
+   inherit. This avoids any question about merging, but it changes the email shown in the claims and leaves stray
+   accounts behind unless they're deleted too.
 
-## Still open
+## Still to check live
 
-- **Does a fresh login with no groups clear the cached groups in Pomerium's user record?** This decides whether
-  option 1 is enough. Test: take a finished test account, run option 1 by hand (remove its groups with the
-  Keycloak admin API), sign out, sign in, and read `/zones/oracle/` plus a `groups` route after the one-minute
-  cache has expired. Put the result in `./quest test` so it can't regress.
-- **Deed.** Decide whether a deed belongs to the account or to a run. If it's per run, the reset also clears
-  the `deed` attribute, and the next `grantCitizen` sets a new one.
-- **Dying.** `Phished` and the house statechart may also need a reset path. Check whether dying alone should
-  keep the groups (a retry) or clear them (a restart).
-
-## Proposed order
-
-1. Add `revoke` and `clearDeed` to `OracleAdmin`, with a unit test for the group and attribute updates
-   (Keycloak calls mocked), and call them from a new reset route on the restart path.
-2. Run the live check above with `./quest deploy` and `./quest test`.
-3. Only if the cached groups survive, decide between option 2 and option 3.
+1. Sign a finished test account out, sign in again, and read the claims and a `groups` route after the one-minute
+   cache has expired. If the old groups come back, the Pomerium user record is holding them (option 2 above).
+2. Add the start-over path to `./quest test` so a finished account is denied again after a restart.
+</content>
