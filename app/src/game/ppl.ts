@@ -46,7 +46,8 @@ function criterionYaml(node: Criterion): readonly string[] {
     case 'authenticated_user':
       return ['authenticated_user: true']
     case 'claim':
-      return [`claim/${node.claim}: ${node.value}`]
+      // A deed is a hex id that can look like a number, so YAML needs it quoted to keep it a string.
+      return [`claim/${node.claim}: ${node.claim === 'deed' ? `"${node.value}"` : node.value}`]
     case 'domain':
     case 'email':
     case 'http_method':
