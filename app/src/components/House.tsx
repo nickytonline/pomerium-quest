@@ -282,7 +282,7 @@ function Editor() {
             The route Pomerium has right now
           </p>
           <pre className="m-0 overflow-x-auto rounded bg-paper-tint px-3 py-2.5 text-[0.8rem] leading-[1.45]">
-            {houseRouteYaml(house, null)}
+            {houseRouteYaml(house, null, identity.deed)}
           </pre>
           <p className="m-0 text-[0.9rem]">
             It's public: no policy, so Pomerium lets in every request, signed in or not. Add a rule at the
@@ -296,7 +296,7 @@ function Editor() {
             The route Pomerium will get
           </p>
           <pre className="m-0 overflow-x-auto rounded bg-paper-tint px-3 py-2.5 text-[0.8rem] leading-[1.45]">
-            {houseRouteYaml(house, rules)}
+            {houseRouteYaml(house, rules, identity.deed)}
           </pre>
         </>
       )}

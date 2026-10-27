@@ -18,12 +18,12 @@ export const HOUSE_VALUE = /^[A-Za-z0-9@._-]{1,254}$/
 
 /**
  * The rule every saved house starts with, so its owner needs no rule of their own: the Oracle gives the
- * owner a `deed` claim holding their house's id, and whoever carries it always gets in.
+ * owner a `deed` claim for this game, and whoever carries it always gets in.
  */
-export const deedRule = (houseId: string): PolicyRule => ({
+export const deedRule = (deed: string): PolicyRule => ({
   action: 'allow',
   match: 'or',
-  criteria: [{ kind: 'claim', claim: 'deed', value: houseId }],
+  criteria: [{ kind: 'claim', claim: 'deed', value: deed }],
 })
 
 /** The methods the game sends to a house. */

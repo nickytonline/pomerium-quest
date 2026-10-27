@@ -84,9 +84,12 @@ const hash = (text: string) => createHash('sha256').update(text).digest('hex').s
 /** A house's id: a hash of its owner's email, so it's DNS-safe and keeps the email out of URLs. */
 export const houseId = (owner: string) => hash(owner.toLowerCase())
 
-/** Which rules a house is enforcing; Pomerium hands it to the house as X-House-Version. */
-const versionOf = (rules: readonly HouseRule[] | null) =>
-  rules ? hash(`deed:${JSON.stringify(rules)}`) : 'public'
+/**
+ * Which rules a house is enforcing; Pomerium hands it to the house as X-House-Version. The deed is part of it, so
+ * a new deed (the owner became a citizen again) rebuilds the door with the new one.
+ */
+const versionOf = (rules: readonly HouseRule[] | null, deed: string | null) =>
+  rules ? hash(`deed:${deed ?? ''}:${JSON.stringify(rules)}`) : 'public'
 
 export class Houses extends Context.Service<
   Houses,
@@ -98,11 +101,13 @@ export class Houses extends Context.Service<
     readonly open: (
       owner: string,
       rules: readonly HouseRule[] | null,
+      deed: string | null,
     ) => Effect.Effect<OpenedHouse, KubeUnavailable | BuildersBusy>
-    /** Checks the player's rules and puts them on the door. */
+    /** Checks the player's rules and puts them on the door. The deed is the owner's current one, from their session. */
     readonly save: (
       owner: string,
       rules: readonly HouseRule[],
+      deed: string | null,
     ) => Effect.Effect<HouseState, KubeUnavailable | BuildersBusy>
     /** The house as it stands, or null when it isn't standing. */
     readonly state: (owner: string) => Effect.Effect<HouseState | null, KubeUnavailable>
@@ -207,15 +212,20 @@ export const HousesLive = Layer.effect(
           Effect.orElseSucceed(() => 0),
         )
 
-    const write = (id: string, rules: readonly HouseRule[] | null) =>
+    const write = (id: string, rules: readonly HouseRule[] | null, deed: string | null) =>
       Effect.gen(function* () {
-        const version = versionOf(rules)
+        const version = versionOf(rules, deed)
         const before = yield* updates(id)
 
         // A new house is public: Pomerium lets every request through, signed in or not. Once the player
-        // saves, the policy replaces the public flag. Pomerium doesn't allow both on one route.
+        // saves, the policy replaces the public flag. Pomerium doesn't allow both on one route. A player with no
+        // deed (the Oracle took it back) gets no deed rule, so the door opens only to the rules.
         const door = rules
-          ? { [`${ANNOTATION}/policy`]: JSON.stringify(policyDocument([deedRule(id), ...rules])) }
+          ? {
+              [`${ANNOTATION}/policy`]: JSON.stringify(
+                policyDocument([...(deed ? [deedRule(deed)] : []), ...rules]),
+              ),
+            }
           : { [`${ANNOTATION}/allow_public_unauthenticated_access`]: 'true' }
 
         const ingress = {
@@ -281,10 +291,10 @@ export const HousesLive = Layer.effect(
       })
 
     /** Puts up the house with these rules, unless it already stands with them. */
-    const build = (owner: string, rules: readonly HouseRule[] | null) =>
+    const build = (owner: string, rules: readonly HouseRule[] | null, deed: string | null) =>
       Effect.gen(function* () {
         const id = houseId(owner)
-        const version = versionOf(rules)
+        const version = versionOf(rules, deed)
         const current = yield* standing(id)
         lastVisited.set(id, Date.now())
 
@@ -299,10 +309,10 @@ export const HousesLive = Layer.effect(
             return yield* new BuildersBusy({ reason: 'every builder is busy', retryAfterSeconds: 60 })
         }
 
-        return yield* write(id, rules)
+        return yield* write(id, rules, deed)
       })
 
-    const save = (owner: string, rules: readonly HouseRule[]) =>
+    const save = (owner: string, rules: readonly HouseRule[], deed: string | null) =>
       Effect.gen(function* () {
         const now = Date.now()
         const since = now - (lastSaved.get(owner) ?? 0)
@@ -318,7 +328,7 @@ export const HousesLive = Layer.effect(
         // the house from these rules.
         yield* remember(houseId(owner), rules)
 
-        return yield* build(owner, rules)
+        return yield* build(owner, rules, deed)
       })
 
     const sweep = Effect.gen(function* () {
@@ -354,7 +364,7 @@ export const HousesLive = Layer.effect(
           : { id, path: `${HOUSE_PREFIX}/${id}/`, version, live: live(id, version) }
       })
 
-    const open = (owner: string, sent: readonly HouseRule[] | null) =>
+    const open = (owner: string, sent: readonly HouseRule[] | null, deed: string | null) =>
       Effect.gen(function* () {
         const id = houseId(owner)
         const kept = yield* saved(id)
@@ -363,7 +373,7 @@ export const HousesLive = Layer.effect(
         // A house saved before rules were kept here is remembered the first time its owner walks in.
         if (kept === undefined && sent) yield* remember(id, sent)
 
-        return { ...(yield* build(owner, rules)), rules }
+        return { ...(yield* build(owner, rules, deed)), rules }
       })
 
     return { open, save, state, sweep }

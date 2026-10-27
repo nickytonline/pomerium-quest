@@ -21,6 +21,8 @@ export class OracleAdmin extends Context.Service<
      * sign-in carries no claims until the player becomes a citizen again.
      */
     readonly wipeClaims: (email: string) => Effect.Effect<void, OracleUnavailable>
+    /** The deed the Oracle last granted this player, or null when it has taken it back. */
+    readonly deedOf: (email: string) => Effect.Effect<string | null, OracleUnavailable>
   }
 >()('OracleAdmin') {}
 
@@ -199,6 +201,26 @@ export const OracleAdminLive = Layer.effect(
         }
       }).pipe(mapError)
 
-    return { grant, grantCitizen, wipeClaims }
+    const deedOf = (email: string) =>
+      Effect.gen(function* () {
+        const accessToken = yield* token
+
+        const users = yield* HttpClientRequest.get(`${adminUrl}/users`).pipe(
+          HttpClientRequest.setUrlParams({ email, exact: 'true' }),
+          HttpClientRequest.bearerToken(accessToken),
+          client.execute,
+          Effect.flatMap(readJson(Schema.Array(UserRecord))),
+        )
+
+        const [user] = users
+
+        if (!user) return yield* new OracleUnavailable({ reason: `no user for ${email}` })
+
+        const { attributes } = yield* Schema.decodeUnknownEffect(UserIdentity)(user)
+
+        return attributes?.deed?.[0] ?? null
+      }).pipe(mapError)
+
+    return { grant, grantCitizen, wipeClaims, deedOf }
   }),
 ).pipe(Layer.provide(FetchHttpClient.layer))
