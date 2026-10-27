@@ -14,7 +14,8 @@ GAME="https://game.${DOMAIN}${SUFFIX}"
 ORACLE="https://oracle.${DOMAIN}${SUFFIX}"
 JAR_DIR="$(mktemp -d)"
 JSON='accept: application/json'
-RUN="$(date +%s)"
+# The process id keeps runs started in the same second (in parallel) from sharing accounts.
+RUN="$(date +%s)-$$"
 failures=0
 
 check() {
@@ -215,6 +216,7 @@ sign_up "$neighbor" "neighbor-${RUN}@${PLAYERS}" >/dev/null
 become_citizen "$neighbor" "neighbor-${RUN}@${PLAYERS}"
 neighbor_path="$(builder "$neighbor" open '{"rules":null,"owner":"'"$owner"'"}' | field path)"
 check "a neighbor's house is their own, whatever they claim" yes "$([ -n "$neighbor_path" ] && [ "$neighbor_path" != "$path" ] && echo yes || echo no)"
+live_within "$home" 60 >/dev/null # the last save may still be applying, and a route mid-update answers 404
 check "the neighbor's public house doesn't open yours" 401 \
   "$(curl -s -o /dev/null -w '%{http_code}' -H "$JSON" "${GAME}${path}knock")"
 check "only citizens reach the Builders' Yard" 401 "$(builder_status "$anon" open '{"rules":null}')"
