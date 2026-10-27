@@ -420,7 +420,7 @@ function Kingdom() {
           </div>
           <div className="grid min-h-0 min-w-0 place-items-center [grid-area:game]" ref={slot}>
             <div
-              className="relative overflow-hidden rounded-md border-4 border-night-deep bg-night-deep shadow-[0_0_0_2px_var(--color-panel-edge),0_18px_50px_rgb(0_0_0/0.45)] has-[:focus-visible]:border-lens"
+              className="relative overflow-hidden rounded-md border-4 border-night-deep bg-night-deep shadow-[0_0_0_2px_var(--color-panel-edge),0_18px_50px_rgb(0_0_0/0.45)] has-[>[role=application]:focus-visible]:border-lens"
               style={board ? { width: board.width, height: board.height } : { visibility: 'hidden' }}
             >
               <GameCanvas view={board?.view} />
@@ -679,6 +679,9 @@ const takesFocus = (target: EventTarget | null) =>
   target instanceof Element &&
   target.closest('a[href], button, input, select, textarea, summary, [tabindex], [contenteditable]') !== null
 
+/** Focuses the board with no ring: the ring is for someone who Tabbed here, not for play resuming. */
+const focusBoard = (board: HTMLElement | null) => board?.focus({ preventScroll: true, focusVisible: false })
+
 function GameCanvas({ view }: { readonly view: Board['view'] | undefined }) {
   const host = useRef<HTMLDivElement>(null)
   const [game, setGame] = useState<import('phaser').Game | null>(null)
@@ -710,7 +713,7 @@ function GameCanvas({ view }: { readonly view: Board['view'] | undefined }) {
   // The game hears keys only while this board has focus, so hand it focus whenever play starts or resumes:
   // whatever held focus until then (a menu, a dialog's answer) is gone.
   useEffect(() => {
-    if (game && view && !waiting) host.current?.focus({ preventScroll: true })
+    if (game && view && !waiting) focusBoard(host.current)
   }, [game, view, waiting])
 
   // A click that lands on nothing in particular is the player coming back to the game. Whatever takes focus
@@ -720,7 +723,7 @@ function GameCanvas({ view }: { readonly view: Board['view'] | undefined }) {
       const selecting = window.getSelection()?.isCollapsed === false
 
       if (quest.isPaused() || selecting || takesFocus(event.target)) return
-      host.current?.focus({ preventScroll: true })
+      focusBoard(host.current)
     }
 
     document.addEventListener('click', onClick)
