@@ -35,7 +35,7 @@ export const houseMachine = setup({
   on: { LETTER_READ: { actions: assign({ letterRead: true }) } },
   states: {
     unowned: {
-      description: 'The house stands locked; the sage holds the deed.',
+      description: 'The house stands locked; the Oracle holds the deed.',
       on: { DEED_GIVEN: 'slimes' },
     },
     slimes: {
@@ -43,11 +43,11 @@ export const houseMachine = setup({
       on: { LETTER_SOLVED: { target: 'bread', actions: 'nextLetter' } },
     },
     bread: {
-      description: 'The traveler ate the bread. Only the player may come in.',
+      description: 'The traveler ate the bread. Only the deed’s owner may come in.',
       on: { LETTER_SOLVED: { target: 'guild', actions: 'nextLetter' } },
     },
     guild: {
-      description: "Let in the player's friends from the Knights' Guild.",
+      description: "Let in the Knights' Guild, as well as the player.",
       on: { LETTER_SOLVED: { target: 'baker', actions: 'nextLetter' } },
     },
     baker: {

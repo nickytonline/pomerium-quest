@@ -9,8 +9,7 @@
 #   ./quest admin     open Keycloak's admin console (the Oracle) on http://localhost:8080
 #   ./quest reset-oracle  forget every player: re-import the Keycloak realm from scratch
 #
-# Environment: QUEST_PORT (default 443), QUEST_DOMAIN (default localhost.pomerium.io),
-# QUEST_KINGDOM_DOMAIN (citizens' email domain, default game.localhost.pomerium.io).
+# Environment: QUEST_PORT (default 443), QUEST_DOMAIN (default localhost.pomerium.io).
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -23,8 +22,7 @@ PORT="${QUEST_PORT:-443}"
 DOMAIN="${QUEST_DOMAIN:-localhost.pomerium.io}"
 STATE=.quest
 CERTS="${STATE}/certs"
-KINGDOM_DOMAIN="${QUEST_KINGDOM_DOMAIN:-game.$DOMAIN}"
-export QUEST_PORT="$PORT" QUEST_DOMAIN="$DOMAIN" QUEST_KINGDOM_DOMAIN="$KINGDOM_DOMAIN"
+export QUEST_PORT="$PORT" QUEST_DOMAIN="$DOMAIN"
 
 say() { printf '\033[1;35m▸\033[0m %s\n' "$*"; }
 fail() { printf '\033[1;31m✗\033[0m %s\n' "$*" >&2; exit 1; }
@@ -79,7 +77,7 @@ cluster() {
 
 images() {
   say "Building images"
-  docker build --target app --build-arg QUEST_KINGDOM_DOMAIN -t pomerium-quest/app:dev .
+  docker build --target app -t pomerium-quest/app:dev .
   say "Loading images into the cluster"
   k3d image import -c "$CLUSTER" pomerium-quest/app:dev
 }
@@ -125,6 +123,7 @@ deploy() {
   for d in keycloak quest; do kc -n "$NAMESPACE" rollout status "deployment/${d}" --timeout=300s; done
   kc -n "$POMERIUM_NAMESPACE" rollout status deployment/pomerium --timeout=300s
   townsfolk
+  deed
   # Pomerium needs a few seconds after the rollout to load certificates and policies.
   for _ in $(seq 1 60); do
     if curl -fsS -o /dev/null "$(url)/" 2>/dev/null; then return; fi
@@ -134,19 +133,54 @@ deploy() {
 }
 
 # The townsfolk who visit players' houses get real Oracle accounts, imported (and reset) at every deploy.
+# Keycloak only imports its realm on first start, so the groups they belong to are created first if an
+# older realm doesn't have them yet (an existing group is left alone, with its members).
 townsfolk() {
-  local password
+  local password groups
   password="$(node -p "require('./${STATE}/secrets.json').keycloakAdminPassword")"
+  groups="$(node -p "[...new Set(require('./deploy/.generated/townsfolk.json').users.flatMap((u) => u.groups))].map((g) => g.slice(1)).join(' ')")"
   kc -n "$NAMESPACE" exec -i deploy/keycloak -- sh -c '
     cat >/tmp/townsfolk.json
     kcadm=/opt/keycloak/bin/kcadm.sh
     $kcadm config credentials --config /tmp/kcadm.config --server http://localhost:8080 \
-      --realm master --user admin --password "$1" >/dev/null 2>&1 &&
+      --realm master --user admin --password "$1" >/dev/null 2>&1 || exit 1
+    for group in $2; do
+      $kcadm create groups --config /tmp/kcadm.config -r kingdom -s "name=$group" >/dev/null 2>&1 || true
+    done
     $kcadm create partialImport --config /tmp/kcadm.config -r kingdom -f /tmp/townsfolk.json >/dev/null
     status=$?
     rm -f /tmp/townsfolk.json
     exit $status
-  ' sh "$password" <deploy/.generated/townsfolk.json || fail "Couldn't add the townsfolk to the Oracle"
+  ' sh "$password" "$groups" <deploy/.generated/townsfolk.json || fail "Couldn't add the townsfolk to the Oracle"
+}
+
+# An older realm has no deed attribute or claim mapper, and Keycloak drops attributes its user profile
+# doesn't declare. Declare the attribute (the profile is the same one the realm imports) and add the
+# mapper to Pomerium's client, each only when it's missing, so a deploy leaves a current realm alone.
+# Each file goes in on stdin, since the Keycloak image has no tar.
+deed() {
+  local password
+  password="$(node -p "require('./${STATE}/secrets.json').keycloakAdminPassword")"
+  keycloak_admin "$password" '
+    $kcadm get users/profile --config /tmp/kcadm.config -r kingdom | grep -q "\"name\" *: *\"deed\"" \
+      || $kcadm update users/profile --config /tmp/kcadm.config -r kingdom -f - >/dev/null
+  ' <deploy/.generated/deed-profile.json || fail "Couldn't declare the deed attribute in the Oracle"
+  keycloak_admin "$password" '
+    client="$($kcadm get clients --config /tmp/kcadm.config -r kingdom -q clientId=pomerium --fields id --format csv --noquotes)"
+    $kcadm get "clients/$client/protocol-mappers/models" --config /tmp/kcadm.config -r kingdom --fields name --format csv --noquotes \
+      | grep -qx deed \
+      || $kcadm create "clients/$client/protocol-mappers/models" --config /tmp/kcadm.config -r kingdom -f - >/dev/null
+  ' <deploy/.generated/deed-mapper.json || fail "Couldn't add the deed claim to the Oracle"
+}
+
+# Runs a script in the Keycloak pod after signing kcadm in as the admin; the script reads its input on stdin.
+keycloak_admin() {
+  kc -n "$NAMESPACE" exec -i deploy/keycloak -- sh -c '
+    kcadm=/opt/keycloak/bin/kcadm.sh
+    $kcadm config credentials --config /tmp/kcadm.config --server http://localhost:8080 \
+      --realm master --user admin --password "$1" >/dev/null 2>&1 || exit 1
+    eval "$2"
+  ' sh "$1" "$2"
 }
 
 case "${1:-up}" in

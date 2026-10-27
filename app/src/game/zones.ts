@@ -2,6 +2,8 @@
 // its own policy. scripts/render.ts turns this list into the Pomerium config, and the game
 // shows the same policy on signs and denial screens.
 
+import { GROUPS } from './groups.ts'
+
 /**
  * One PPL criterion, e.g. { kind: 'claim', claim: 'groups', value: 'knights' } renders as
  * `claim/groups: knights`.
@@ -27,7 +29,7 @@ export interface PolicyRule {
   readonly criteria: readonly Criterion[]
 }
 
-export type ClaimName = 'groups' | 'email'
+export type ClaimName = 'groups' | 'email' | 'deed'
 
 export type ZoneId =
   | 'oracle'
@@ -48,36 +50,29 @@ export interface Zone {
   readonly policy: readonly PolicyRule[]
 }
 
-/**
- * The email domain of the kingdom's citizens: QUEST_KINGDOM_DOMAIN, or game.localhost.pomerium.io. Node reads it
- * at render and on the server; Vite bakes it into the browser bundle (see vite.config.ts).
- */
-export const KINGDOM_DOMAIN: string =
-  (typeof process === 'undefined'
-    ? import.meta.env.QUEST_KINGDOM_DOMAIN
-    : process.env['QUEST_KINGDOM_DOMAIN']) || 'game.localhost.pomerium.io'
-
 /** Posted to the game by the sign-in frame once Pomerium hands it back with a session. */
 export const SIGNED_IN_MESSAGE = 'pomerium-quest/signed-in'
 
 const all = (...criteria: Criterion[]): PolicyRule => ({ action: 'allow', match: 'and', criteria })
 const signedIn: Criterion = { kind: 'authenticated_user' }
-const citizen: Criterion = { kind: 'domain', is: KINGDOM_DOMAIN }
 const inGroup = (value: string): Criterion => ({ kind: 'claim', claim: 'groups', value })
+
+/** A citizen is whoever the Oracle has put in the citizens group, whatever their email domain. */
+const citizen = inGroup(GROUPS.citizens)
 
 export const ZONES: readonly Zone[] = [
   { id: 'oracle', name: "Oracle's Temple", prefix: '/zones/oracle', policy: [all(signedIn)] },
   { id: 'fields', name: 'Fields Gate', prefix: '/zones/fields', policy: [all(signedIn)] },
   { id: 'town', name: 'Town Gate', prefix: '/zones/town', policy: [all(citizen)] },
   { id: 'guild', name: "Knights' Guild", prefix: '/zones/guild', policy: [all(citizen)] },
-  { id: 'armory', name: 'Armory', prefix: '/zones/armory', policy: [all(inGroup('knights'))] },
+  { id: 'armory', name: 'Armory', prefix: '/zones/armory', policy: [all(inGroup(GROUPS.knights))] },
   // The scriptorium's path sits inside the library's, so its route is the more specific match and Pomerium
   // checks its policy instead of the library's.
   {
     id: 'scriptorium',
     name: 'Scriptorium',
     prefix: '/zones/library/scriptorium',
-    policy: [all(citizen, inGroup('scribes'))],
+    policy: [all(citizen, inGroup(GROUPS.scribes))],
   },
   // Citizens may read (GET) and nothing more.
   {
@@ -94,7 +89,7 @@ export const ZONES: readonly Zone[] = [
     id: 'keep',
     name: 'Royal Keep',
     prefix: '/zones/keep',
-    policy: [all(citizen, inGroup('knights'), inGroup('scholars'))],
+    policy: [all(citizen, inGroup(GROUPS.knights), inGroup(GROUPS.scholars))],
   },
 ]
 

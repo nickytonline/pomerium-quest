@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { parse } from 'yaml'
+import { GROUPS } from './groups.ts'
 import { decide, policyDocument, policyYaml, type Identity } from './ppl.ts'
-import { KINGDOM_DOMAIN, ZONES, zoneById, type PolicyRule, type ZoneId } from './zones.ts'
+import { ZONES, zoneById, type PolicyRule, type ZoneId } from './zones.ts'
 
 const person = (email: string, groups: readonly string[] = []): Identity => ({
   authenticated: true,
@@ -9,10 +10,10 @@ const person = (email: string, groups: readonly string[] = []): Identity => ({
   groups,
 })
 
-const citizen = person(`nick@${KINGDOM_DOMAIN}`)
-const knight = person(`captain@${KINGDOM_DOMAIN}`, ['knights'])
-const scribe = person(`scribe@${KINGDOM_DOMAIN}`, ['scribes'])
-const knightAndScholar = person(`both@${KINGDOM_DOMAIN}`, ['knights', 'scholars'])
+const citizen = person('nick@example.org', [GROUPS.citizens])
+const knight = person('captain@example.org', [GROUPS.citizens, GROUPS.knights])
+const scribe = person('scribe@example.org', [GROUPS.citizens, GROUPS.scribes])
+const knightAndScholar = person('both@example.org', [GROUPS.citizens, GROUPS.knights, GROUPS.scholars])
 const traveler = person('wanderer@outlands.net')
 const nobody: Identity = { authenticated: false, email: '', groups: [] }
 
@@ -25,10 +26,11 @@ describe('the game explains the same decision Pomerium makes for every zone', ()
     expect(allowed('fields', nobody)).toBe(false)
   })
 
-  it('keeps the town for citizens, whatever else a stranger carries', () => {
+  it('keeps the town for the citizens group, whatever else a stranger carries', () => {
     expect(allowed('town', citizen)).toBe(true)
     expect(allowed('town', traveler)).toBe(false)
-    expect(allowed('town', person('x@evil.net', ['knights']))).toBe(false)
+    expect(allowed('town', person('nick@example.org'))).toBe(false)
+    expect(allowed('town', person('x@evil.net', [GROUPS.knights]))).toBe(false)
   })
 
   it('checks the knights group claim, not the email', () => {
@@ -45,14 +47,14 @@ describe('the game explains the same decision Pomerium makes for every zone', ()
   it('needs scribes for the scriptorium, even though knights and citizens can read the library', () => {
     expect(allowed('scriptorium', scribe)).toBe(true)
     expect(allowed('scriptorium', knight)).toBe(false)
-    expect(allowed('scriptorium', person('scribe@outlands.net', ['scribes']))).toBe(false)
+    expect(allowed('scriptorium', person('scribe@example.org', [GROUPS.scribes]))).toBe(false)
   })
 
   it('opens the keep only when every check in its one rule passes', () => {
     expect(allowed('keep', knightAndScholar)).toBe(true)
     expect(allowed('keep', knight)).toBe(false)
-    expect(allowed('keep', person(`s@${KINGDOM_DOMAIN}`, ['scholars']))).toBe(false)
-    expect(allowed('keep', person('x@outlands.net', ['knights', 'scholars']))).toBe(false)
+    expect(allowed('keep', person('s@example.org', [GROUPS.citizens, GROUPS.scholars]))).toBe(false)
+    expect(allowed('keep', person('x@example.org', [GROUPS.knights, GROUPS.scholars]))).toBe(false)
   })
 })
 
@@ -66,12 +68,16 @@ describe('decide', () => {
 
   it('lets a deny rule win over a matching allow rule', () => {
     const policy = house(
-      { action: 'allow', match: 'and', criteria: [{ kind: 'domain', is: KINGDOM_DOMAIN }] },
-      { action: 'deny', match: 'or', criteria: [{ kind: 'email', is: `baker@${KINGDOM_DOMAIN}` }] },
+      {
+        action: 'allow',
+        match: 'and',
+        criteria: [{ kind: 'claim', claim: 'groups', value: GROUPS.citizens }],
+      },
+      { action: 'deny', match: 'or', criteria: [{ kind: 'email', is: 'baker@example.org' }] },
     )
 
     expect(decide(policy, citizen, get).allow).toBe(true)
-    expect(decide(policy, person(`baker@${KINGDOM_DOMAIN}`), get).allow).toBe(false)
+    expect(decide(policy, person('baker@example.org', [GROUPS.citizens]), get).allow).toBe(false)
   })
 
   it('combines criteria the way and, or and not say', () => {
@@ -118,7 +124,23 @@ describe('the policy Pomerium reads', () => {
 
   it('writes group checks as claim/groups, which open-source Pomerium understands', () => {
     expect(policyDocument(zoneById('armory').policy)).toEqual([
-      { allow: { and: [{ 'claim/groups': 'knights' }] } },
+      { allow: { and: [{ 'claim/groups': GROUPS.knights }] } },
     ])
+  })
+
+  it('keeps claim values that look like numbers or booleans as strings in the YAML', () => {
+    const rules: readonly PolicyRule[] = [
+      {
+        action: 'allow',
+        match: 'or',
+        criteria: ['123', 'true', '1e5', GROUPS.scholars].map((value) => ({
+          kind: 'claim' as const,
+          claim: 'groups' as const,
+          value,
+        })),
+      },
+    ]
+
+    expect(parse(policyYaml(rules, 0).join('\n'))).toEqual(policyDocument(rules))
   })
 })

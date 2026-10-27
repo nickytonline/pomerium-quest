@@ -2,17 +2,19 @@
 // become a real Pomerium route; nothing here decides access.
 import { useEffect, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { LESSONS, link, type LessonId } from '../game/content.ts'
+import { GROUPS } from '../game/groups.ts'
 import {
   HOUSE_LIMITS,
   HOUSE_VALUE,
+  TOWNSFOLK_DOMAIN,
   VISITOR_IDS,
   VISITORS,
+  turnsAwayOwner,
   type HouseCriterion,
   type HouseRule,
 } from '../game/house.ts'
 import { currentLetter, houseRouteYaml, saveDoorRules } from '../game/house-story.ts'
 import { quest, useQuest } from '../game/store.ts'
-import { KINGDOM_DOMAIN } from '../game/zones.ts'
 import { TabbedScreen, switchTab } from './TabbedScreen.tsx'
 
 type Kind = HouseCriterion['kind']
@@ -37,18 +39,18 @@ const MATCHES: readonly { readonly value: HouseRule['match']; readonly label: st
   { value: 'not', label: 'none of these (not)' },
 ]
 
-/** A fresh check of each kind; an email check starts as the player's own address. */
-function blank(kind: Kind, email: string): HouseCriterion {
+/** A fresh check of each kind; an email check starts as the first visitor the desk lists. */
+function blank(kind: Kind): HouseCriterion {
   switch (kind) {
     case 'accept':
     case 'authenticated_user':
       return { kind }
     case 'email':
-      return { kind, is: email }
+      return { kind, is: peopleWith()[0]?.email ?? '' }
     case 'domain':
-      return { kind, is: KINGDOM_DOMAIN }
+      return { kind, is: TOWNSFOLK_DOMAIN }
     case 'claim':
-      return { kind, claim: 'groups', value: 'knights' }
+      return { kind, claim: 'groups', value: GROUPS.knights }
     case 'http_method':
       return { kind, is: 'GET' }
   }
@@ -86,11 +88,8 @@ function withValue(criterion: HouseCriterion, value: string): HouseCriterion {
 /** The email picker's choice for an address that isn't anyone's the game knows; the player types it. */
 const SOMEONE_ELSE = ''
 
-/** Whose email an email check can pick: the player's, or a visitor's. */
-const peopleWith = (email: string) => [
-  { name: 'you', email },
-  ...VISITOR_IDS.map((id) => VISITORS[id]).filter((visitor) => visitor.email !== email),
-]
+/** Whose email an email check can pick. The owner isn't listed: their deed already lets them in. */
+const peopleWith = () => VISITOR_IDS.map((id) => VISITORS[id])
 
 const valid = (rules: readonly HouseRule[]) =>
   rules.every((rule) =>
@@ -123,13 +122,15 @@ export function HouseEditor() {
 }
 
 function Editor() {
-  const email = useQuest((s) => s.identity.email)
+  const identity = useQuest((s) => s.identity)
   const saved = useQuest((s) => s.progress.houseRules)
   const house = useQuest((s) => s.house)
 
-  const [rules, setRules] = useState<readonly HouseRule[]>(
-    () => saved ?? [{ action: 'allow', match: 'or', criteria: [blank('email', email)] }],
-  )
+  const [rules, setRules] = useState<readonly HouseRule[]>(() => saved ?? [])
+  const locksYouOut = turnsAwayOwner(rules, identity)
+
+  // A house still public with no rules written has nothing to put on the door yet.
+  const changed = saved !== null || rules.length > 0
 
   const [status, setStatus] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -174,7 +175,7 @@ function Editor() {
       <button
         className={`${smallButton} border-lens`}
         type="button"
-        disabled={saving || !valid(rules)}
+        disabled={saving || !changed || !valid(rules) || locksYouOut}
         onClick={() => void save()}
       >
         {saving ? 'The builders are at work…' : 'Put these rules on the door'}
@@ -187,6 +188,11 @@ function Editor() {
       {!valid(rules) && (
         <p className="m-0 text-[0.85rem] text-deny" role="alert">
           Fill in every check. Emails, domains and groups may only use letters, numbers and @ . _ -
+        </p>
+      )}
+      {locksYouOut && (
+        <p className="m-0 text-[0.85rem] text-deny" role="alert">
+          A deny rule matches you. A deny always wins, even over your deed, so this door would turn you away.
         </p>
       )}
       {status && (
@@ -217,14 +223,24 @@ function Editor() {
           .join(' · ')}
         , and slimes, who never sign in.
       </p>
+      {saved === null && (
+        <p className="m-0 rounded border-2 border-deny px-3 py-2.5 text-[0.9rem]">
+          <span className="font-display text-sun">Wide open</span> Right now your door is public
+          (allow_public_unauthenticated_access), so Pomerium lets in everyone, even slimes with no session.
+          Putting rules on the door replaces that.
+        </p>
+      )}
+      <p className="m-0 rounded border-2 border-panel-edge px-3 py-2.5 text-[0.9rem]">
+        <span className="font-display text-sun">Your deed</span> Whoever holds this house's deed always gets
+        in, so you need no rule for yourself. The rules below are for everyone else.
+      </p>
       {rules.map((rule, index) => (
         <RuleCard
           key={index}
           rule={rule}
           index={index}
-          email={email}
           onChange={(next) => setRule(index, next)}
-          onRemove={rules.length > 1 ? () => setRules(rules.filter((_, i) => i !== index)) : undefined}
+          onRemove={() => setRules(rules.filter((_, i) => i !== index))}
         />
       ))}
       <div>
@@ -233,10 +249,7 @@ function Editor() {
           type="button"
           disabled={rules.length >= HOUSE_LIMITS.rules}
           onClick={() =>
-            setRules([
-              ...rules,
-              { action: 'allow', match: 'and', criteria: [blank('authenticated_user', email)] },
-            ])
+            setRules([...rules, { action: 'allow', match: 'and', criteria: [blank('authenticated_user')] }])
           }
         >
           + Add a rule
@@ -263,12 +276,30 @@ function Editor() {
         The game writes your rules into a real route for your house, as its policy. Pomerium lets a request in
         when any allow rule matches and no deny rule does. If no allow rule matches, it says no.
       </p>
-      <p className="m-0 text-[0.72rem] tracking-[0.08em] text-paper-muted uppercase">
-        The route Pomerium will get
-      </p>
-      <pre className="m-0 overflow-x-auto rounded bg-paper-tint px-3 py-2.5 text-[0.8rem] leading-[1.45]">
-        {houseRouteYaml(house, rules)}
-      </pre>
+      {saved === null && (
+        <>
+          <p className="m-0 text-[0.72rem] tracking-[0.08em] text-paper-muted uppercase">
+            The route Pomerium has right now
+          </p>
+          <pre className="m-0 overflow-x-auto rounded bg-paper-tint px-3 py-2.5 text-[0.8rem] leading-[1.45]">
+            {houseRouteYaml(house, null)}
+          </pre>
+          <p className="m-0 text-[0.9rem]">
+            It's public: no policy, so Pomerium lets in every request, signed in or not. Add a rule at the
+            desk and the route Pomerium will get appears below.
+          </p>
+        </>
+      )}
+      {changed && (
+        <>
+          <p className="m-0 text-[0.72rem] tracking-[0.08em] text-paper-muted uppercase">
+            The route Pomerium will get
+          </p>
+          <pre className="m-0 overflow-x-auto rounded bg-paper-tint px-3 py-2.5 text-[0.8rem] leading-[1.45]">
+            {houseRouteYaml(house, rules)}
+          </pre>
+        </>
+      )}
       {problems}
       <ul className="m-0 flex list-none flex-wrap gap-x-3.5 gap-y-1.5 p-0 text-[0.85rem]">
         {DESK_DOCS.map((lesson) => (
@@ -301,13 +332,11 @@ function Editor() {
 function RuleCard({
   rule,
   index,
-  email,
   onChange,
   onRemove,
 }: {
   readonly rule: HouseRule
   readonly index: number
-  readonly email: string
   readonly onChange: (rule: HouseRule) => void
   readonly onRemove: (() => void) | undefined
 }) {
@@ -362,7 +391,6 @@ function RuleCard({
           key={at}
           criterion={criterion}
           label={`Rule ${index + 1}, check ${at + 1}`}
-          email={email}
           onChange={(next) => setCriterion(at, next)}
           onRemove={
             rule.criteria.length > 1
@@ -376,7 +404,7 @@ function RuleCard({
           className={smallButton}
           type="button"
           disabled={rule.criteria.length >= HOUSE_LIMITS.criteria}
-          onClick={() => onChange({ ...rule, criteria: [...rule.criteria, blank('email', '')] })}
+          onClick={() => onChange({ ...rule, criteria: [...rule.criteria, blank('email')] })}
         >
           + Add a check
         </button>
@@ -388,18 +416,16 @@ function RuleCard({
 function CheckRow({
   criterion,
   label,
-  email,
   onChange,
   onRemove,
 }: {
   readonly criterion: HouseCriterion
   readonly label: string
-  readonly email: string
   readonly onChange: (criterion: HouseCriterion) => void
   readonly onRemove: (() => void) | undefined
 }) {
   const value = valueOf(criterion)
-  const people = peopleWith(email)
+  const people = peopleWith()
   const known = criterion.kind === 'email' && people.some((person) => person.email === criterion.is)
 
   return (
@@ -411,7 +437,7 @@ function CheckRow({
         onChange={(event) => {
           const kind = KINDS.find((candidate) => candidate.kind === event.target.value)?.kind
 
-          if (kind) onChange(blank(kind, email))
+          if (kind) onChange(blank(kind))
         }}
       >
         {KINDS.map((kind) => (

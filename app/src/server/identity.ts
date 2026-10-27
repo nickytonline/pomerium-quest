@@ -8,6 +8,8 @@ export type Player = {
   readonly email: string
   readonly name: string
   readonly groups: ReadonlyArray<string>
+  /** The id of the player's house, once the Oracle has granted the deed. */
+  readonly deed: string | null
   readonly issuer: string
 }
 
@@ -18,6 +20,7 @@ const PomeriumClaims = Schema.Struct({
   email: Schema.optional(Schema.String),
   name: Schema.optional(Schema.String),
   groups: Schema.optional(Schema.Array(Schema.String)),
+  deed: Schema.optional(Schema.String),
 })
 
 // jwt_claims_headers forwards the IdP's groups claim as a comma-separated header.
@@ -63,6 +66,7 @@ export const PomeriumIdentityLive = Layer.effect(
           email,
           name: claims.name || (email.split('@')[0] ?? email),
           groups: headerGroups.length > 0 ? headerGroups : (claims.groups ?? []),
+          deed: claims.deed || null,
           issuer: claims.iss,
         }
       })

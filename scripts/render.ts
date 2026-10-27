@@ -5,14 +5,15 @@
 //   node scripts/render.ts            → deploy/.generated/pomerium.yaml and manifests.yaml
 //
 // Environment: QUEST_DOMAIN (default localhost.pomerium.io), QUEST_PORT (default 443),
-// QUEST_KINGDOM_DOMAIN (citizens' email domain, default game.localhost.pomerium.io), and QUEST_DEV=1 to run the game's Vite dev server from the source mounted into the cluster.
+// and QUEST_DEV=1 to run the game's Vite dev server from the source mounted into the cluster.
 import { generateKeyPairSync, randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { parseAllDocuments, stringify } from 'yaml'
+import { GROUPS } from '../app/src/game/groups.ts'
 import { VISITORS, VISITOR_IDS, visitorPassword } from '../app/src/game/house.ts'
 import { policyDocument } from '../app/src/game/ppl.ts'
-import { KINGDOM_DOMAIN, ZONES } from '../app/src/game/zones.ts'
+import { ZONES } from '../app/src/game/zones.ts'
 
 type Yaml = string | number | boolean | readonly Yaml[] | { readonly [key: string]: Yaml }
 
@@ -168,7 +169,7 @@ function pomeriumSettings(): Yaml {
       // screen to start over (see app/src/game/access.ts).
       runtimeFlags: { allow_any_sign_out_redirect_uri: true },
       // Forward the identity provider's groups claim to the app as a header too.
-      jwtClaimHeaders: { 'X-Pomerium-Claim-Groups': 'groups' },
+      jwtClaimHeaders: { 'X-Pomerium-Claim-Groups': 'groups', 'X-Pomerium-Claim-Deed': 'deed' },
     },
   }
 }
@@ -304,10 +305,25 @@ const secretEnv = (name: string, key: string) => ({
   valueFrom: { secretKeyRef: { name: 'quest-secrets', key } },
 })
 
+/** Puts the deed attribute into the session as the `deed` claim. */
+const deedMapper = {
+  name: 'deed',
+  protocol: 'openid-connect',
+  protocolMapper: 'oidc-usermodel-attribute-mapper',
+  config: {
+    'user.attribute': 'deed',
+    'claim.name': 'deed',
+    'jsonType.label': 'String',
+    'id.token.claim': 'true',
+    'access.token.claim': 'true',
+    'userinfo.token.claim': 'true',
+    'introspection.token.claim': 'true',
+  },
+}
+
 /**
- * Registration asks only for an email and a password: no first and last name. Only the
- * kingdom's addresses may sign up; the game shows the town gate refusing an outsider
- * through the Traveler instead.
+ * Registration asks only for an email and a password: no first and last name. Anyone may sign up;
+ * the town gate refuses an outsider through the Traveler, who isn't in the citizens group.
  */
 const userProfile = {
   attributes: [
@@ -328,13 +344,16 @@ const userProfile = {
       validations: {
         email: {},
         length: { max: 255 },
-        pattern: {
-          pattern: `(?i)^[^@\\s]+@${KINGDOM_DOMAIN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`,
-          'error-message': 'kingdomEmailOnly',
-        },
       },
       required: { roles: ['user'] },
       permissions: { view: ['admin', 'user'], edit: ['admin', 'user'] },
+      multivalued: false,
+    },
+    {
+      // The deed to a player's house: the id of their house. Only the game server may set it.
+      name: 'deed',
+      displayName: 'Deed',
+      permissions: { view: ['admin'], edit: ['admin'] },
       multivalued: false,
     },
   ],
@@ -353,8 +372,8 @@ function realm(secrets: Secrets): Yaml {
     displayName: 'The Oracle',
     displayNameHtml: '<div class="kc-logo-text"><span>The Oracle</span></div>',
     loginTheme: 'quest',
-    // Any address in KINGDOM_DOMAIN may sign up, unverified (see userProfile). Never reuse this realm
-    // for anything real.
+    // Any address may sign up, unverified: being a citizen comes from the citizens group, which the Oracle
+    // grants in the game, not from an address. Never reuse this realm for anything real.
     registrationAllowed: true,
     registrationEmailAsUsername: true,
     loginWithEmailAllowed: true,
@@ -363,7 +382,7 @@ function realm(secrets: Secrets): Yaml {
     resetPasswordAllowed: false,
     rememberMe: false,
     sslRequired: 'external',
-    groups: [{ name: 'knights' }, { name: 'scholars' }],
+    groups: [GROUPS.citizens, GROUPS.knights, GROUPS.scholars].map((name) => ({ name })),
     clients: [
       {
         clientId: 'pomerium',
@@ -389,6 +408,7 @@ function realm(secrets: Secrets): Yaml {
               'introspection.token.claim': 'true',
             },
           },
+          deedMapper,
         ],
       },
       {
@@ -450,6 +470,8 @@ function houses(): Yaml[] {
       metadata: { name: 'quest-builder', namespace: HOUSES_NAMESPACE },
       rules: [
         { ...ingresses, verbs: ['get', 'list', 'create', 'update', 'patch', 'delete'] },
+        // Each house's saved rules outlive its Ingress, which is taken down when nobody visits.
+        { apiGroups: [''], resources: ['configmaps'], verbs: ['get', 'create', 'patch'] },
         // To see when the Ingress Controller has applied a house (it records an event on each one).
         { apiGroups: [''], resources: ['events'], verbs: ['list'] },
       ],
@@ -511,7 +533,6 @@ function manifests(secrets: Secrets): Yaml[] {
       3000,
       {
         env: [
-          { name: 'QUEST_KINGDOM_DOMAIN', value: KINGDOM_DOMAIN },
           { name: 'QUEST_PUBLIC_ORIGIN', value: publicUrl('game') },
           { name: 'KEYCLOAK_URL', value: svc('keycloak', 8080) },
           { name: 'KEYCLOAK_REALM', value: REALM },
@@ -555,10 +576,7 @@ function manifests(secrets: Secrets): Yaml[] {
       kind: 'ConfigMap',
       metadata: { name: 'keycloak-theme', namespace: NAMESPACE },
       data: Object.fromEntries(
-        THEME_FILES.map((file) => [
-          themeKey(file),
-          readFileSync(join(THEME, file), 'utf8').replaceAll('{kingdomDomain}', KINGDOM_DOMAIN),
-        ]),
+        THEME_FILES.map((file) => [themeKey(file), readFileSync(join(THEME, file), 'utf8')]),
       ),
     },
     deployment(
@@ -655,8 +673,7 @@ mkdirSync(OUT, { recursive: true })
 
 /**
  * The townsfolk who visit players' houses, as a Keycloak partial import. ./quest imports it at every
- * deploy, overwriting them, so their passwords and groups always match. An import skips the user
- * profile's kingdom-only email rule, which is how the traveler from outlands.net gets an account.
+ * deploy, overwriting them, so their passwords and groups always match.
  */
 const townsfolk = (secrets: Secrets) => ({
   ifResourceExists: 'OVERWRITE',
@@ -680,5 +697,10 @@ writeFileSync(join(OUT, 'pomerium.yaml'), documents(controller()))
 writeFileSync(join(OUT, 'manifests.yaml'), documents(manifests(secrets)))
 
 writeFileSync(join(OUT, 'townsfolk.json'), JSON.stringify(townsfolk(secrets)), { mode: 0o600 })
+
+// What an older realm lacks to carry the deed; ./quest applies them, since Keycloak imports the realm only once.
+writeFileSync(join(OUT, 'deed-profile.json'), JSON.stringify(userProfile))
+
+writeFileSync(join(OUT, 'deed-mapper.json'), JSON.stringify(deedMapper))
 
 console.log(`rendered ${OUT}/manifests.yaml for ${publicUrl('game')}`)

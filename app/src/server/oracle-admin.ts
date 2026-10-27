@@ -1,19 +1,34 @@
 import { Context, Effect, Layer, Redacted, Schema } from 'effect'
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from 'effect/http'
+import { GROUPS } from '../game/groups.ts'
 import { QuestConfig } from './config.ts'
 import { OracleUnavailable } from './errors.ts'
 
-// The game asks the Oracle (Keycloak, our identity provider) to add a group to a player.
+// The game asks the Oracle (Keycloak, our identity provider) to add a group or a claim to a player.
 // Pomerium only sees the change once the player's session is refreshed with new claims.
 export class OracleAdmin extends Context.Service<
   OracleAdmin,
   {
     readonly grant: (email: string, group: string) => Effect.Effect<void, OracleUnavailable>
+    /**
+     * Makes the player a citizen holding the deed to their house, in one pass. The deed is a user attribute the
+     * Oracle puts in their token. It's set first, so a failure leaves them not yet a citizen and the grant is
+     * offered again.
+     */
+    readonly grantCitizen: (email: string, deed: string) => Effect.Effect<void, OracleUnavailable>
   }
 >()('OracleAdmin') {}
 
 const TokenResponse = Schema.Struct({ access_token: Schema.String })
 const Found = Schema.Array(Schema.Struct({ id: Schema.String, name: Schema.optional(Schema.String) }))
+
+// A user as Keycloak returns it. Updating a user sends the whole record back, so it's kept as it came.
+const UserRecord = Schema.Record(Schema.String, Schema.Unknown)
+
+const UserIdentity = Schema.Struct({
+  id: Schema.String,
+  attributes: Schema.optional(Schema.Record(Schema.String, Schema.Array(Schema.String))),
+})
 
 export const OracleAdminLive = Layer.effect(
   OracleAdmin,
@@ -48,29 +63,86 @@ export const OracleAdminLive = Layer.effect(
         Effect.flatMap(readJson(Found)),
       )
 
+    const mapError = <A, R>(effect: Effect.Effect<A, unknown, R>) =>
+      effect.pipe(
+        Effect.mapError((error) =>
+          error instanceof OracleUnavailable
+            ? error
+            : new OracleUnavailable({ reason: error instanceof Error ? error.message : String(error) }),
+        ),
+      )
+
+    const findGroup = (group: string, accessToken: string) =>
+      Effect.gen(function* () {
+        const groups = yield* find('groups', { search: group, exact: 'true' }, accessToken)
+        const found = groups.find((candidate) => candidate.name === group)
+
+        if (!found) return yield* new OracleUnavailable({ reason: `no group ${group}` })
+
+        return found
+      })
+
+    const addToGroup = (userId: string, groupId: string, accessToken: string) =>
+      HttpClientRequest.put(`${adminUrl}/users/${userId}/groups/${groupId}`).pipe(
+        HttpClientRequest.bearerToken(accessToken),
+        client.execute,
+      )
+
     const grant = (email: string, group: string) =>
       Effect.gen(function* () {
         const accessToken = yield* token
         const [user] = yield* find('users', { email, exact: 'true' }, accessToken)
-        const groups = yield* find('groups', { search: group, exact: 'true' }, accessToken)
-        const found = groups.find((candidate) => candidate.name === group)
 
-        if (!user || !found) {
+        if (!user) return yield* new OracleUnavailable({ reason: `no user for ${email}` })
+
+        const found = yield* findGroup(group, accessToken)
+        yield* addToGroup(user.id, found.id, accessToken)
+      }).pipe(mapError)
+
+    // The deed attribute goes first, since it's the step that can fail (see below). If the group were added
+    // first and the attribute then failed, the player would be a citizen with no deed, and the Oracle would
+    // never offer the grant again.
+    const grantCitizen = (email: string, deed: string) =>
+      Effect.gen(function* () {
+        const accessToken = yield* token
+
+        const users = yield* HttpClientRequest.get(`${adminUrl}/users`).pipe(
+          HttpClientRequest.setUrlParams({ email, exact: 'true' }),
+          HttpClientRequest.bearerToken(accessToken),
+          client.execute,
+          Effect.flatMap(readJson(Schema.Array(UserRecord))),
+        )
+
+        const [user] = users
+
+        if (!user) return yield* new OracleUnavailable({ reason: `no user for ${email}` })
+
+        const { id, attributes } = yield* Schema.decodeUnknownEffect(UserIdentity)(user)
+        const citizen = yield* findGroup(GROUPS.citizens, accessToken)
+
+        yield* HttpClientRequest.put(`${adminUrl}/users/${id}`).pipe(
+          HttpClientRequest.bearerToken(accessToken),
+          HttpClientRequest.bodyJsonUnsafe({ ...user, attributes: { ...attributes, deed: [deed] } }),
+          client.execute,
+        )
+
+        // Keycloak answers 204 even when it drops an attribute the user profile doesn't declare (a realm
+        // from before the deed), so read it back rather than tell the player it's theirs.
+        const stored = yield* HttpClientRequest.get(`${adminUrl}/users/${id}`).pipe(
+          HttpClientRequest.bearerToken(accessToken),
+          client.execute,
+          Effect.flatMap(readJson(UserIdentity)),
+        )
+
+        if (stored.attributes?.deed?.[0] !== deed) {
           return yield* new OracleUnavailable({
-            reason: `no ${user ? 'group' : 'user'} for ${email} / ${group}`,
+            reason: "the Oracle didn't keep the deed claim; run ./quest deploy",
           })
         }
 
-        yield* HttpClientRequest.put(`${adminUrl}/users/${user.id}/groups/${found.id}`).pipe(
-          HttpClientRequest.bearerToken(accessToken),
-          client.execute,
-        )
-      }).pipe(
-        Effect.mapError((error) =>
-          error instanceof OracleUnavailable ? error : new OracleUnavailable({ reason: error.message }),
-        ),
-      )
+        yield* addToGroup(id, citizen.id, accessToken)
+      }).pipe(mapError)
 
-    return { grant }
+    return { grant, grantCitizen }
   }),
 ).pipe(Layer.provide(FetchHttpClient.layer))

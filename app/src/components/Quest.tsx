@@ -20,7 +20,7 @@ import { MAX_HP, SETTLE_MS, quest, useQuest, type DenyView, type Dir } from '../
 import { decide, type Identity } from '../game/ppl.ts'
 import { sound, startSound, useSound, type SoundSettings } from '../game/sound.ts'
 import { BOARD_TILES, MAP_HEIGHT, MAP_WIDTH, TILE_PX } from '../game/world.ts'
-import { KINGDOM_DOMAIN, SIGNED_IN_MESSAGE, zoneById } from '../game/zones.ts'
+import { SIGNED_IN_MESSAGE, zoneById } from '../game/zones.ts'
 
 /** Wide enough for the panels beside the game. The game fits the height, so width alone decides. */
 const SIDE_BY_SIDE = '(min-width: 960px)'
@@ -28,6 +28,9 @@ const ANY_TOUCH = '(any-pointer: coarse)'
 
 const STAGE_LABEL: Record<QuestStage, string> = {
   anonymous: 'Anonymous',
+  newcomer: 'Newcomer',
+  invited: 'Invited',
+  granted: 'Citizen (stale claims)',
   citizen: 'Citizen',
   proven: 'Proven',
   knighted: 'Knighted (stale claims)',
@@ -114,7 +117,7 @@ function useBoot() {
     void probe().then(({ mode, identity }) => {
       quest.setMode(mode, identity)
 
-      if (identity.authenticated) quest.send({ type: 'SIGNED_IN', groups: identity.groups })
+      if (identity.authenticated) quest.signedIn(identity)
       else quest.send({ type: 'SIGNED_OUT' })
 
       if (returning) {
@@ -926,7 +929,7 @@ function Finale() {
 }
 
 const VOUCHED_BY: readonly { readonly role: string; readonly by: string }[] = [
-  { role: `A citizen of ${KINGDOM_DOMAIN}`, by: 'the Oracle knows who you are' },
+  { role: 'A citizen', by: 'the Oracle put you in the citizens group' },
   { role: 'A knight', by: 'the Captain vouched for you' },
   { role: 'A scholar', by: 'the Librarian vouched for you' },
 ]
@@ -1221,7 +1224,7 @@ function IdentityPanel() {
   const stage = useQuest((s) => s.stage)
 
   const claims = identity.authenticated
-    ? JSON.stringify({ email: identity.email, groups: identity.groups }, null, 2)
+    ? JSON.stringify({ email: identity.email, groups: identity.groups, deed: identity.deed }, null, 2)
     : null
 
   return (

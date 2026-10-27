@@ -13,15 +13,15 @@ import {
   type Page,
   type SignId,
 } from './content.ts'
+import { GROUPS } from './groups.ts'
 import { decide, routeYaml, type Identity } from './ppl.ts'
 import { VISITORS, type VisitorId } from './house.ts'
-import { houseStage } from './house-machine.ts'
-import { giveDeed } from './house-story.ts'
+import { addDeed, citizenshipPages } from './house-story.ts'
 import { KNIGHT_QUOTA, hasSteel, isAtLeast, stage, type QuestStage } from './quest-machine.ts'
 import { sfx } from './sound.ts'
 import { MAX_HP, quest, type DenyView, type LogEntry } from './store.ts'
 import type { Gate, GateRequest, NpcId } from './world.ts'
-import { KINGDOM_DOMAIN, zoneById, type Zone } from './zones.ts'
+import { zoneById, type Zone } from './zones.ts'
 
 const UPSTREAM = 'http://quest.quest.svc.cluster.local:3000'
 
@@ -43,29 +43,29 @@ let groupsBeforeSignIn: readonly string[] | null = null
 const who = (id: Identity) => (id.authenticated ? id.email : 'anonymous')
 
 const claimsCode = (id: Identity) =>
-  JSON.stringify({ email: id.email, email_verified: true, groups: id.groups }, null, 2)
+  JSON.stringify({ email: id.email, email_verified: true, groups: id.groups, deed: id.deed }, null, 2)
 
-const domainOf = (id: Identity) => id.email.split('@')[1] ?? ''
+const isCitizen = (id: Identity) => id.groups.includes(GROUPS.citizens)
 
-const NOT_A_CITIZEN = `Every allow rule needs domain: ${KINGDOM_DOMAIN}, and your email's domain doesn't match. When no rule matches, Pomerium denies the request.`
+const NOT_A_CITIZEN = `Every allow rule needs claim/groups: ${GROUPS.citizens}, and the groups claim in your session doesn't include it. When no rule matches, Pomerium denies the request.`
 
 /** The Royal Keep checks three things at once; say which ones the player still lacks. */
 function keepRefusal(id: Identity): Refusal {
   const vouched = vouchedGroups()
   const missing: string[] = []
 
-  if (domainOf(id) !== KINGDOM_DOMAIN) missing.push(`a citizen of ${KINGDOM_DOMAIN}`)
+  if (!isCitizen(id)) missing.push('a citizen (the Oracle can make you one)')
 
-  if (!id.groups.includes('knights'))
+  if (!id.groups.includes(GROUPS.knights))
     missing.push(
-      vouched.includes('knights')
+      vouched.includes(GROUPS.knights)
         ? "carrying your knight's papers (the Oracle can sign you in again at his temple)"
         : "a knight (the Captain in the Knights' Guild can vouch for you)",
     )
 
-  if (!id.groups.includes('scholars'))
+  if (!id.groups.includes(GROUPS.scholars))
     missing.push(
-      vouched.includes('scholars')
+      vouched.includes(GROUPS.scholars)
         ? "carrying your scholar's papers (the Oracle can sign you in again at his temple)"
         : 'a scholar (read every book in the library, then talk to the Librarian)',
     )
@@ -75,7 +75,7 @@ function keepRefusal(id: Identity): Refusal {
       title: 'Knights who are scholars only',
       text: `The guard of the Royal Keep reads your papers twice. "My orders: only knights who are also scholars. You still need to be ${missing.join(', and ')}."`,
     },
-    hint: `The keep's one rule needs domain: ${KINGDOM_DOMAIN}, claim/groups: knights and claim/groups: scholars. In an and rule every check must pass; the ✗ lines are the ones your session fails.`,
+    hint: `The keep's one rule needs claim/groups: ${GROUPS.citizens}, claim/groups: ${GROUPS.knights} and claim/groups: ${GROUPS.scholars}. In an and rule every check must pass; the ✗ lines are the ones your session fails.`,
   }
 }
 
@@ -92,7 +92,7 @@ function refusal(zone: Zone, id: Identity): Refusal {
   const citizensOnly = (place: string): Refusal => ({
     story: {
       title: 'Citizens only',
-      text: `The guard lowers a spear across the road. "${place} is for citizens of ${KINGDOM_DOMAIN}. Those are my orders. Your papers say ${id.email}, from ${domainOf(id)}, so I can't let you pass."`,
+      text: `The guard lowers a spear across the road. "${place} is for citizens. Those are my orders. Your papers say ${id.email}, but nothing in them says citizen, so I can't let you pass."`,
     },
     hint: NOT_A_CITIZEN,
   })
@@ -108,21 +108,21 @@ function refusal(zone: Zone, id: Identity): Refusal {
           title: 'Knights only',
           text: 'The guard doesn\'t budge. "My orders say knights only, and nothing in your papers says knight. The Captain in the Knights\' Guild can vouch for you."',
         },
-        hint: "The armory's only rule needs claim/groups: knights, and the groups claim in your session doesn't include knights.",
+        hint: `The armory's only rule needs claim/groups: ${GROUPS.knights}, and the groups claim in your session doesn't include ${GROUPS.knights}.`,
       }
     case 'keep':
       return keepRefusal(id)
     case 'library':
       return citizensOnly('The library')
     case 'scriptorium':
-      if (domainOf(id) !== KINGDOM_DOMAIN) return citizensOnly('The scriptorium')
+      if (!isCitizen(id)) return citizensOnly('The scriptorium')
 
       return {
         story: {
           title: 'Scribes only',
           text: 'The scriptorium guard bars the door. "This room is for writing in the Royal Ledger, and my orders say only scribes may come in. Your papers say you may read, not write."',
         },
-        hint: `The scriptorium's path, ${zone.prefix}, is inside the library's, so Pomerium matched this more specific route and checked its policy instead. Its only rule needs claim/groups: scribes, and the groups claim in your session doesn't include scribes. No rule matched, so Pomerium denied it. This denial is the lesson.`,
+        hint: `The scriptorium's path, ${zone.prefix}, is inside the library's, so Pomerium matched this more specific route and checked its policy instead. Its only rule needs claim/groups: ${GROUPS.scribes}, and the groups claim in your session doesn't include ${GROUPS.scribes}. No rule matched, so Pomerium denied it. This denial is the lesson.`,
       }
 
     default:
@@ -296,7 +296,7 @@ function signInWithPomerium(url: string, onSignedIn: (next: Identity) => void, o
 
         groupsBeforeSignIn = identity().authenticated ? identity().groups : null
         quest.setIdentity(next)
-        quest.send({ type: 'SIGNED_IN', groups: next.groups })
+        quest.signedIn(next)
         onSignedIn(next)
       })
     },
@@ -304,9 +304,53 @@ function signInWithPomerium(url: string, onSignedIn: (next: Identity) => void, o
   )
 }
 
+/** What the Oracle says to a newcomer who has signed in: the sage has news. */
+const SAGE_HINT: Page = {
+  who: 'Oracle',
+  text: 'Before you go anywhere, speak with the sage. They have news for you.',
+}
+
+/** True while a grant is under way, so a second one can't start before CITIZEN_GRANTED arrives. */
+let granting = false
+
+/** The Oracle makes an invited newcomer a citizen and grants their deed, then signs them in again to carry both. */
+const grantCitizenship = () => {
+  if (granting) return
+
+  quest.say(
+    [
+      ...citizenshipPages(),
+      {
+        who: 'Oracle',
+        text: 'Your session still holds the claims I gave you at sign-in, so let me sign you in again. Then it will carry them.',
+        links: [link('refresh')],
+      },
+    ],
+    () => {
+      // Set here, not before the dialog: a dialog that is replaced never runs this, and must not leave the flag stuck.
+      granting = true
+      learn('refresh')
+
+      void addDeed().then((added) => {
+        granting = false
+
+        if (!added) {
+          quest.toast("The Oracle couldn't grant your claims. Talk to him again.", 'deny')
+
+          return
+        }
+
+        quest.send({ type: 'CITIZEN_GRANTED' })
+        refreshClaims(() => {})
+      })
+    },
+  )
+}
+
 const welcome = (next: Identity) =>
   quest.say([
     { who: 'Oracle', text: `There. You are ${next.email}. Here are your claims.`, code: claimsCode(next) },
+    ...(stage() === 'newcomer' ? [SAGE_HINT] : []),
   ])
 
 const welcomeBack = (next: Identity, onDone?: () => void) =>
@@ -325,9 +369,11 @@ const welcomeBack = (next: Identity, onDone?: () => void) =>
 function vouchedGroups() {
   const vouched: string[] = []
 
-  if (isAtLeast('knighted')) vouched.push('knights')
+  if (isAtLeast('granted')) vouched.push(GROUPS.citizens)
 
-  if (quest.get().progress.scholar) vouched.push('scholars')
+  if (isAtLeast('knighted')) vouched.push(GROUPS.knights)
+
+  if (quest.get().progress.scholar) vouched.push(GROUPS.scholars)
 
   return vouched
 }
@@ -381,7 +427,7 @@ function oracle() {
         ...intro,
         {
           who: 'Oracle',
-          text: `Step into the light and tell me who you are. New here? Introduce yourself with your ${KINGDOM_DOMAIN} email and a password. I only know citizens of ${KINGDOM_DOMAIN}.`,
+          text: `Step into the light and tell me who you are. New here? Introduce yourself with your email and a password.`,
         },
       ],
       () => {
@@ -393,11 +439,26 @@ function oracle() {
     return
   }
 
-  const stale = staleGroups()
+  // The sage tells a newcomer they're entitled to citizenship and a house; the Oracle grants both after that.
+  if (stage() === 'newcomer') {
+    quest.say([SAGE_HINT])
 
-  if (stale.length > 0) {
+    return
+  }
+
+  if (stage() === 'invited') {
+    grantCitizenship()
+
+    return
+  }
+
+  const stale = staleGroups()
+  // The deed isn't a group, but it reaches the session the same way: only at the next sign-in.
+  const missing = [...stale, ...(isAtLeast('granted') && !id.deed ? ['your deed'] : [])]
+
+  if (missing.length > 0) {
     quest.say(
-      [{ who: 'Oracle', text: `I have added ${stale.join(' and ')} to your groups.` }, refreshPage()],
+      [{ who: 'Oracle', text: `I have added ${missing.join(' and ')} to your claims.` }, refreshPage()],
       () => {
         learn('refresh')
         refreshClaims(() => {})
@@ -483,7 +544,7 @@ function traveler() {
       { who: 'Traveler', text: "The Oracle knows me. I'm wanderer@outlands.net, signed in and everything." },
       {
         who: 'Traveler',
-        text: `But this town only lets in people whose email domain is ${KINGDOM_DOMAIN}. Signing in got me as far as the guard. It didn't get me past them.`,
+        text: "But this town only lets in citizens, and the Oracle hasn't made me one. Signing in got me as far as the guard. It didn't get me past them.",
       },
       {
         who: 'Traveler',
@@ -500,12 +561,12 @@ function traveler() {
           onBehalfOf: 'the Traveler',
           story: {
             title: 'Not a citizen',
-            text: `The town guard turns the Traveler away. The Oracle knows them as ${TRAVELER.email}, but the town only opens to citizens of ${KINGDOM_DOMAIN}.`,
+            text: `The town guard turns the Traveler away. The Oracle knows them as ${TRAVELER.email}, but the town only opens to citizens.`,
           },
           requestLine: `GET ${location.origin}${path}`,
           who: TRAVELER.email,
           lines: decide(town, TRAVELER, { method: 'GET', path }, 'their').lines,
-          hint: `Their domain is ${TRAVELER.email.split('@')[1]}, and only citizens of ${KINGDOM_DOMAIN} may enter. This was the Traveler's request: your own access hasn't changed.`,
+          hint: "Their groups claim has no citizen in it, and only citizens may enter. This was the Traveler's request: your own access hasn't changed.",
           links: [link('authz'), link('defaultDeny')],
         },
         () => learn('authz'),
@@ -526,7 +587,7 @@ function baker() {
       },
       {
         who: 'Baker',
-        text: `The guard checks me every single time, same as everyone. My email domain is ${KINGDOM_DOMAIN}, so I match the guard's orders and I'm let through.`,
+        text: `The guard checks me every single time, same as everyone. My groups claim says citizen, so I match the guard's orders and I'm let through.`,
       },
       {
         who: 'Baker',
@@ -542,21 +603,66 @@ function baker() {
   )
 }
 
-const SCRIPTS: Record<NpcId, () => void> = {
-  sage: () => {
-    if (identity().authenticated) {
+/** The sage once the player has signed in: a newcomer is told they're entitled to citizenship and a house. */
+function sageAfterSignIn() {
+  switch (stage()) {
+    case 'newcomer':
       quest.say(
         [
           {
             who: 'Sage',
-            text: 'The Oracle vouches for you now. Head north through the Fields Gate. A guard stands at every gate, and the sign beside it shows the exact orders that guard follows.',
+            text: "The Oracle knows who you are. That's not the same as being a citizen: the guards in town want to see it in your papers.",
+            links: [link('claims')],
+          },
+          {
+            who: 'Sage',
+            text: "You're about to become a citizen. And every citizen is entitled to a house outside the walls: an empty one in the Slime Fields, just below the pond.",
+          },
+          {
+            who: 'Sage',
+            text: 'Go and see the Oracle again. He will put two claims in your papers: a group called citizens, and the deed to your house.',
           },
         ],
-        // Once the player has a session, the sage hands over the deed to their house.
-        () => {
-          if (houseStage() === 'unowned') giveDeed()
-        },
+        () => quest.send({ type: 'SAGE_SPOKE' }),
       )
+
+      return
+    case 'invited':
+      quest.say([
+        {
+          who: 'Sage',
+          text: 'Go and see the Oracle, in his temple to the west. He will put your citizens group and the deed to your house in your papers.',
+        },
+      ])
+
+      return
+    case 'granted':
+      quest.say([
+        {
+          who: 'Sage',
+          text: 'The Oracle has made you a citizen, but your papers still show the old claims. Visit him once more, and he will sign you in again.',
+        },
+      ])
+
+      return
+    default:
+      quest.say([
+        {
+          who: 'Sage',
+          text: 'Head north through the Fields Gate. A guard stands at every gate, and the sign beside it shows the exact orders that guard follows.',
+        },
+        {
+          who: 'Sage',
+          text: 'Your house stands out in the Slime Fields, just below the pond. Nobody guards it but its own door rules, and the slimes have noticed.',
+        },
+      ])
+  }
+}
+
+const SCRIPTS: Record<NpcId, () => void> = {
+  sage: () => {
+    if (identity().authenticated) {
+      sageAfterSignIn()
 
       return
     }
@@ -600,6 +706,9 @@ const SCRIPTS: Record<NpcId, () => void> = {
     // The Armorer keeps the forge; the guard decides. Each stage gets a line about what the guard sees.
     const lines: Record<QuestStage, string> = {
       anonymous: armorerIntro,
+      newcomer: armorerIntro,
+      invited: armorerIntro,
+      granted: armorerIntro,
       citizen: armorerIntro,
       proven: `${armorerIntro} The Captain can vouch for you.`,
       knighted:
@@ -692,7 +801,7 @@ async function librarian() {
 export const talk = (npc: NpcId) => SCRIPTS[npc]()
 
 /** The address a phish's sign-in page lives at: close to the kingdom's, and not it. */
-const PHISH_DOMAIN = `${KINGDOM_DOMAIN.split('.')[0]}-login.net`
+const PHISH_DOMAIN = 'game-login.net'
 
 /**
  * A phish, dressed as the Oracle, offers to sign the player in. Accepting loses the game;

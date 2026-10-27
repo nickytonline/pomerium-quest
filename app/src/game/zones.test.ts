@@ -1,28 +1,21 @@
-import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
+import { describe, expect, it } from 'vite-plus/test'
+import { GROUPS } from './groups.ts'
+import { VISITORS } from './house.ts'
+import { ZONES } from './zones.ts'
 
-const load = async (domain: string | undefined) => {
-  vi.resetModules()
+describe('citizens', () => {
+  it('are the Oracle’s citizens group, never an email domain', () => {
+    const criteria = ZONES.flatMap((zone) => zone.policy).flatMap((rule) => rule.criteria)
 
-  if (domain === undefined) vi.stubEnv('QUEST_KINGDOM_DOMAIN', '')
-  else vi.stubEnv('QUEST_KINGDOM_DOMAIN', domain)
-
-  return import('./zones.ts')
-}
-
-describe('the citizens domain', () => {
-  afterEach(() => vi.unstubAllEnvs())
-
-  it('defaults to the game itself, never a real third-party domain', async () => {
-    const { KINGDOM_DOMAIN } = await load(undefined)
-
-    expect(KINGDOM_DOMAIN).toBe('game.localhost.pomerium.io')
-  })
-
-  it('follows QUEST_KINGDOM_DOMAIN into every policy that checks citizens', async () => {
-    const { ZONES } = await load('example.org')
+    expect(criteria.some((criterion) => criterion.kind === 'domain')).toBe(false)
 
     const citizenZones = ZONES.filter((zone) =>
-      zone.policy.some((rule) => rule.criteria.some((criterion) => criterion.kind === 'domain')),
+      zone.policy.some((rule) =>
+        rule.criteria.some(
+          (criterion) =>
+            criterion.kind === 'claim' && criterion.claim === 'groups' && criterion.value === GROUPS.citizens,
+        ),
+      ),
     )
 
     expect(citizenZones.map((zone) => zone.id)).toEqual([
@@ -33,31 +26,18 @@ describe('the citizens domain', () => {
       'builder',
       'keep',
     ])
-
-    for (const zone of citizenZones) {
-      const domains = zone.policy
-        .flatMap((rule) => rule.criteria)
-        .flatMap((c) => (c.kind === 'domain' ? [c.is] : []))
-
-      expect(domains, zone.id).toEqual(['example.org'])
-    }
   })
 
-  it('gives the townsfolk addresses in that domain, with the traveler outside it', async () => {
-    await load('example.org')
-
-    const { VISITORS } = await import('./house.ts')
-
-    expect(VISITORS.baker.email).toBe('baker@example.org')
-    expect(VISITORS.captain.email).toBe('captain@example.org')
-    expect(VISITORS.traveler.email.endsWith('@example.org')).toBe(false)
+  it('include the townsfolk but not the traveler, who comes from outside the kingdom', () => {
+    expect(VISITORS.baker.groups).toContain(GROUPS.citizens)
+    expect(VISITORS.captain.groups).toContain(GROUPS.citizens)
+    expect(VISITORS.librarian.groups).toContain(GROUPS.citizens)
+    expect(VISITORS.traveler.groups).not.toContain(GROUPS.citizens)
   })
 })
 
 describe('zone routes', () => {
-  it('have unique ids and prefixes, so Pomerium never has two routes for one path', async () => {
-    const { ZONES } = await load(undefined)
-
+  it('have unique ids and prefixes, so Pomerium never has two routes for one path', () => {
     expect(new Set(ZONES.map((zone) => zone.id)).size).toBe(ZONES.length)
     expect(new Set(ZONES.map((zone) => zone.prefix)).size).toBe(ZONES.length)
   })

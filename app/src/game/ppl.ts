@@ -1,12 +1,14 @@
 // A small PPL evaluator for the criteria the game uses. The real decision comes from
 // Pomerium; this evaluator only explains it (which line passed, which failed).
-import type { Criterion, PolicyRule, Zone } from './zones.ts'
+import type { ClaimName, Criterion, PolicyRule, Zone } from './zones.ts'
 
 export interface Identity {
   readonly authenticated: boolean
   readonly email: string
   /** The `groups` claim from the identity provider, as carried in the session. */
   readonly groups: readonly string[]
+  /** The `deed` claim: the id of the player's house, once the Oracle has granted it. */
+  readonly deed?: string | undefined
 }
 
 export interface RequestInfo {
@@ -36,6 +38,10 @@ interface Check {
 
 const pad = (n: number) => ' '.repeat(n)
 
+/** A claim value as YAML reads it: quoted when it could pass for a number, boolean or null, so it stays a string. */
+const claimValue = (claim: ClaimName, value: string) =>
+  claim === 'deed' || /^([-+.\d]|(true|false|null|yes|no|on|off|y|n|~)$)/i.test(value) ? `"${value}"` : value
+
 /** The YAML lines Pomerium reads for one criterion. */
 function criterionYaml(node: Criterion): readonly string[] {
   switch (node.kind) {
@@ -44,7 +50,7 @@ function criterionYaml(node: Criterion): readonly string[] {
     case 'authenticated_user':
       return ['authenticated_user: true']
     case 'claim':
-      return [`claim/${node.claim}: ${node.value}`]
+      return [`claim/${node.claim}: ${claimValue(node.claim, node.value)}`]
     case 'domain':
     case 'email':
     case 'http_method':
@@ -60,7 +66,7 @@ function criterionLabel(node: Criterion): string {
     case 'authenticated_user':
       return 'authenticated_user: true'
     case 'claim':
-      return `claim/${node.claim}: ${node.value}`
+      return `claim/${node.claim}: ${claimValue(node.claim, node.value)}`
     case 'domain':
     case 'email':
     case 'http_method':
@@ -81,6 +87,13 @@ export function policyYaml(policy: readonly PolicyRule[], indent: number): strin
   ])
 }
 
+/** What each claim holds in a session. */
+const CLAIM_VALUES: Record<ClaimName, (id: Identity) => readonly string[]> = {
+  groups: (id) => id.groups,
+  email: (id) => [id.email],
+  deed: (id) => (id.deed ? [id.deed] : []),
+}
+
 function check(node: Criterion, id: Identity, req: RequestInfo, whose: Viewpoint): Check {
   const domain = id.email.split('@')[1] ?? ''
 
@@ -99,7 +112,7 @@ function check(node: Criterion, id: Identity, req: RequestInfo, whose: Viewpoint
     case 'http_method':
       return { ok: req.method === node.is, actual: `this request: ${req.method}` }
     case 'claim': {
-      const values = node.claim === 'groups' ? id.groups : [id.email]
+      const values = CLAIM_VALUES[node.claim](id)
 
       return { ok: values.includes(node.value), actual: `${whose} ${node.claim}: [${values.join(', ')}]` }
     }

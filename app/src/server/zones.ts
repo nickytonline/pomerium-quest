@@ -1,8 +1,10 @@
 import { Effect, Schema } from 'effect'
+import { GROUPS } from '../game/groups.ts'
+import { turnsAwayOwner, type HouseRule } from '../game/house.ts'
 import { SIGNED_IN_MESSAGE, ZONES } from '../game/zones.ts'
 import { QuestConfig } from './config.ts'
 import { InvalidRules } from './errors.ts'
-import { HouseRules, Houses } from './houses.ts'
+import { HouseRules, Houses, houseId } from './houses.ts'
 import { Visitors } from './visitors.ts'
 import { PomeriumIdentity, type Player } from './identity.ts'
 import { OracleAdmin } from './oracle-admin.ts'
@@ -53,6 +55,18 @@ const readBody =
 
 const readKnock = readBody(KnockRequest)
 const readRules = readBody(HouseRequest)
+
+/** Refuses rules whose deny would lock the owner out of their own door, whatever the editor allowed. */
+const keepOwnerIn = (player: Player, rules: readonly HouseRule[] | null) =>
+  rules &&
+  turnsAwayOwner(rules, {
+    authenticated: true,
+    email: player.email,
+    groups: player.groups,
+    deed: houseId(player.email),
+  })
+    ? Effect.fail(new InvalidRules({ reason: 'a deny rule would lock the owner out of their own door' }))
+    : Effect.void
 
 /**
  * A house answers whoever Pomerium let in, with the rules version Pomerium enforced (X-House-Version).
@@ -105,23 +119,34 @@ export const handleZone = (request: Request, splat: string) =>
           : Response.redirect(new URL('/?signedin=1', config.publicOrigin), 302)
       case 'POST guild/knight': {
         const oracle = yield* OracleAdmin
-        yield* oracle.grant(player.email, 'knights')
+        yield* oracle.grant(player.email, GROUPS.knights)
 
-        return json(200, { granted: 'knights', refreshRequired: true, verifiedBy })
+        return json(200, { granted: GROUPS.knights, refreshRequired: true, verifiedBy })
+      }
+
+      // The Oracle makes a newcomer a citizen and grants the deed to their house: the citizens group, and a
+      // deed claim holding their house's id. Only the Oracle's own zone, since a newcomer isn't a citizen yet.
+      case 'POST oracle/citizen': {
+        const oracle = yield* OracleAdmin
+        const deed = houseId(player.email)
+        yield* oracle.grantCitizen(player.email, deed)
+
+        return json(200, { granted: [GROUPS.citizens], deed, refreshRequired: true, verifiedBy })
       }
 
       // The Librarian writes to the Oracle, like the Captain, once the player has read every book.
       case 'POST oracle/scholar': {
         const oracle = yield* OracleAdmin
-        yield* oracle.grant(player.email, 'scholars')
+        yield* oracle.grant(player.email, GROUPS.scholars)
 
-        return json(200, { granted: 'scholars', refreshRequired: true, verifiedBy })
+        return json(200, { granted: GROUPS.scholars, refreshRequired: true, verifiedBy })
       }
 
       // The owner is always the verified player, never something the request says.
       case 'POST builder/open': {
         const houses = yield* Houses
         const { rules } = yield* readRules(request)
+        yield* keepOwnerIn(player, rules)
 
         return json(200, yield* houses.open(player.email, rules))
       }
@@ -130,7 +155,9 @@ export const handleZone = (request: Request, splat: string) =>
         const houses = yield* Houses
         const { rules } = yield* readRules(request)
 
-        if (!rules) return json(400, { error: 'a saved house needs at least one rule' })
+        if (!rules) return json(400, { error: 'a saved house needs its rules' })
+
+        yield* keepOwnerIn(player, rules)
 
         return json(200, yield* houses.save(player.email, rules))
       }

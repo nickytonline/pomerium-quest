@@ -9,14 +9,13 @@ Pomerium Pomeranian, and every gate in the kingdom is a real Pomerium route. The
 follows the route's real policy, and when a guard turns you away, the game shows you the exact policy rule
 that failed.
 
-Chapter one covers the fundamentals. (`game.localhost.pomerium.io` is the default citizens' domain; set
-`QUEST_KINGDOM_DOMAIN` to use your own, as described in [Settings](#settings).)
+Chapter one covers the fundamentals.
 
 | In the game                                                    | In Pomerium                                                              |
 | -------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | The Oracle signs you in                                        | Your identity provider (Keycloak, over OIDC)                             |
 | Each gate's guard, and the sign beside it                      | A route and its policy                                                   |
-| The town only admits `game.localhost.pomerium.io` citizens     | The `domain` criterion                                                   |
+| The Oracle makes you a citizen, and the town only admits them  | `claim/groups`, set by the IdP, not guessed from your email address      |
 | The Captain makes you a knight; the armory checks it           | `claim/groups`, and claims coming from the IdP                           |
 | Being knighted doesn't open the armory until you sign in again | Your session holds the claims from sign-in until Pomerium refreshes it   |
 | Citizens may read the books, but not write in them             | Allow rules can check `http_method`                                      |
@@ -24,7 +23,7 @@ Chapter one covers the fundamentals. (`game.localhost.pomerium.io` is the defaul
 | The access log and the denial screen                           | Every request is checked, and denied by default                          |
 | The game server knows who you are                              | Pomerium's signed `X-Pomerium-Jwt-Assertion` header, verified by the app |
 
-Then the sage gives you a house in the Slime Fields, and you write the policy on its door yourself:
+Then the Oracle makes you a citizen with a house in the Slime Fields, and you write the policy on its door yourself:
 
 | At your house                                                  | In Pomerium                                                                           |
 | -------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
@@ -46,13 +45,13 @@ asks Pomerium whether to let you through, so what you can reach depends on who t
 |                                                                  | Who                 | What they do                                                                                  |
 | ---------------------------------------------------------------- | ------------------- | --------------------------------------------------------------------------------------------- |
 | <img src="docs/images/legend/dog.gif" width="48" alt="">         | **You**             | The Pomerium Pomeranian                                                                       |
-| <img src="docs/images/legend/sage.png" width="48" alt="">        | **The sage**        | Starts you on the quest, and once you've signed in, gives you the deed to a house             |
-| <img src="docs/images/legend/oracle.png" width="48" alt="">      | **The Oracle**      | Your identity provider. He signs you in, in his temple, and hands Pomerium your claims        |
+| <img src="docs/images/legend/sage.png" width="48" alt="">        | **The sage**        | Starts you on the quest, and once you've signed in, sends you to the Oracle for citizenship   |
+| <img src="docs/images/legend/oracle.png" width="48" alt="">      | **The Oracle**      | Your identity provider. He signs you in, in his temple, and grants you a deed to a house      |
 | <img src="docs/images/legend/guard.png" width="48" alt="">       | **A guard**         | Stands at every gate and follows that route's policy, to the letter, on every request         |
 | <img src="docs/images/legend/captain.png" width="48" alt="">     | **The Captain**     | Runs the Knights' Guild. Beat three bot slimes and they have the Oracle add you to `knights`  |
 | <img src="docs/images/legend/armorer.png" width="48" alt="">     | **The Armorer**     | Keeps the forge. The armory's guard, not the Armorer, decides who gets the steel sword        |
 | <img src="docs/images/legend/librarian.png" width="48" alt="">   | **The Librarian**   | Read every book in the library and they have the Oracle add you to `scholars`                 |
-| <img src="docs/images/legend/baker.png" width="48" alt="">       | **The baker**       | `baker@game.localhost.pomerium.io`, a citizen, so the town gate lets them in                  |
+| <img src="docs/images/legend/baker.png" width="48" alt="">       | **The baker**       | `baker@game.localhost.pomerium.io`, in the citizens group, so the town gate lets them in      |
 | <img src="docs/images/legend/traveler.png" width="48" alt="">    | **The traveler**    | `wanderer@outlands.net`: signed in, but not a citizen, so the town gate turns them away       |
 | <img src="docs/images/legend/phish.png" width="48" alt="">       | **A phish**         | Dresses as the Oracle and offers to sign you in. Hand over your password and you lose         |
 | <img src="docs/images/legend/bot-slime.gif" width="48" alt="">   | **A bot slime**     | Roams the Slime Fields and bites. It never signs in, so it's a request with no session at all |
@@ -117,7 +116,7 @@ and the Royal Keep at the end of the road wants a citizen who is a knight and a 
 
 ### Write the rules on your own door
 
-The sage gives you a house in the Slime Fields. Its door is a real Pomerium route too, and it starts
+The Oracle gives you a house in the Slime Fields once you are a citizen. Its door is a real Pomerium route too, and it starts
 public, so slimes walk right in. Letters on your desk ask for door rules, one lesson at a time, and the
 rules you write become the route's policy. Save them, and the townsfolk and a slime come and knock,
 signed in as themselves (or not at all), so you see what Pomerium does with your policy.
@@ -204,6 +203,9 @@ password the first time.
 | `./quest reset-oracle`  | Forget every player and re-import the Keycloak realm                                    |
 | `./quest down`          | Delete the cluster                                                                      |
 
+`./quest dev` (and `./quest up`) take a minute or two to start the cluster, build the images and bring up Keycloak. Wait
+for the `Ready:` line before you open the game.
+
 Port 443 already in use? Run `QUEST_PORT=8443 ./quest up` and open `https://game.localhost.pomerium.io:8443`.
 
 ### Settings
@@ -211,16 +213,14 @@ Port 443 already in use? Run `QUEST_PORT=8443 ./quest up` and open `https://game
 `./quest` reads these environment variables. Set them the same way for every command, since each deploy
 renders the config again:
 
-| Variable               | Default                      | What it sets                                                                            |
-| ---------------------- | ---------------------------- | --------------------------------------------------------------------------------------- |
-| `QUEST_KINGDOM_DOMAIN` | `game.localhost.pomerium.io` | The citizens' email domain: the sign-up form, every `domain` policy and the game's text |
-| `QUEST_PORT`           | `443`                        | The port Pomerium listens on                                                            |
-| `QUEST_DOMAIN`         | `localhost.pomerium.io`      | The domain the game, the Oracle and Pomerium's sign-in live under                       |
+| Variable       | Default                 | What it sets                                                      |
+| -------------- | ----------------------- | ----------------------------------------------------------------- |
+| `QUEST_PORT`   | `443`                   | The port Pomerium listens on                                      |
+| `QUEST_DOMAIN` | `localhost.pomerium.io` | The domain the game, the Oracle and Pomerium's sign-in live under |
 
-For example, `QUEST_KINGDOM_DOMAIN=example.org ./quest up` makes the town admit `example.org` citizens,
-and the townsfolk become `baker@example.org` and so on. Keycloak only imports its realm on first start,
-so after changing any of these on an existing cluster, run `./quest reset-oracle` too. After changing
-`QUEST_DOMAIN`, also delete `.quest/certs` so mkcert makes a certificate for the new domain.
+Keycloak only imports its realm on first start, so after changing either of these on an existing cluster,
+run `./quest reset-oracle` too. After changing `QUEST_DOMAIN`, also delete `.quest/certs` so mkcert makes a
+certificate for the new domain.
 
 The game only plays behind Pomerium. Opened directly (say, `npm run dev -w app` on
 http://localhost:3000), it says so and won't start: use `./quest dev` for hot reload behind
@@ -240,13 +240,13 @@ flowchart LR
       direction TB
       oracleRoute["/zones/oracle/* · authenticated_user"]
       fields["/zones/fields/* · authenticated_user"]
-      town["/zones/town/* · domain is game.localhost.pomerium.io"]
-      guild["/zones/guild/* · domain is game.localhost.pomerium.io"]
+      town["/zones/town/* · claim/groups: citizens"]
+      guild["/zones/guild/* · claim/groups: citizens"]
       armory["/zones/armory/* · claim/groups: knights"]
       scriptorium["/zones/library/scriptorium/* · citizen, scribes"]
       library["/zones/library/* · citizen, GET only"]
       keep["/zones/keep/* · citizen, knights and scholars"]
-      builder["/zones/builder/* · domain is game.localhost.pomerium.io"]
+      builder["/zones/builder/* · claim/groups: citizens"]
       home["/zones/home/{id}/ · the rules each player wrote"]
       shell["/* game shell · public"]
       idpRoute["oracle.localhost.pomerium.io"]
@@ -321,7 +321,8 @@ Players' houses are the one exception: their policy comes from the player.
   writes into the `quest-houses` namespace, the only one its ServiceAccount may change. The owner
   always comes from Pomerium's verified JWT, and door rules are checked against a strict schema before
   the server renders them as PPL. A house starts public, comes down after 30 minutes without a visit,
-  and at most 100 stand at once: past a few hundred, the Ingress Controller slows down, and at 1,000 it
+  and is rebuilt from the rules it keeps in a ConfigMap beside the Ingress, so they follow the player to any
+  browser. At most 100 stand at once: past a few hundred, the Ingress Controller slows down, and at 1,000 it
   can't start (see the load test in the plan, and `scripts/house-load-test.sh`).
 - **The townsfolk** (the baker, the traveler, the Captain and the Librarian) have real Oracle
   accounts, which `./quest` imports at every deploy. The game server signs them in through Pomerium and
@@ -349,11 +350,11 @@ keyboard.
 
 Progress lives in three [XState](https://stately.ai/docs/xstate) statecharts, saved to local storage:
 
-| Machine                                               | Tracks                                                                           |
-| ----------------------------------------------------- | -------------------------------------------------------------------------------- |
-| [`quest-machine.ts`](app/src/game/quest-machine.ts)   | Chapter one: anonymous → citizen → proven → knighted → knight → armed            |
-| [`house-machine.ts`](app/src/game/house-machine.ts)   | Your house: one stage per letter on the desk, solved by real visits              |
-| [`player-machine.ts`](app/src/game/player-machine.ts) | The dog: walking, waiting on a gate, swinging, and a moment's safety after a hit |
+| Machine                                               | Tracks                                                                                               |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| [`quest-machine.ts`](app/src/game/quest-machine.ts)   | Chapter one: anonymous → newcomer → invited → granted → citizen → proven → knighted → knight → armed |
+| [`house-machine.ts`](app/src/game/house-machine.ts)   | Your house: one stage per letter on the desk, solved by real visits                                  |
+| [`player-machine.ts`](app/src/game/player-machine.ts) | The dog: walking, waiting on a gate, swinging, and a moment's safety after a hit                     |
 
 `knighted` is the stage the chapter turns on: the Oracle lists you in `knights`, but your Pomerium
 session still holds the claims from when you signed in, so the armory says no until you sign in again.
@@ -368,13 +369,13 @@ The server is a handful of [Effect](https://effect.website) services behind one 
 [`routes/zones/$.ts`](app/src/routes/zones/$.ts). By the time a request reaches it, Pomerium has already
 allowed it.
 
-| Service                                          | Job                                                                                   |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------- |
-| [`PomeriumIdentity`](app/src/server/identity.ts) | Verifies `X-Pomerium-Jwt-Assertion` against Pomerium's JWKS: who is asking            |
-| [`OracleAdmin`](app/src/server/oracle-admin.ts)  | Adds a player to `knights` or `scholars` in Keycloak, as the Captain or the Librarian |
-| [`Houses`](app/src/server/houses.ts)             | Renders a player's door rules as PPL and writes their house's Ingress                 |
-| [`Visitors`](app/src/server/visitors.ts)         | Signs the townsfolk in through Pomerium and knocks on a house as them                 |
-| [`Kube`](app/src/server/kube.ts)                 | Talks to the Kubernetes API with the pod's ServiceAccount                             |
+| Service                                          | Job                                                                                    |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| [`PomeriumIdentity`](app/src/server/identity.ts) | Verifies `X-Pomerium-Jwt-Assertion` against Pomerium's JWKS: who is asking             |
+| [`OracleAdmin`](app/src/server/oracle-admin.ts)  | Adds a player to `knights` or `scholars` in Keycloak, as the Captain or the Librarian  |
+| [`Houses`](app/src/server/houses.ts)             | Renders a player's door rules as PPL, writes their house's Ingress and keeps the rules |
+| [`Visitors`](app/src/server/visitors.ts)         | Signs the townsfolk in through Pomerium and knocks on a house as them                  |
+| [`Kube`](app/src/server/kube.ts)                 | Talks to the Kubernetes API with the pod's ServiceAccount                              |
 
 ### Where things live
 
@@ -394,13 +395,13 @@ allowed it.
 
 ### Things worth knowing
 
-- **Anyone can sign up as any citizen.** The realm takes any `game.localhost.pomerium.io` email without verifying
-  it, because the address is what the game's guards check. Set `QUEST_KINGDOM_DOMAIN` to use another
-  domain in the sign-up form, the policies, and the game's text. That's fine for a learning game. Never reuse the realm, or
-  this Pomerium, for anything real.
+- **Anyone can sign up, and the game makes them a citizen.** The realm takes any email without verifying it.
+  Being a citizen is the `citizen` group, and owning a house is a `deed` claim. The Oracle grants both in the game
+  (see `POST /zones/oracle/citizen`); no address proves either. That's fine for a learning game. Never reuse the realm, or this
+  Pomerium, for anything real.
 - **Keycloak runs in dev mode** (`start-dev`) with its H2 database on a volume, so players survive a
   redeploy. It imports the realm on first start only: after changing the realm in `render.ts`, or
-  `QUEST_DOMAIN`/`QUEST_PORT`/`QUEST_KINGDOM_DOMAIN`, run `./quest reset-oracle`. A public deployment should run
+  `QUEST_DOMAIN`/`QUEST_PORT`, run `./quest reset-oracle`. (`./quest dev` and `./quest deploy` do create any group the townsfolk need, such as `citizen`, if an older realm lacks it, so a new group alone needs no reset.) A public deployment should run
   `start` with a real database.
 - **Signing in again signs you out of Keycloak too.** Pomerium's sign-out calls Keycloak's
   end-session endpoint, so refreshing your claims asks for your password again.

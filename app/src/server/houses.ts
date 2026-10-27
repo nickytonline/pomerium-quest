@@ -1,6 +1,14 @@
 import { Context, Effect, Layer, Option, Schedule, Schema } from 'effect'
 import { createHash } from 'node:crypto'
-import { HOUSE_LIMITS, HOUSE_PREFIX, HOUSE_VALUE, type HouseRule, type HouseState } from '../game/house.ts'
+import {
+  HOUSE_LIMITS,
+  HOUSE_PREFIX,
+  HOUSE_VALUE,
+  deedRule,
+  type HouseRule,
+  type HouseState,
+  type OpenedHouse,
+} from '../game/house.ts'
 import { policyDocument } from '../game/ppl.ts'
 import { QuestConfig } from './config.ts'
 import { BuildersBusy, KubeUnavailable } from './errors.ts'
@@ -9,6 +17,10 @@ import { Kube, type KubeResponse } from './kube.ts'
 // Each player's house is a real Pomerium route: an Ingress the game writes into the houses namespace,
 // read by the Pomerium Ingress Controller. The owner always comes from Pomerium's verified JWT (see
 // zones.ts), so a player can only ever write their own house.
+//
+// The rules a player saves are kept in a ConfigMap next to the Ingress. An idle house's Ingress is taken
+// down, and a player can walk in from a browser that has never seen their rules; either way the ConfigMap
+// is what the house is rebuilt from, so a house is never rebuilt public by mistake.
 
 const ANNOTATION = 'ingress.pomerium.io'
 const VERSION_HEADERS = `${ANNOTATION}/set_request_headers`
@@ -38,10 +50,7 @@ const HouseRuleSchema = Schema.Struct({
 })
 
 /** What the editor may send. Anything else is refused before it gets near Kubernetes. */
-export const HouseRules = Schema.Array(HouseRuleSchema).check(
-  Schema.isNonEmpty(),
-  Schema.isMaxLength(HOUSE_LIMITS.rules),
-)
+export const HouseRules = Schema.Array(HouseRuleSchema).check(Schema.isMaxLength(HOUSE_LIMITS.rules))
 
 const IngressMeta = Schema.Struct({
   metadata: Schema.Struct({
@@ -52,6 +61,8 @@ const IngressMeta = Schema.Struct({
 })
 
 const IngressList = Schema.Struct({ items: Schema.Array(IngressMeta) })
+
+const StoredRules = Schema.Struct({ data: Schema.Struct({ rules: Schema.fromJsonString(HouseRules) }) })
 
 const EventList = Schema.Struct({
   items: Schema.Array(Schema.Struct({ count: Schema.optional(Schema.Number) })),
@@ -74,16 +85,20 @@ const hash = (text: string) => createHash('sha256').update(text).digest('hex').s
 export const houseId = (owner: string) => hash(owner.toLowerCase())
 
 /** Which rules a house is enforcing; Pomerium hands it to the house as X-House-Version. */
-const versionOf = (rules: readonly HouseRule[] | null) => (rules ? hash(JSON.stringify(rules)) : 'public')
+const versionOf = (rules: readonly HouseRule[] | null) =>
+  rules ? hash(`deed:${JSON.stringify(rules)}`) : 'public'
 
 export class Houses extends Context.Service<
   Houses,
   {
-    /** Builds the house if it isn't standing, with the rules the player last saved, and marks it visited. */
+    /**
+     * Builds the house if it isn't standing and marks it visited. The rules the server saved for the player
+     * win; the ones sent are used only for a player with none saved (and are saved then).
+     */
     readonly open: (
       owner: string,
       rules: readonly HouseRule[] | null,
-    ) => Effect.Effect<HouseState, KubeUnavailable | BuildersBusy>
+    ) => Effect.Effect<OpenedHouse, KubeUnavailable | BuildersBusy>
     /** Checks the player's rules and puts them on the door. */
     readonly save: (
       owner: string,
@@ -103,6 +118,7 @@ export const HousesLive = Layer.effect(
     const kube = yield* Kube
     const host = new URL(config.publicOrigin).hostname
     const base = `/apis/networking.k8s.io/v1/namespaces/${config.housesNamespace}/ingresses`
+    const rulesBase = `/api/v1/namespaces/${config.housesNamespace}/configmaps`
     const eventsBase = `/api/v1/namespaces/${config.housesNamespace}/events`
     const lastSaved = new Map<string, number>()
 
@@ -148,6 +164,35 @@ export const HousesLive = Layer.effect(
         ),
       )
 
+    /** The rules the player last saved, or undefined when they never have (or the ConfigMap is unreadable). */
+    const saved = (id: string) =>
+      kube.call('GET', `${rulesBase}/house-${id}-rules`).pipe(
+        Effect.flatMap((response) =>
+          response.status === 200
+            ? Schema.decodeUnknownEffect(StoredRules)(response.body).pipe(
+                Effect.map(({ data }) => data.rules),
+                Effect.orElseSucceed(() => undefined),
+              )
+            : Effect.succeed(undefined),
+        ),
+      )
+
+    const remember = (id: string, rules: readonly HouseRule[]) =>
+      Effect.gen(function* () {
+        const response = yield* kube.call(
+          'PATCH',
+          `${rulesBase}/house-${id}-rules?fieldManager=quest&force=true`,
+          {
+            apiVersion: 'v1',
+            kind: 'ConfigMap',
+            metadata: { name: `house-${id}-rules`, namespace: config.housesNamespace },
+            data: { rules: JSON.stringify(rules) },
+          },
+        )
+
+        if (response.status !== 200 && response.status !== 201) return yield* failed(response)
+      })
+
     // The Ingress Controller records an "Updated" event each time it applies an Ingress. Kubernetes
     // folds repeats into one event and counts them, so a higher count means Pomerium has the change.
     const updates = (id: string) =>
@@ -170,7 +215,7 @@ export const HousesLive = Layer.effect(
         // A new house is public: Pomerium lets every request through, signed in or not. Once the player
         // saves, the policy replaces the public flag. Pomerium doesn't allow both on one route.
         const door = rules
-          ? { [`${ANNOTATION}/policy`]: JSON.stringify(policyDocument(rules)) }
+          ? { [`${ANNOTATION}/policy`]: JSON.stringify(policyDocument([deedRule(id), ...rules])) }
           : { [`${ANNOTATION}/allow_public_unauthenticated_access`]: 'true' }
 
         const ingress = {
@@ -269,6 +314,9 @@ export const HousesLive = Layer.effect(
           })
 
         lastSaved.set(owner, now)
+        // Saved first: if it fails nothing has changed, and if the build then can't start, walking in rebuilds
+        // the house from these rules.
+        yield* remember(houseId(owner), rules)
 
         return yield* build(owner, rules)
       })
@@ -306,6 +354,18 @@ export const HousesLive = Layer.effect(
           : { id, path: `${HOUSE_PREFIX}/${id}/`, version, live: live(id, version) }
       })
 
-    return { open: build, save, state, sweep }
+    const open = (owner: string, sent: readonly HouseRule[] | null) =>
+      Effect.gen(function* () {
+        const id = houseId(owner)
+        const kept = yield* saved(id)
+        const rules = kept ?? sent
+
+        // A house saved before rules were kept here is remembered the first time its owner walks in.
+        if (kept === undefined && sent) yield* remember(id, sent)
+
+        return { ...(yield* build(owner, rules)), rules }
+      })
+
+    return { open, save, state, sweep }
   }),
 )
