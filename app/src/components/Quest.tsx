@@ -739,6 +739,8 @@ function GameCanvas({ view }: { readonly view: Board['view'] | undefined }) {
       tabIndex={0}
       role="application"
       aria-label="Game board"
+      // Phaser cancels mousedown on its canvas, which also cancels the browser's focus change.
+      onMouseDown={() => focusBoard(host.current)}
       onClick={() => quest.get().dialog && quest.advance()}
     />
   )
