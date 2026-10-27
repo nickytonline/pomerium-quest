@@ -105,3 +105,6 @@ export type HouseState = {
   /** Whether Pomerium is enforcing this version yet: it takes up a change a little after it's saved. */
   readonly live: boolean
 }
+
+/** A house just opened, with the rules the server holds for it: the player's saved ones, in any browser. */
+export type OpenedHouse = HouseState & { readonly rules: readonly HouseRule[] | null }

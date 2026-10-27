@@ -321,7 +321,8 @@ Players' houses are the one exception: their policy comes from the player.
   writes into the `quest-houses` namespace, the only one its ServiceAccount may change. The owner
   always comes from Pomerium's verified JWT, and door rules are checked against a strict schema before
   the server renders them as PPL. A house starts public, comes down after 30 minutes without a visit,
-  and at most 100 stand at once: past a few hundred, the Ingress Controller slows down, and at 1,000 it
+  and is rebuilt from the rules it keeps in a ConfigMap beside the Ingress, so they follow the player to any
+  browser. At most 100 stand at once: past a few hundred, the Ingress Controller slows down, and at 1,000 it
   can't start (see the load test in the plan, and `scripts/house-load-test.sh`).
 - **The townsfolk** (the baker, the traveler, the Captain and the Librarian) have real Oracle
   accounts, which `./quest` imports at every deploy. The game server signs them in through Pomerium and
@@ -368,13 +369,13 @@ The server is a handful of [Effect](https://effect.website) services behind one 
 [`routes/zones/$.ts`](app/src/routes/zones/$.ts). By the time a request reaches it, Pomerium has already
 allowed it.
 
-| Service                                          | Job                                                                                   |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------- |
-| [`PomeriumIdentity`](app/src/server/identity.ts) | Verifies `X-Pomerium-Jwt-Assertion` against Pomerium's JWKS: who is asking            |
-| [`OracleAdmin`](app/src/server/oracle-admin.ts)  | Adds a player to `knights` or `scholars` in Keycloak, as the Captain or the Librarian |
-| [`Houses`](app/src/server/houses.ts)             | Renders a player's door rules as PPL and writes their house's Ingress                 |
-| [`Visitors`](app/src/server/visitors.ts)         | Signs the townsfolk in through Pomerium and knocks on a house as them                 |
-| [`Kube`](app/src/server/kube.ts)                 | Talks to the Kubernetes API with the pod's ServiceAccount                             |
+| Service                                          | Job                                                                                    |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| [`PomeriumIdentity`](app/src/server/identity.ts) | Verifies `X-Pomerium-Jwt-Assertion` against Pomerium's JWKS: who is asking             |
+| [`OracleAdmin`](app/src/server/oracle-admin.ts)  | Adds a player to `knights` or `scholars` in Keycloak, as the Captain or the Librarian  |
+| [`Houses`](app/src/server/houses.ts)             | Renders a player's door rules as PPL, writes their house's Ingress and keeps the rules |
+| [`Visitors`](app/src/server/visitors.ts)         | Signs the townsfolk in through Pomerium and knocks on a house as them                  |
+| [`Kube`](app/src/server/kube.ts)                 | Talks to the Kubernetes API with the pod's ServiceAccount                              |
 
 ### Where things live
 

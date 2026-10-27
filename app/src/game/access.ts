@@ -1,6 +1,6 @@
 // How the game asks for access: every gate is a real HTTP request through Pomerium, and the
 // status code is the answer.
-import type { HouseRule, HouseState, Knock, Knocker } from './house.ts'
+import type { HouseRule, HouseState, Knock, Knocker, OpenedHouse } from './house.ts'
 import { type Identity } from './ppl.ts'
 import { ANONYMOUS, type Mode } from './store.ts'
 import { type Zone } from './zones.ts'
@@ -161,7 +161,7 @@ async function builder<T>(action: string, body: BuilderRequest): Promise<Built<T
   }
 }
 
-export const openHouse = (rules: readonly HouseRule[] | null) => builder<HouseState>('open', { rules })
+export const openHouse = (rules: readonly HouseRule[] | null) => builder<OpenedHouse>('open', { rules })
 export const saveHouse = (rules: readonly HouseRule[]) => builder<HouseState>('save', { rules })
 
 /** The Oracle makes the player a citizen and grants the deed to their house. */

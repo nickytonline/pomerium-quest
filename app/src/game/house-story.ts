@@ -93,13 +93,18 @@ export async function enterHouse(): Promise<HouseState | null> {
     return null
   }
 
-  quest.setHouse(built.value)
+  const { rules: kept, ...house } = built.value
 
-  if (built.value.version === 'public') learn('publicRoute')
+  // The server's rules are the player's, whichever browser saved them.
+  if (JSON.stringify(kept) !== JSON.stringify(rules())) quest.progress({ houseRules: kept })
+
+  quest.setHouse(house)
+
+  if (house.version === 'public') learn('publicRoute')
 
   if (!quest.get().letterRead && currentLetter()) quest.toast('There’s a letter on your desk', 'info')
 
-  return built.value
+  return house
 }
 
 /** Reads the letter waiting on the desk, then does whatever comes next (opening the door rules). */

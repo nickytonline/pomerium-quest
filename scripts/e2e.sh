@@ -204,6 +204,12 @@ check "letter 5: the Captain may look in (GET)" 200 "$(knock "$home" captain GET
 check "letter 5: the Captain may not knock (POST)" 403 "$(knock "$home" captain POST)"
 check "letter 5: you may knock (POST)" 200 "$(status "$home" "${path}knock" POST)"
 
+# A browser that has never seen the rules (a new device) opens the house with none: the server keeps them.
+saved_version="$(builder "$home" status '{}' | field version)"
+reopened="$(builder "$home" open '{"rules":null}')"
+check "opening from a fresh browser keeps the saved door" "$saved_version" "$(printf '%s' "$reopened" | field version)"
+check "and hands the saved rules back" yes "$(printf '%s' "$reopened" | grep -q '"rules":\[{' && echo yes || echo no)"
+
 echo "Keeping houses apart"
 sleep 11
 quoted="$(rules "[{\"action\":\"allow\",\"match\":\"or\",\"criteria\":[$(email_is "x'y@${PLAYERS}")]}]")"

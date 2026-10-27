@@ -4,7 +4,8 @@ import { request } from 'node:https'
 import { KubeUnavailable } from './errors.ts'
 
 // The game server's own access to the Kubernetes API, as its ServiceAccount. Its Role only lets it
-// manage Ingresses in the houses namespace (see scripts/render.ts), so this is the third layer that
+// manage Ingresses and the ConfigMaps holding their rules in the houses namespace (see
+// scripts/render.ts), so this is the third layer that
 // keeps houses apart: even a bug here can't reach the gates or the Oracle.
 
 const ACCOUNT = '/var/run/secrets/kubernetes.io/serviceaccount'
@@ -14,7 +15,9 @@ export interface KubeObject {
   readonly apiVersion: string
   readonly kind: string
   readonly metadata: { readonly name: string; readonly namespace: string }
-  readonly spec: object
+  readonly spec?: object
+  /** What a ConfigMap holds. */
+  readonly data?: Readonly<Record<string, string>>
 }
 
 export interface KubeResponse {

@@ -469,6 +469,8 @@ function houses(): Yaml[] {
       metadata: { name: 'quest-builder', namespace: HOUSES_NAMESPACE },
       rules: [
         { ...ingresses, verbs: ['get', 'list', 'create', 'update', 'patch', 'delete'] },
+        // Each house's saved rules outlive its Ingress, which is taken down when nobody visits.
+        { apiGroups: [''], resources: ['configmaps'], verbs: ['get', 'create', 'patch'] },
         // To see when the Ingress Controller has applied a house (it records an event on each one).
         { apiGroups: [''], resources: ['events'], verbs: ['list'] },
       ],
