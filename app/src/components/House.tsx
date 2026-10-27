@@ -101,10 +101,10 @@ const valid = (rules: readonly HouseRule[]) =>
   )
 
 const field =
-  'rounded border-2 border-panel-edge bg-night-deep px-2 py-1 text-[0.9rem] text-ink focus-visible:border-lens'
+  'rounded border-2 border-panel-edge bg-night-deep px-2 py-1 text-[0.9rem] text-ink focus-visible:border-focus'
 
 const smallButton =
-  'rounded border-2 border-panel-edge bg-panel px-2.5 py-1 font-display text-[0.85rem] text-ink hover:border-lens disabled:opacity-50'
+  'rounded border-2 border-panel-edge bg-panel px-2.5 py-1 font-display text-[0.85rem] text-ink hover:border-sun disabled:opacity-50'
 
 const overlay =
   'absolute inset-0 grid items-start justify-items-center overflow-auto bg-[rgb(10_7_22/0.9)] p-3.5'
@@ -268,7 +268,7 @@ function Editor() {
   )
 
   const pomerium = (
-    <div className="flex flex-col gap-2.5 rounded-tr-lg rounded-b-lg border-t-6 border-lens bg-paper px-5 py-[18px] text-paper-ink [&_a]:text-paper-link">
+    <div className="flex flex-col gap-2.5 rounded-tr-lg rounded-b-lg border-t-6 border-lens bg-paper px-5 py-[18px] text-paper-ink [&_a]:text-paper-link [&_:focus-visible]:outline-paper-focus">
       <h2 className="m-0 text-[1.25rem] font-bold" id="desk-title-pomerium">
         Your house is a route
       </h2>

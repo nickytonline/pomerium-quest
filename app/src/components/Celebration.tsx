@@ -331,7 +331,7 @@ function CelebrationScreen({ stats }: { readonly stats: string }) {
             Back to the kingdom
           </button>
           <button
-            className="rounded border-2 border-panel-edge bg-panel px-4 py-3 font-display text-ink hover:border-lens"
+            className="rounded border-2 border-panel-edge bg-panel px-4 py-3 font-display text-ink hover:border-sun"
             type="button"
             onClick={playAgain}
           >
