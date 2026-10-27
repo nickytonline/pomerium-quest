@@ -109,7 +109,12 @@ export const questMachine = setup({
     },
     proven: {
       description: 'Has defeated enough bot slimes for the Captain to vouch for them.',
-      on: { KNIGHTED: 'knighted', SIGNED_OUT: 'anonymous' },
+      on: {
+        // A session from before citizens were a claim: the Oracle grants it the next time they visit.
+        SIGNED_IN: { guard: 'lacksCitizenClaim', target: 'invited' },
+        KNIGHTED: 'knighted',
+        SIGNED_OUT: 'anonymous',
+      },
     },
     knighted: {
       description: "The identity provider lists 'knights', but the Pomerium session holds older claims.",
@@ -117,10 +122,14 @@ export const questMachine = setup({
     },
     knight: {
       description: 'The session carries groups: [knights]; the armory policy matches.',
-      on: { STEEL_TAKEN: 'armed' },
+      on: {
+        SIGNED_IN: { guard: 'lacksCitizenClaim', target: 'invited' },
+        STEEL_TAKEN: 'armed',
+      },
     },
     armed: {
       description: 'Holds the steel sword; can break the rocks to the library.',
+      on: { SIGNED_IN: { guard: 'lacksCitizenClaim', target: 'invited' } },
     },
   },
 })

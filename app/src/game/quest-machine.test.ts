@@ -82,7 +82,7 @@ describe("chapter one's quest", () => {
     actor.send({ type: 'SIGNED_IN', groups: ['scholars'] })
     expect(actor.getSnapshot().value).toBe('knighted')
 
-    actor.send({ type: 'SIGNED_IN', groups: ['knights'] })
+    actor.send({ type: 'SIGNED_IN', groups: ['citizen', 'knights'] })
     expect(actor.getSnapshot().value).toBe('knight')
   })
 
@@ -104,7 +104,7 @@ describe("chapter one's quest", () => {
     const actor = toProven()
 
     actor.send({ type: 'KNIGHTED' })
-    actor.send({ type: 'SIGNED_IN', groups: ['knights'] })
+    actor.send({ type: 'SIGNED_IN', groups: ['citizen', 'knights'] })
     actor.send({ type: 'STEEL_TAKEN' })
     expect(actor.getSnapshot().value).toBe('armed')
   })
@@ -133,5 +133,20 @@ describe("the house's letters", () => {
 
     actor.send({ type: 'LETTER_SOLVED' })
     expect(actor.getSnapshot().value).toBe('unowned')
+  })
+
+  it('sends a saved player whose session lacks the citizen claim back to the Oracle', () => {
+    const proven = toProven()
+
+    proven.send({ type: 'SIGNED_IN', groups: [] })
+    expect(proven.getSnapshot().value).toBe('invited')
+
+    const armed = toProven()
+
+    armed.send({ type: 'KNIGHTED' })
+    armed.send({ type: 'SIGNED_IN', groups: ['citizen', 'knights'] })
+    armed.send({ type: 'STEEL_TAKEN' })
+    armed.send({ type: 'SIGNED_IN', groups: ['knights'] })
+    expect(armed.getSnapshot().value).toBe('invited')
   })
 })
