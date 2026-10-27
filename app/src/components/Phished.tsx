@@ -2,9 +2,10 @@
 // only way on is to start again.
 import { link } from '../game/content.ts'
 import { useState } from 'react'
+import { startOver } from '../game/restart.ts'
 import { SETTLE_MS, useQuest } from '../game/store.ts'
 import { PHISH_FRAME } from '../game/world.ts'
-import { NPCS, Sprite, playAgain } from './Celebration.tsx'
+import { NPCS, Sprite } from './Celebration.tsx'
 
 export function Phished() {
   const open = useQuest((s) => s.phished)
@@ -17,8 +18,8 @@ function PhishedScreen() {
   const idp = link('idp')
 
   // The Enter that closed the phish's last line lands on Start over too: ignore it.
-  const startOver = () => {
-    if (performance.now() - shownAt > SETTLE_MS) playAgain()
+  const startAgain = () => {
+    if (performance.now() - shownAt > SETTLE_MS) void startOver()
   }
 
   return (
@@ -61,7 +62,7 @@ function PhishedScreen() {
         <button
           className="mt-2 motion-safe:animate-blink rounded border-3 border-night-deep bg-lime px-[22px] py-3 font-display text-[1.05rem] text-night-deep shadow-[4px_4px_0_var(--color-night-deep)]"
           type="button"
-          onClick={startOver}
+          onClick={startAgain}
           // A held Enter from closing the phish's dialog must not start over unseen.
           onKeyDown={(event) => event.repeat && event.preventDefault()}
           autoFocus
