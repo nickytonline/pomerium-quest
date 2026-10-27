@@ -1,4 +1,5 @@
 import { Effect, Schema } from 'effect'
+import { turnsAwayOwner, type HouseRule } from '../game/house.ts'
 import { SIGNED_IN_MESSAGE, ZONES } from '../game/zones.ts'
 import { QuestConfig } from './config.ts'
 import { InvalidRules } from './errors.ts'
@@ -53,6 +54,18 @@ const readBody =
 
 const readKnock = readBody(KnockRequest)
 const readRules = readBody(HouseRequest)
+
+/** Refuses rules whose deny would lock the owner out of their own door, whatever the editor allowed. */
+const keepOwnerIn = (player: Player, rules: readonly HouseRule[] | null) =>
+  rules &&
+  turnsAwayOwner(rules, {
+    authenticated: true,
+    email: player.email,
+    groups: player.groups,
+    deed: houseId(player.email),
+  })
+    ? Effect.fail(new InvalidRules({ reason: 'a deny rule would lock the owner out of their own door' }))
+    : Effect.void
 
 /**
  * A house answers whoever Pomerium let in, with the rules version Pomerium enforced (X-House-Version).
@@ -132,6 +145,7 @@ export const handleZone = (request: Request, splat: string) =>
       case 'POST builder/open': {
         const houses = yield* Houses
         const { rules } = yield* readRules(request)
+        yield* keepOwnerIn(player, rules)
 
         return json(200, yield* houses.open(player.email, rules))
       }
@@ -141,6 +155,8 @@ export const handleZone = (request: Request, splat: string) =>
         const { rules } = yield* readRules(request)
 
         if (!rules) return json(400, { error: 'a saved house needs its rules' })
+
+        yield* keepOwnerIn(player, rules)
 
         return json(200, yield* houses.save(player.email, rules))
       }

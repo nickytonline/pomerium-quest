@@ -20,6 +20,7 @@ const PomeriumClaims = Schema.Struct({
   email: Schema.optional(Schema.String),
   name: Schema.optional(Schema.String),
   groups: Schema.optional(Schema.Array(Schema.String)),
+  deed: Schema.optional(Schema.String),
 })
 
 // jwt_claims_headers forwards the IdP's groups claim as a comma-separated header.
@@ -65,7 +66,7 @@ export const PomeriumIdentityLive = Layer.effect(
           email,
           name: claims.name || (email.split('@')[0] ?? email),
           groups: headerGroups.length > 0 ? headerGroups : (claims.groups ?? []),
-          deed: request.headers.get('x-pomerium-claim-deed') || null,
+          deed: claims.deed || null,
           issuer: claims.iss,
         }
       })
