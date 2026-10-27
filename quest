@@ -123,6 +123,7 @@ deploy() {
   for d in keycloak quest; do kc -n "$NAMESPACE" rollout status "deployment/${d}" --timeout=300s; done
   kc -n "$POMERIUM_NAMESPACE" rollout status deployment/pomerium --timeout=300s
   townsfolk
+  deed
   # Pomerium needs a few seconds after the rollout to load certificates and policies.
   for _ in $(seq 1 60); do
     if curl -fsS -o /dev/null "$(url)/" 2>/dev/null; then return; fi
@@ -151,6 +152,28 @@ townsfolk() {
     rm -f /tmp/townsfolk.json
     exit $status
   ' sh "$password" "$groups" <deploy/.generated/townsfolk.json || fail "Couldn't add the townsfolk to the Oracle"
+}
+
+# An older realm has no deed attribute or claim mapper, and Keycloak drops attributes its user profile
+# doesn't declare. Declare the attribute (the profile is the same one the realm imports) and add the
+# mapper to Pomerium's client unless it's already there.
+deed() {
+  local password
+  password="$(node -p "require('./${STATE}/secrets.json').keycloakAdminPassword")"
+  tar -c -C deploy/.generated deed-profile.json deed-mapper.json | kc -n "$NAMESPACE" exec -i deploy/keycloak -- sh -c '
+    tar -x -C /tmp
+    kcadm=/opt/keycloak/bin/kcadm.sh
+    $kcadm config credentials --config /tmp/kcadm.config --server http://localhost:8080 \
+      --realm master --user admin --password "$1" >/dev/null 2>&1 || exit 1
+    $kcadm update users/profile --config /tmp/kcadm.config -r kingdom -f /tmp/deed-profile.json >/dev/null || exit 1
+    client="$($kcadm get clients --config /tmp/kcadm.config -r kingdom -q clientId=pomerium --fields id --format csv --noquotes)"
+    $kcadm get "clients/$client/protocol-mappers/models" --config /tmp/kcadm.config -r kingdom --fields name --format csv --noquotes \
+      | grep -qx deed \
+      || $kcadm create "clients/$client/protocol-mappers/models" --config /tmp/kcadm.config -r kingdom -f /tmp/deed-mapper.json >/dev/null
+    status=$?
+    rm -f /tmp/deed-profile.json /tmp/deed-mapper.json
+    exit $status
+  ' sh "$password" || fail "Couldn't add the deed claim to the Oracle"
 }
 
 case "${1:-up}" in

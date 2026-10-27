@@ -103,6 +103,20 @@ export const OracleAdminLive = Layer.effect(
           HttpClientRequest.bodyJsonUnsafe({ ...user, attributes: { ...attributes, [claim]: [value] } }),
           client.execute,
         )
+
+        // Keycloak answers 204 even when it drops an attribute the user profile doesn't declare (a realm
+        // from before the deed), so read it back rather than tell the player it's theirs.
+        const stored = yield* HttpClientRequest.get(`${adminUrl}/users/${id}`).pipe(
+          HttpClientRequest.bearerToken(accessToken),
+          client.execute,
+          Effect.flatMap(readJson(UserIdentity)),
+        )
+
+        if (stored.attributes?.[claim]?.[0] !== value) {
+          return yield* new OracleUnavailable({
+            reason: `the Oracle didn't keep the ${claim} claim; run ./quest deploy`,
+          })
+        }
       }).pipe(
         Effect.mapError((error) =>
           error instanceof OracleUnavailable ? error : new OracleUnavailable({ reason: String(error) }),

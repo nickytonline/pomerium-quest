@@ -304,10 +304,25 @@ const secretEnv = (name: string, key: string) => ({
   valueFrom: { secretKeyRef: { name: 'quest-secrets', key } },
 })
 
+/** Puts the deed attribute into the session as the `deed` claim. */
+const deedMapper = {
+  name: 'deed',
+  protocol: 'openid-connect',
+  protocolMapper: 'oidc-usermodel-attribute-mapper',
+  config: {
+    'user.attribute': 'deed',
+    'claim.name': 'deed',
+    'jsonType.label': 'String',
+    'id.token.claim': 'true',
+    'access.token.claim': 'true',
+    'userinfo.token.claim': 'true',
+    'introspection.token.claim': 'true',
+  },
+}
+
 /**
- * Registration asks only for an email and a password: no first and last name. Only the
- * kingdom's addresses may sign up; the game shows the town gate refusing an outsider
- * through the Traveler instead.
+ * Registration asks only for an email and a password: no first and last name. Anyone may sign up;
+ * the town gate refuses an outsider through the Traveler, who has no citizen claim.
  */
 const userProfile = {
   attributes: [
@@ -392,20 +407,7 @@ function realm(secrets: Secrets): Yaml {
               'introspection.token.claim': 'true',
             },
           },
-          {
-            name: 'deed',
-            protocol: 'openid-connect',
-            protocolMapper: 'oidc-usermodel-attribute-mapper',
-            config: {
-              'user.attribute': 'deed',
-              'claim.name': 'deed',
-              'jsonType.label': 'String',
-              'id.token.claim': 'true',
-              'access.token.claim': 'true',
-              'userinfo.token.claim': 'true',
-              'introspection.token.claim': 'true',
-            },
-          },
+          deedMapper,
         ],
       },
       {
@@ -693,5 +695,10 @@ writeFileSync(join(OUT, 'pomerium.yaml'), documents(controller()))
 writeFileSync(join(OUT, 'manifests.yaml'), documents(manifests(secrets)))
 
 writeFileSync(join(OUT, 'townsfolk.json'), JSON.stringify(townsfolk(secrets)), { mode: 0o600 })
+
+// What an older realm lacks to carry the deed; ./quest applies them, since Keycloak imports the realm only once.
+writeFileSync(join(OUT, 'deed-profile.json'), JSON.stringify(userProfile))
+
+writeFileSync(join(OUT, 'deed-mapper.json'), JSON.stringify(deedMapper))
 
 console.log(`rendered ${OUT}/manifests.yaml for ${publicUrl('game')}`)
