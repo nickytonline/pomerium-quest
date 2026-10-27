@@ -310,14 +310,12 @@ const SAGE_HINT: Page = {
   text: 'Before you go anywhere, speak with the sage. They have news for you.',
 }
 
-/** True while the Oracle is granting citizenship, so talking to him again can't start a second grant. */
+/** True while a grant is under way, so a second one can't start before CITIZEN_GRANTED arrives. */
 let granting = false
 
 /** The Oracle makes an invited newcomer a citizen and grants their deed, then signs them in again to carry both. */
 const grantCitizenship = () => {
   if (granting) return
-
-  granting = true
 
   quest.say(
     [
@@ -329,6 +327,8 @@ const grantCitizenship = () => {
       },
     ],
     () => {
+      // Set here, not before the dialog: a dialog that is replaced never runs this, and must not leave the flag stuck.
+      granting = true
       learn('refresh')
 
       void addDeed().then((added) => {
