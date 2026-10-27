@@ -142,6 +142,15 @@ export const handleZone = (request: Request, splat: string) =>
         return json(200, { granted: GROUPS.scholars, refreshRequired: true, verifiedBy })
       }
 
+      // A restart or a death takes the player's claims back, so the next sign-in carries none. The deed goes with
+      // them: the Oracle grants it again when the player becomes a citizen.
+      case 'POST oracle/reset': {
+        const oracle = yield* OracleAdmin
+        yield* oracle.wipeClaims(player.email)
+
+        return json(200, { cleared: true, verifiedBy })
+      }
+
       // The owner is always the verified player, never something the request says.
       case 'POST builder/open': {
         const houses = yield* Houses
