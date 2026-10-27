@@ -674,10 +674,6 @@ function SoundToggle({ setting, label }: { readonly setting: keyof SoundSettings
   )
 }
 
-const takesFocus = (target: EventTarget | null) =>
-  target instanceof Element &&
-  target.closest('a[href], button, input, select, textarea, summary, [tabindex], [contenteditable]') !== null
-
 /** Focuses the board with no ring: the ring is for someone who Tabbed here, not for play resuming. */
 const focusBoard = (board: HTMLElement | null) => board?.focus({ preventScroll: true, focusVisible: false })
 
@@ -717,13 +713,14 @@ function GameCanvas({ view }: { readonly view: Board['view'] | undefined }) {
     if (ready && !waiting) focusBoard(host.current)
   }, [ready, waiting])
 
-  // A click that lands on nothing in particular is the player coming back to the game. Whatever takes focus
-  // itself keeps it, and so does text being selected.
+  // A click that leaves nothing focused is the player coming back to the game. Whatever the click did focus
+  // keeps it (Safari and Firefox on macOS don't focus a clicked button), and so does text being selected.
   useEffect(() => {
-    const onClick = (event: MouseEvent) => {
+    const onClick = () => {
       const selecting = window.getSelection()?.isCollapsed === false
+      const nothingFocused = document.activeElement === null || document.activeElement === document.body
 
-      if (quest.isPaused() || selecting || takesFocus(event.target)) return
+      if (quest.isPaused() || selecting || !nothingFocused) return
       focusBoard(host.current)
     }
 
