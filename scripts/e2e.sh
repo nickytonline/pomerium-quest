@@ -74,6 +74,14 @@ become_citizen() {
   sign_in_again "$jar" "$email" >/dev/null
   check "the new session carries a deed claim" yes \
     "$(curl -s -b "$jar" -H "$JSON" "${GAME}/zones/oracle/" | grep -q '"deed":"[0-9a-f]\{12\}"' && echo yes || echo no)"
+  # Pomerium takes a moment to see the new claims; wait, so the first request after this isn't a stale 403.
+  local town=403
+  for _ in $(seq 1 45); do
+    town="$(status "$jar" /zones/town/enter)"
+    [ "$town" = 200 ] && break
+    sleep 2
+  done
+  check "town opens once the session carries the citizen group" 200 "$town"
 }
 
 echo "Anonymous"
@@ -93,13 +101,6 @@ check "the Builders' Yard refuses a newcomer" 403 "$(status "$citizen" /zones/bu
 
 echo "Citizen"
 become_citizen "$citizen" "$email"
-town=403
-for _ in $(seq 1 45); do
-  town="$(status "$citizen" /zones/town/enter)"
-  [ "$town" = 200 ] && break
-  sleep 2
-done
-check "town opens once the session carries the citizen group" 200 "$town"
 check "armory without knights" 403 "$(status "$citizen" /zones/armory/enter)"
 check "library read (GET)" 200 "$(status "$citizen" /zones/library/books/0)"
 check "library refuses a write (POST)" 403 "$(status "$citizen" /zones/library/books/0 POST)"
