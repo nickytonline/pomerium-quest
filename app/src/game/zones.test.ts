@@ -4,7 +4,7 @@ import { VISITORS } from './house.ts'
 import { ZONES } from './zones.ts'
 
 describe('citizens', () => {
-  it('are the Oracle’s citizen group, never an email domain', () => {
+  it('are the Oracle’s citizens group, never an email domain', () => {
     const criteria = ZONES.flatMap((zone) => zone.policy).flatMap((rule) => rule.criteria)
 
     expect(criteria.some((criterion) => criterion.kind === 'domain')).toBe(false)
@@ -13,7 +13,7 @@ describe('citizens', () => {
       zone.policy.some((rule) =>
         rule.criteria.some(
           (criterion) =>
-            criterion.kind === 'claim' && criterion.claim === 'groups' && criterion.value === GROUPS.citizen,
+            criterion.kind === 'claim' && criterion.claim === 'groups' && criterion.value === GROUPS.citizens,
         ),
       ),
     )
@@ -29,10 +29,10 @@ describe('citizens', () => {
   })
 
   it('include the townsfolk but not the traveler, who comes from outside the kingdom', () => {
-    expect(VISITORS.baker.groups).toContain(GROUPS.citizen)
-    expect(VISITORS.captain.groups).toContain(GROUPS.citizen)
-    expect(VISITORS.librarian.groups).toContain(GROUPS.citizen)
-    expect(VISITORS.traveler.groups).not.toContain(GROUPS.citizen)
+    expect(VISITORS.baker.groups).toContain(GROUPS.citizens)
+    expect(VISITORS.captain.groups).toContain(GROUPS.citizens)
+    expect(VISITORS.librarian.groups).toContain(GROUPS.citizens)
+    expect(VISITORS.traveler.groups).not.toContain(GROUPS.citizens)
   })
 })
 

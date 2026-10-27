@@ -51,7 +51,7 @@ asks Pomerium whether to let you through, so what you can reach depends on who t
 | <img src="docs/images/legend/captain.png" width="48" alt="">     | **The Captain**     | Runs the Knights' Guild. Beat three bot slimes and they have the Oracle add you to `knights`  |
 | <img src="docs/images/legend/armorer.png" width="48" alt="">     | **The Armorer**     | Keeps the forge. The armory's guard, not the Armorer, decides who gets the steel sword        |
 | <img src="docs/images/legend/librarian.png" width="48" alt="">   | **The Librarian**   | Read every book in the library and they have the Oracle add you to `scholars`                 |
-| <img src="docs/images/legend/baker.png" width="48" alt="">       | **The baker**       | `baker@game.localhost.pomerium.io`, in the citizen group, so the town gate lets them in       |
+| <img src="docs/images/legend/baker.png" width="48" alt="">       | **The baker**       | `baker@game.localhost.pomerium.io`, in the citizens group, so the town gate lets them in      |
 | <img src="docs/images/legend/traveler.png" width="48" alt="">    | **The traveler**    | `wanderer@outlands.net`: signed in, but not a citizen, so the town gate turns them away       |
 | <img src="docs/images/legend/phish.png" width="48" alt="">       | **A phish**         | Dresses as the Oracle and offers to sign you in. Hand over your password and you lose         |
 | <img src="docs/images/legend/bot-slime.gif" width="48" alt="">   | **A bot slime**     | Roams the Slime Fields and bites. It never signs in, so it's a request with no session at all |
@@ -240,13 +240,13 @@ flowchart LR
       direction TB
       oracleRoute["/zones/oracle/* · authenticated_user"]
       fields["/zones/fields/* · authenticated_user"]
-      town["/zones/town/* · claim/groups: citizen"]
-      guild["/zones/guild/* · claim/groups: citizen"]
+      town["/zones/town/* · claim/groups: citizens"]
+      guild["/zones/guild/* · claim/groups: citizens"]
       armory["/zones/armory/* · claim/groups: knights"]
       scriptorium["/zones/library/scriptorium/* · citizen, scribes"]
       library["/zones/library/* · citizen, GET only"]
       keep["/zones/keep/* · citizen, knights and scholars"]
-      builder["/zones/builder/* · claim/groups: citizen"]
+      builder["/zones/builder/* · claim/groups: citizens"]
       home["/zones/home/{id}/ · the rules each player wrote"]
       shell["/* game shell · public"]
       idpRoute["oracle.localhost.pomerium.io"]

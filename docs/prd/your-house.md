@@ -91,11 +91,11 @@ The first two letters tell one story:
 
 Later letters build on that:
 
-| Letter                                                           | What it teaches                       | One answer                                                     |
-| ---------------------------------------------------------------- | ------------------------------------- | -------------------------------------------------------------- |
-| "Let in your friends from the Knights' Guild"                    | `claim/groups`                        | `allow: { or: [claim/groups: knights] }`                       |
-| "Any citizen may visit, except the baker"                        | `deny` beats `allow`                  | allow `claim/groups: citizen`, then `deny` the baker's `email` |
-| "Friends may look in through the window (GET), not knock (POST)" | `http_method`, two rules on one route | as the library does                                            |
+| Letter                                                           | What it teaches                       | One answer                                                      |
+| ---------------------------------------------------------------- | ------------------------------------- | --------------------------------------------------------------- |
+| "Let in your friends from the Knights' Guild"                    | `claim/groups`                        | `allow: { or: [claim/groups: knights] }`                        |
+| "Any citizen may visit, except the baker"                        | `deny` beats `allow`                  | allow `claim/groups: citizens`, then `deny` the baker's `email` |
+| "Friends may look in through the window (GET), not knock (POST)" | `http_method`, two rules on one route | as the library does                                             |
 
 A letter counts as solved when the real visits come out the way the brief asks: the visitors are the test
 cases.

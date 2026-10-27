@@ -5,7 +5,7 @@
 //
 // A newcomer is signed in but isn't a citizen yet: the sage tells them they're entitled to citizenship and
 // a house, and the Oracle grants both. Like `knighted`, `granted` is a stale session: the Oracle has put
-// the player in the citizen group, but their Pomerium session still holds the claims from sign-in.
+// the player in the citizens group, but their Pomerium session still holds the claims from sign-in.
 //
 // `knighted` is the important one: the Oracle (identity provider) now lists the player
 // in the knights group, but their Pomerium session still holds the claims from sign-in,
@@ -47,8 +47,8 @@ export const questMachine = setup({
   },
   guards: {
     proven: ({ context }) => isProven(context.defeated),
-    hasCitizenClaim: ({ event }) => event.type === 'SIGNED_IN' && event.groups.includes(GROUPS.citizen),
-    lacksCitizenClaim: ({ event }) => event.type === 'SIGNED_IN' && !event.groups.includes(GROUPS.citizen),
+    hasCitizenClaim: ({ event }) => event.type === 'SIGNED_IN' && event.groups.includes(GROUPS.citizens),
+    lacksCitizenClaim: ({ event }) => event.type === 'SIGNED_IN' && !event.groups.includes(GROUPS.citizens),
     hasKnightsClaim: ({ event }) => event.type === 'SIGNED_IN' && event.groups.includes(GROUPS.knights),
   },
 }).createMachine({
@@ -76,7 +76,7 @@ export const questMachine = setup({
       },
     },
     newcomer: {
-      description: 'Signed in, but the session has no citizen claim. The sage has news for you.',
+      description: "Signed in, but the session isn't in the citizens group. The sage has news for you.",
       on: {
         SAGE_SPOKE: 'invited',
         SIGNED_IN: { guard: 'hasCitizenClaim', target: 'citizen' },
@@ -93,14 +93,14 @@ export const questMachine = setup({
       },
     },
     granted: {
-      description: `The identity provider lists '${GROUPS.citizen}', but the Pomerium session holds older claims.`,
+      description: `The identity provider lists '${GROUPS.citizens}', but the Pomerium session holds older claims.`,
       on: {
         SIGNED_IN: { guard: 'hasCitizenClaim', target: 'citizen' },
         SIGNED_OUT: 'anonymous',
       },
     },
     citizen: {
-      description: 'Signed in with the citizen claim; no other groups yet.',
+      description: 'Signed in with the citizens group; no other groups yet.',
       always: { guard: 'proven', target: 'proven' },
       on: {
         SIGNED_OUT: 'anonymous',

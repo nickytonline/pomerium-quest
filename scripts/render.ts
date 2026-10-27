@@ -323,7 +323,7 @@ const deedMapper = {
 
 /**
  * Registration asks only for an email and a password: no first and last name. Anyone may sign up;
- * the town gate refuses an outsider through the Traveler, who has no citizen claim.
+ * the town gate refuses an outsider through the Traveler, who isn't in the citizens group.
  */
 const userProfile = {
   attributes: [
@@ -372,7 +372,7 @@ function realm(secrets: Secrets): Yaml {
     displayName: 'The Oracle',
     displayNameHtml: '<div class="kc-logo-text"><span>The Oracle</span></div>',
     loginTheme: 'quest',
-    // Any address may sign up, unverified: being a citizen comes from the citizen group, which the Oracle
+    // Any address may sign up, unverified: being a citizen comes from the citizens group, which the Oracle
     // grants in the game, not from an address. Never reuse this realm for anything real.
     registrationAllowed: true,
     registrationEmailAsUsername: true,
@@ -382,7 +382,7 @@ function realm(secrets: Secrets): Yaml {
     resetPasswordAllowed: false,
     rememberMe: false,
     sslRequired: 'external',
-    groups: [GROUPS.citizen, GROUPS.knights, GROUPS.scholars].map((name) => ({ name })),
+    groups: [GROUPS.citizens, GROUPS.knights, GROUPS.scholars].map((name) => ({ name })),
     clients: [
       {
         clientId: 'pomerium',

@@ -16,7 +16,7 @@ JAR_DIR="$(mktemp -d)"
 JSON='accept: application/json'
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # The group names come from the game's own constants, so these checks can't drift from the policies.
-read -r GROUP_CITIZEN GROUP_KNIGHTS < <(node --input-type=module -e "import { GROUPS } from '$ROOT/app/src/game/groups.ts'; console.log(GROUPS.citizen, GROUPS.knights)")
+read -r GROUP_CITIZEN GROUP_KNIGHTS < <(node --input-type=module -e "import { GROUPS } from '$ROOT/app/src/game/groups.ts'; console.log(GROUPS.citizens, GROUPS.knights)")
 [ -n "$GROUP_KNIGHTS" ] || { echo 'could not read the group names from app/src/game/groups.ts'; exit 1; }
 # The process id keeps runs started in the same second (in parallel) from sharing accounts.
 RUN="$(date +%s)-$$"
@@ -70,7 +70,7 @@ sign_in_again() {
     "$(curl -s -L -c "$jar" -b "$jar" "${GAME}/.pomerium/sign_out?pomerium_redirect_uri=${GAME}/zones/oracle/signin")"
 }
 
-# A newcomer isn't a citizen until the Oracle says so: he grants the citizen group and the deed, and the
+# A newcomer isn't a citizen until the Oracle says so: he grants the citizens group and the deed, and the
 # player signs in again so their session carries them.
 become_citizen() {
   local jar="$1" email="$2"
@@ -85,7 +85,7 @@ become_citizen() {
     [ "$town" = 200 ] && break
     sleep 2
   done
-  check "town opens once the session carries the citizen group" 200 "$town"
+  check "town opens once the session carries the citizens group" 200 "$town"
 }
 
 echo "Anonymous"

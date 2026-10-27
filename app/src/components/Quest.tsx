@@ -929,7 +929,7 @@ function Finale() {
 }
 
 const VOUCHED_BY: readonly { readonly role: string; readonly by: string }[] = [
-  { role: 'A citizen', by: 'the Oracle put you in the citizen group' },
+  { role: 'A citizen', by: 'the Oracle put you in the citizens group' },
   { role: 'A knight', by: 'the Captain vouched for you' },
   { role: 'A scholar', by: 'the Librarian vouched for you' },
 ]

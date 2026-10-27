@@ -118,7 +118,7 @@ export const OracleAdminLive = Layer.effect(
         if (!user) return yield* new OracleUnavailable({ reason: `no user for ${email}` })
 
         const { id, attributes } = yield* Schema.decodeUnknownEffect(UserIdentity)(user)
-        const citizen = yield* findGroup(GROUPS.citizen, accessToken)
+        const citizen = yield* findGroup(GROUPS.citizens, accessToken)
 
         yield* HttpClientRequest.put(`${adminUrl}/users/${id}`).pipe(
           HttpClientRequest.bearerToken(accessToken),

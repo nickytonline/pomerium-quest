@@ -45,9 +45,9 @@ const who = (id: Identity) => (id.authenticated ? id.email : 'anonymous')
 const claimsCode = (id: Identity) =>
   JSON.stringify({ email: id.email, email_verified: true, groups: id.groups, deed: id.deed }, null, 2)
 
-const isCitizen = (id: Identity) => id.groups.includes(GROUPS.citizen)
+const isCitizen = (id: Identity) => id.groups.includes(GROUPS.citizens)
 
-const NOT_A_CITIZEN = `Every allow rule needs claim/groups: ${GROUPS.citizen}, and the groups claim in your session doesn't include it. When no rule matches, Pomerium denies the request.`
+const NOT_A_CITIZEN = `Every allow rule needs claim/groups: ${GROUPS.citizens}, and the groups claim in your session doesn't include it. When no rule matches, Pomerium denies the request.`
 
 /** The Royal Keep checks three things at once; say which ones the player still lacks. */
 function keepRefusal(id: Identity): Refusal {
@@ -75,7 +75,7 @@ function keepRefusal(id: Identity): Refusal {
       title: 'Knights who are scholars only',
       text: `The guard of the Royal Keep reads your papers twice. "My orders: only knights who are also scholars. You still need to be ${missing.join(', and ')}."`,
     },
-    hint: `The keep's one rule needs claim/groups: ${GROUPS.citizen}, claim/groups: ${GROUPS.knights} and claim/groups: ${GROUPS.scholars}. In an and rule every check must pass; the ✗ lines are the ones your session fails.`,
+    hint: `The keep's one rule needs claim/groups: ${GROUPS.citizens}, claim/groups: ${GROUPS.knights} and claim/groups: ${GROUPS.scholars}. In an and rule every check must pass; the ✗ lines are the ones your session fails.`,
   }
 }
 
@@ -369,7 +369,7 @@ const welcomeBack = (next: Identity, onDone?: () => void) =>
 function vouchedGroups() {
   const vouched: string[] = []
 
-  if (isAtLeast('granted')) vouched.push(GROUPS.citizen)
+  if (isAtLeast('granted')) vouched.push(GROUPS.citizens)
 
   if (isAtLeast('knighted')) vouched.push(GROUPS.knights)
 
@@ -620,7 +620,7 @@ function sageAfterSignIn() {
           },
           {
             who: 'Sage',
-            text: 'Go and see the Oracle again. He will put two claims in your papers: a group called citizen, and the deed to your house.',
+            text: 'Go and see the Oracle again. He will put two claims in your papers: a group called citizens, and the deed to your house.',
           },
         ],
         () => quest.send({ type: 'SAGE_SPOKE' }),
@@ -631,7 +631,7 @@ function sageAfterSignIn() {
       quest.say([
         {
           who: 'Sage',
-          text: 'Go and see the Oracle, in his temple to the west. He will put your citizen group and the deed to your house in your papers.',
+          text: 'Go and see the Oracle, in his temple to the west. He will put your citizens group and the deed to your house in your papers.',
         },
       ])
 

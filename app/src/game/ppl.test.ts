@@ -10,10 +10,10 @@ const person = (email: string, groups: readonly string[] = []): Identity => ({
   groups,
 })
 
-const citizen = person('nick@example.org', [GROUPS.citizen])
-const knight = person('captain@example.org', [GROUPS.citizen, GROUPS.knights])
-const scribe = person('scribe@example.org', [GROUPS.citizen, GROUPS.scribes])
-const knightAndScholar = person('both@example.org', [GROUPS.citizen, GROUPS.knights, GROUPS.scholars])
+const citizen = person('nick@example.org', [GROUPS.citizens])
+const knight = person('captain@example.org', [GROUPS.citizens, GROUPS.knights])
+const scribe = person('scribe@example.org', [GROUPS.citizens, GROUPS.scribes])
+const knightAndScholar = person('both@example.org', [GROUPS.citizens, GROUPS.knights, GROUPS.scholars])
 const traveler = person('wanderer@outlands.net')
 const nobody: Identity = { authenticated: false, email: '', groups: [] }
 
@@ -26,7 +26,7 @@ describe('the game explains the same decision Pomerium makes for every zone', ()
     expect(allowed('fields', nobody)).toBe(false)
   })
 
-  it('keeps the town for the citizen group, whatever else a stranger carries', () => {
+  it('keeps the town for the citizens group, whatever else a stranger carries', () => {
     expect(allowed('town', citizen)).toBe(true)
     expect(allowed('town', traveler)).toBe(false)
     expect(allowed('town', person('nick@example.org'))).toBe(false)
@@ -53,7 +53,7 @@ describe('the game explains the same decision Pomerium makes for every zone', ()
   it('opens the keep only when every check in its one rule passes', () => {
     expect(allowed('keep', knightAndScholar)).toBe(true)
     expect(allowed('keep', knight)).toBe(false)
-    expect(allowed('keep', person('s@example.org', [GROUPS.citizen, GROUPS.scholars]))).toBe(false)
+    expect(allowed('keep', person('s@example.org', [GROUPS.citizens, GROUPS.scholars]))).toBe(false)
     expect(allowed('keep', person('x@example.org', [GROUPS.knights, GROUPS.scholars]))).toBe(false)
   })
 })
@@ -71,13 +71,13 @@ describe('decide', () => {
       {
         action: 'allow',
         match: 'and',
-        criteria: [{ kind: 'claim', claim: 'groups', value: GROUPS.citizen }],
+        criteria: [{ kind: 'claim', claim: 'groups', value: GROUPS.citizens }],
       },
       { action: 'deny', match: 'or', criteria: [{ kind: 'email', is: 'baker@example.org' }] },
     )
 
     expect(decide(policy, citizen, get).allow).toBe(true)
-    expect(decide(policy, person('baker@example.org', [GROUPS.citizen]), get).allow).toBe(false)
+    expect(decide(policy, person('baker@example.org', [GROUPS.citizens]), get).allow).toBe(false)
   })
 
   it('combines criteria the way and, or and not say', () => {

@@ -6,7 +6,7 @@ import { decide, type Identity } from './ppl.ts'
 const owner: Identity = {
   authenticated: true,
   email: `nick@${TOWNSFOLK_DOMAIN}`,
-  groups: [GROUPS.citizen],
+  groups: [GROUPS.citizens],
   deed: '3f9a1c2b7d4e',
 }
 

@@ -13,18 +13,18 @@ const beatSlimes = (actor: ReturnType<typeof start>, count: number) => {
 const toProven = () => {
   const actor = start()
 
-  actor.send({ type: 'SIGNED_IN', groups: [GROUPS.citizen] })
+  actor.send({ type: 'SIGNED_IN', groups: [GROUPS.citizens] })
   beatSlimes(actor, KNIGHT_QUOTA)
 
   return actor
 }
 
 describe("chapter one's quest", () => {
-  it('starts anonymous and becomes a citizen on sign-in with the citizen claim', () => {
+  it('starts anonymous and becomes a citizen on sign-in with the citizens group', () => {
     const actor = start()
 
     expect(actor.getSnapshot().value).toBe('anonymous')
-    actor.send({ type: 'SIGNED_IN', groups: [GROUPS.citizen] })
+    actor.send({ type: 'SIGNED_IN', groups: [GROUPS.citizens] })
     expect(actor.getSnapshot().value).toBe('citizen')
   })
 
@@ -44,7 +44,7 @@ describe("chapter one's quest", () => {
     actor.send({ type: 'SIGNED_IN', groups: [] })
     expect(actor.getSnapshot().value).toBe('granted')
 
-    actor.send({ type: 'SIGNED_IN', groups: [GROUPS.citizen] })
+    actor.send({ type: 'SIGNED_IN', groups: [GROUPS.citizens] })
     expect(actor.getSnapshot().value).toBe('citizen')
   })
 
@@ -53,12 +53,12 @@ describe("chapter one's quest", () => {
 
     beatSlimes(actor, KNIGHT_QUOTA)
     expect(actor.getSnapshot().value).toBe('anonymous')
-    actor.send({ type: 'SIGNED_IN', groups: [GROUPS.citizen] })
+    actor.send({ type: 'SIGNED_IN', groups: [GROUPS.citizens] })
     expect(actor.getSnapshot().value).toBe('proven')
 
     const short = start()
 
-    short.send({ type: 'SIGNED_IN', groups: [GROUPS.citizen] })
+    short.send({ type: 'SIGNED_IN', groups: [GROUPS.citizens] })
     beatSlimes(short, KNIGHT_QUOTA - 1)
     expect(short.getSnapshot().value).toBe('citizen')
   })
@@ -70,10 +70,10 @@ describe("chapter one's quest", () => {
     expect(actor.getSnapshot().value).toBe('knighted')
 
     // The session still holds its old claims: signing in again without the group changes nothing.
-    actor.send({ type: 'SIGNED_IN', groups: [GROUPS.citizen, GROUPS.scholars] })
+    actor.send({ type: 'SIGNED_IN', groups: [GROUPS.citizens, GROUPS.scholars] })
     expect(actor.getSnapshot().value).toBe('knighted')
 
-    actor.send({ type: 'SIGNED_IN', groups: [GROUPS.citizen, GROUPS.knights] })
+    actor.send({ type: 'SIGNED_IN', groups: [GROUPS.citizens, GROUPS.knights] })
     expect(actor.getSnapshot().value).toBe('knight')
   })
 
@@ -95,7 +95,7 @@ describe("chapter one's quest", () => {
     const actor = toProven()
 
     actor.send({ type: 'KNIGHTED' })
-    actor.send({ type: 'SIGNED_IN', groups: [GROUPS.citizen, GROUPS.knights] })
+    actor.send({ type: 'SIGNED_IN', groups: [GROUPS.citizens, GROUPS.knights] })
     actor.send({ type: 'STEEL_TAKEN' })
     expect(actor.getSnapshot().value).toBe('armed')
   })

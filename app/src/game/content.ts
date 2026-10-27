@@ -122,7 +122,7 @@ export const link = (lesson: LessonId) => LESSONS[lesson].link
 export const SIGN_TEXT: Partial<Record<SignId, string>> = {
   fields:
     "This gate is a route, and its guard follows the route's policy. Pomerium checks every request for this path against the policy below, and forwards the ones it allows to the app behind the route.",
-  town: 'The town only lets in citizens: people the Oracle has put in the citizen group.',
+  town: 'The town only lets in citizens: people the Oracle has put in the citizens group.',
   guild: "The Knights' Guild hall. Any citizen may enter.",
   armory: 'Only knights. The guard reads the groups claim your identity provider put in your session.',
   library:

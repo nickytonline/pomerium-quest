@@ -50,7 +50,7 @@ type HouseClaimCriterion = Extract<Criterion, { readonly kind: 'claim' }> & { re
 
 export type HouseRule = Omit<PolicyRule, 'criteria'> & { readonly criteria: readonly HouseCriterion[] }
 
-/** The townsfolk's email domain. Citizenship comes from the Oracle's citizen group, never from an address. */
+/** The townsfolk's email domain. Citizenship comes from the Oracle's citizens group, never from an address. */
 export const TOWNSFOLK_DOMAIN = 'game.localhost.pomerium.io'
 
 /** Who knocks on the player's door. Each is a real account at the Oracle. */
@@ -68,17 +68,17 @@ export interface Visitor {
  * real session. The traveler comes from outside the kingdom, as at the town gate.
  */
 export const VISITORS: Record<VisitorId, Visitor> = {
-  baker: { name: 'the baker', email: `baker@${TOWNSFOLK_DOMAIN}`, groups: [GROUPS.citizen] },
+  baker: { name: 'the baker', email: `baker@${TOWNSFOLK_DOMAIN}`, groups: [GROUPS.citizens] },
   traveler: { name: 'the traveler', email: 'wanderer@outlands.net', groups: [] },
   captain: {
     name: 'the Captain',
     email: `captain@${TOWNSFOLK_DOMAIN}`,
-    groups: [GROUPS.citizen, GROUPS.knights],
+    groups: [GROUPS.citizens, GROUPS.knights],
   },
   librarian: {
     name: 'the Librarian',
     email: `librarian@${TOWNSFOLK_DOMAIN}`,
-    groups: [GROUPS.citizen, GROUPS.scholars],
+    groups: [GROUPS.citizens, GROUPS.scholars],
   },
 }
 

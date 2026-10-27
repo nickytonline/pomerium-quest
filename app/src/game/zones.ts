@@ -57,8 +57,8 @@ const all = (...criteria: Criterion[]): PolicyRule => ({ action: 'allow', match:
 const signedIn: Criterion = { kind: 'authenticated_user' }
 const inGroup = (value: string): Criterion => ({ kind: 'claim', claim: 'groups', value })
 
-/** A citizen is whoever the Oracle has put in the citizen group, whatever their email domain. */
-const citizen = inGroup(GROUPS.citizen)
+/** A citizen is whoever the Oracle has put in the citizens group, whatever their email domain. */
+const citizen = inGroup(GROUPS.citizens)
 
 export const ZONES: readonly Zone[] = [
   { id: 'oracle', name: "Oracle's Temple", prefix: '/zones/oracle', policy: [all(signedIn)] },
