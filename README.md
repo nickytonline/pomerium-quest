@@ -68,10 +68,7 @@ asks Pomerium whether to let you through, so what you can reach depends on who t
 | Open the menu    | Esc                                       | The Menu button    |
 | Open the journal | I (in a narrow window)                    | The Journal button |
 
-The game hears the keys while its board has focus. The board takes focus when you start playing, when a
-menu, dialog or panel closes, and when you click the page. If you press Tab or click to a button or link,
-the keys go there instead: Enter and Space press it, and the arrow keys do nothing. Click the game, or
-press Tab until the board has a bright border, to play on.
+The game takes the keys while it has focus. If they stop working, click the game.
 
 The menu saves your game, restarts it, quits to the title screen, and turns music and sound effects on
 and off. Beside the board, your identity shows the claims in your session right now, and the access log
