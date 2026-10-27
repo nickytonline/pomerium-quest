@@ -156,24 +156,31 @@ townsfolk() {
 
 # An older realm has no deed attribute or claim mapper, and Keycloak drops attributes its user profile
 # doesn't declare. Declare the attribute (the profile is the same one the realm imports) and add the
-# mapper to Pomerium's client unless it's already there.
+# mapper to Pomerium's client, each only when it's missing, so a deploy leaves a current realm alone.
+# Each file goes in on stdin, since the Keycloak image has no tar.
 deed() {
   local password
   password="$(node -p "require('./${STATE}/secrets.json').keycloakAdminPassword")"
-  tar -c -C deploy/.generated deed-profile.json deed-mapper.json | kc -n "$NAMESPACE" exec -i deploy/keycloak -- sh -c '
-    tar -x -C /tmp
-    kcadm=/opt/keycloak/bin/kcadm.sh
-    $kcadm config credentials --config /tmp/kcadm.config --server http://localhost:8080 \
-      --realm master --user admin --password "$1" >/dev/null 2>&1 || exit 1
-    $kcadm update users/profile --config /tmp/kcadm.config -r kingdom -f /tmp/deed-profile.json >/dev/null || exit 1
+  keycloak_admin "$password" '
+    $kcadm get users/profile --config /tmp/kcadm.config -r kingdom | grep -q "\"name\" *: *\"deed\"" \
+      || $kcadm update users/profile --config /tmp/kcadm.config -r kingdom -f - >/dev/null
+  ' <deploy/.generated/deed-profile.json || fail "Couldn't declare the deed attribute in the Oracle"
+  keycloak_admin "$password" '
     client="$($kcadm get clients --config /tmp/kcadm.config -r kingdom -q clientId=pomerium --fields id --format csv --noquotes)"
     $kcadm get "clients/$client/protocol-mappers/models" --config /tmp/kcadm.config -r kingdom --fields name --format csv --noquotes \
       | grep -qx deed \
-      || $kcadm create "clients/$client/protocol-mappers/models" --config /tmp/kcadm.config -r kingdom -f /tmp/deed-mapper.json >/dev/null
-    status=$?
-    rm -f /tmp/deed-profile.json /tmp/deed-mapper.json
-    exit $status
-  ' sh "$password" || fail "Couldn't add the deed claim to the Oracle"
+      || $kcadm create "clients/$client/protocol-mappers/models" --config /tmp/kcadm.config -r kingdom -f - >/dev/null
+  ' <deploy/.generated/deed-mapper.json || fail "Couldn't add the deed claim to the Oracle"
+}
+
+# Runs a script in the Keycloak pod after signing kcadm in as the admin; the script reads its input on stdin.
+keycloak_admin() {
+  kc -n "$NAMESPACE" exec -i deploy/keycloak -- sh -c '
+    kcadm=/opt/keycloak/bin/kcadm.sh
+    $kcadm config credentials --config /tmp/kcadm.config --server http://localhost:8080 \
+      --realm master --user admin --password "$1" >/dev/null 2>&1 || exit 1
+    eval "$2"
+  ' sh "$1" "$2"
 }
 
 case "${1:-up}" in

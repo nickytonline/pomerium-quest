@@ -670,8 +670,7 @@ mkdirSync(OUT, { recursive: true })
 
 /**
  * The townsfolk who visit players' houses, as a Keycloak partial import. ./quest imports it at every
- * deploy, overwriting them, so their passwords and groups always match. An import skips the user
- * profile's kingdom-only email rule, which is how the traveler from outlands.net gets an account.
+ * deploy, overwriting them, so their passwords and groups always match.
  */
 const townsfolk = (secrets: Secrets) => ({
   ifResourceExists: 'OVERWRITE',
