@@ -23,7 +23,7 @@ Chapter one covers the fundamentals.
 | The access log and the denial screen                           | Every request is checked, and denied by default                          |
 | The game server knows who you are                              | Pomerium's signed `X-Pomerium-Jwt-Assertion` header, verified by the app |
 
-Then the sage gives you a house in the Slime Fields, and you write the policy on its door yourself:
+Then the Oracle makes you a citizen with a house in the Slime Fields, and you write the policy on its door yourself:
 
 | At your house                                                  | In Pomerium                                                                           |
 | -------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
@@ -45,7 +45,7 @@ asks Pomerium whether to let you through, so what you can reach depends on who t
 |                                                                  | Who                 | What they do                                                                                  |
 | ---------------------------------------------------------------- | ------------------- | --------------------------------------------------------------------------------------------- |
 | <img src="docs/images/legend/dog.gif" width="48" alt="">         | **You**             | The Pomerium Pomeranian                                                                       |
-| <img src="docs/images/legend/sage.png" width="48" alt="">        | **The sage**        | Starts you on the quest, and once you've signed in, points you to your house                  |
+| <img src="docs/images/legend/sage.png" width="48" alt="">        | **The sage**        | Starts you on the quest, and once you've signed in, sends you to the Oracle for citizenship   |
 | <img src="docs/images/legend/oracle.png" width="48" alt="">      | **The Oracle**      | Your identity provider. He signs you in, in his temple, and grants you a deed to a house      |
 | <img src="docs/images/legend/guard.png" width="48" alt="">       | **A guard**         | Stands at every gate and follows that route's policy, to the letter, on every request         |
 | <img src="docs/images/legend/captain.png" width="48" alt="">     | **The Captain**     | Runs the Knights' Guild. Beat three bot slimes and they have the Oracle add you to `knights`  |
@@ -116,7 +116,7 @@ and the Royal Keep at the end of the road wants a citizen who is a knight and a 
 
 ### Write the rules on your own door
 
-The sage gives you a house in the Slime Fields. Its door is a real Pomerium route too, and it starts
+The Oracle gives you a house in the Slime Fields once you are a citizen. Its door is a real Pomerium route too, and it starts
 public, so slimes walk right in. Letters on your desk ask for door rules, one lesson at a time, and the
 rules you write become the route's policy. Save them, and the townsfolk and a slime come and knock,
 signed in as themselves (or not at all), so you see what Pomerium does with your policy.
@@ -349,11 +349,11 @@ keyboard.
 
 Progress lives in three [XState](https://stately.ai/docs/xstate) statecharts, saved to local storage:
 
-| Machine                                               | Tracks                                                                           |
-| ----------------------------------------------------- | -------------------------------------------------------------------------------- |
-| [`quest-machine.ts`](app/src/game/quest-machine.ts)   | Chapter one: anonymous → citizen → proven → knighted → knight → armed            |
-| [`house-machine.ts`](app/src/game/house-machine.ts)   | Your house: one stage per letter on the desk, solved by real visits              |
-| [`player-machine.ts`](app/src/game/player-machine.ts) | The dog: walking, waiting on a gate, swinging, and a moment's safety after a hit |
+| Machine                                               | Tracks                                                                                               |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| [`quest-machine.ts`](app/src/game/quest-machine.ts)   | Chapter one: anonymous → newcomer → invited → granted → citizen → proven → knighted → knight → armed |
+| [`house-machine.ts`](app/src/game/house-machine.ts)   | Your house: one stage per letter on the desk, solved by real visits                                  |
+| [`player-machine.ts`](app/src/game/player-machine.ts) | The dog: walking, waiting on a gate, swinging, and a moment's safety after a hit                     |
 
 `knighted` is the stage the chapter turns on: the Oracle lists you in `knights`, but your Pomerium
 session still holds the claims from when you signed in, so the armory says no until you sign in again.
