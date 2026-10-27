@@ -71,6 +71,8 @@ become_citizen() {
   local jar="$1" email="$2"
   check "the Oracle grants citizenship and a deed" 200 "$(status "$jar" /zones/oracle/citizen POST)"
   sign_in_again "$jar" "$email" >/dev/null
+  check "the new session carries a deed claim" yes \
+    "$(curl -s -b "$jar" -H "$JSON" "${GAME}/zones/oracle/" | grep -q '"deed":"[0-9a-f]\{12\}"' && echo yes || echo no)"
 }
 
 echo "Anonymous"

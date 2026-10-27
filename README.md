@@ -395,8 +395,8 @@ allowed it.
 ### Things worth knowing
 
 - **Anyone can sign up, and the game makes them a citizen.** The realm takes any email without verifying it.
-  Being a citizen is the `citizen` group, which the Oracle grants in the game (see `POST /zones/oracle/citizen`),
-  not something an address proves. That's fine for a learning game. Never reuse the realm, or this
+  Being a citizen is the `citizen` group, and owning a house is a `deed` claim. The Oracle grants both in the game
+  (see `POST /zones/oracle/citizen`); no address proves either. That's fine for a learning game. Never reuse the realm, or this
   Pomerium, for anything real.
 - **Keycloak runs in dev mode** (`start-dev`) with its H2 database on a volume, so players survive a
   redeploy. It imports the realm on first start only: after changing the realm in `render.ts`, or

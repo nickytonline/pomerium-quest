@@ -59,7 +59,7 @@ operators.
 
 ## What the player does
 
-1. After first sign-in the Oracle sends the player to the sage, who says they're about to become a citizen and entitled to a house outside the walls: an empty one in the Slime Fields, just below the pond. Back at the Oracle, he adds two claims: the `citizen` group and the house's deed (a group named for the house). He signs them in again so their session carries both.
+1. After first sign-in the Oracle sends the player to the sage, who says they're about to become a citizen and entitled to a house outside the walls: an empty one in the Slime Fields, just below the pond. Back at the Oracle, he adds two claims: the `citizen` group and a `deed` claim holding the house's id. He signs them in again so their session carries both.
 2. **The house starts open to everyone.** Its route is public
    (`allow_public_unauthenticated_access`), so Pomerium lets every request through, signed in or not.
    When the player arrives, slime bots are bouncing around inside and the traveler is at the table eating
@@ -264,9 +264,9 @@ The server checks them with an Effect Schema before writing anything:
 - **Size:** at most 6 rules with 6 criteria each.
 
 PPL has no variables, so a rule can't say "the owner" and have Pomerium work out who that is. The deed does
-it instead. Each house is named for a hash of its owner's email, and the Oracle adds the owner to a group
-with that name (`deed-<id>`) when he grants the deed. The server writes `allow: claim/groups: deed-<id>` as
-the first rule of every saved house, and the editor and sign show it too, so the owner needs no email rule
+it instead. Each house is named for a hash of its owner's email, and when the Oracle grants the deed he
+sets a `deed` attribute on the owner holding that id, which a mapper puts in their token as the `deed`
+claim. The server writes `allow: claim/deed: <id>` as the first rule of every saved house, and the editor and sign show it too, so the owner needs no email rule
 of their own and can't remove themselves by accident. Only a `deny` can still turn the owner away, since a
 deny always beats an allow; the desk checks the rules with `turnsAwayOwner` and refuses to save one. The
 rules may be empty: then only the deed's owner gets in.
