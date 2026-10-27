@@ -3,6 +3,7 @@
 import { probe, refreshClaimsUrl, requestZone, signInUrl, type Outcome } from './access.ts'
 import {
   BOOKS,
+  KNOCKED_OUT,
   LESSONS,
   LESSON_ORDER,
   SIGN_DOCS,
@@ -15,6 +16,7 @@ import {
 } from './content.ts'
 import { GROUPS } from './groups.ts'
 import { decide, routeYaml, type Identity } from './ppl.ts'
+import { startOver } from './restart.ts'
 import { VISITORS, type VisitorId } from './house.ts'
 import { addDeed, citizenshipPages } from './house-story.ts'
 import { KNIGHT_QUOTA, hasSteel, isAtLeast, stage, type QuestStage } from './quest-machine.ts'
@@ -899,6 +901,11 @@ const hearts = (halves: number) => {
   if (halves % 2 === 0) return `${whole} ${whole === 1 ? 'heart' : 'hearts'}`
 
   return whole ? `${whole}½ hearts` : 'half a heart'
+}
+
+/** The player runs out of hearts: a restart, so the Oracle takes their claims back and they start over. */
+export function knockedOut() {
+  quest.say(KNOCKED_OUT, () => void startOver())
 }
 
 export function drinkFromFountain() {

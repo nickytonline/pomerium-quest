@@ -23,6 +23,7 @@ import {
   drinkFromFountain,
   eatFish,
   enterGate,
+  knockedOut,
   meetPhish,
   openChest,
   readAnvil,
@@ -2206,7 +2207,7 @@ export class KingdomScene extends Phaser.Scene {
 
     if (hp <= 0) {
       sfx('faint')
-      this.respawn()
+      knockedOut()
 
       return
     }
@@ -2228,7 +2229,7 @@ export class KingdomScene extends Phaser.Scene {
     else this.player?.setCrop()
   }
 
-  private respawn(message = 'You wake up back in Hearth Village. Your identity and gear are still yours.') {
+  private respawn(message: string) {
     this.closeGate()
     this.pos = this.world.spawn
     this.player?.setPosition(center(this.pos.x), center(this.pos.y))
