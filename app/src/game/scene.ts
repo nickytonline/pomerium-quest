@@ -509,12 +509,22 @@ export class KingdomScene extends Phaser.Scene {
       // Phaser handles these keys first, then stops the browser from scrolling the page.
       // (A page-level preventDefault would hide them from Phaser altogether.)
       keyboard.addCapture('UP,DOWN,LEFT,RIGHT,SPACE')
-      // Queue presses as events so a tap shorter than a frame still counts.
+      // Queue presses as events so a tap shorter than a frame still counts. A press while the game waits
+      // belongs to what it waits on: the board hears keys before the window's dialog handler does, so
+      // without this the Enter that closes a dialog would also start the next interaction.
       keyboard.on('keydown', (event: KeyboardEvent) => {
         const action = KEY_ACTIONS.get(event.code)
 
-        if (action && !event.repeat) this.pending.add(action)
+        if (action && !event.repeat && !quest.isPaused()) this.pending.add(action)
       })
+
+      // Keys are only heard while the board has focus, so a key let go after focus moved on is never
+      // heard let go: release them all rather than walk on.
+      const board = this.game.canvas.parentElement
+      const letGo = () => keyboard.resetKeys()
+
+      board?.addEventListener('focusout', letGo)
+      this.events.once('destroy', () => board?.removeEventListener('focusout', letGo))
     }
 
     quest.setRegion(regionAt(this.pos))
@@ -2239,6 +2249,8 @@ export function startGame(parent: HTMLElement) {
   const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent,
+    // Keys reach the game only while its board has focus, so a focused button keeps its Enter and Space.
+    input: { keyboard: { target: parent } },
     width: VIEW.width,
     height: VIEW.height,
     pixelArt: true,

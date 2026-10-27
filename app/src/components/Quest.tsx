@@ -16,7 +16,7 @@ import { PolicyLines } from './PolicyLines.tsx'
 import { TAB_EVENT, TabbedScreen, switchTab, tabHint } from './TabbedScreen.tsx'
 import { INTRO, LESSONS, LESSON_ORDER, type Choice } from '../game/content.ts'
 import { KNIGHT_QUOTA, questMachine, type QuestStage } from '../game/quest-machine.ts'
-import { MAX_HP, SETTLE_MS, quest, useQuest, type DenyView, type Dir } from '../game/store.ts'
+import { MAX_HP, SETTLE_MS, paused, quest, useQuest, type DenyView, type Dir } from '../game/store.ts'
 import { decide, type Identity } from '../game/ppl.ts'
 import { sound, startSound, useSound, type SoundSettings } from '../game/sound.ts'
 import { BOARD_TILES, MAP_HEIGHT, MAP_WIDTH, TILE_PX } from '../game/world.ts'
@@ -61,7 +61,7 @@ const actionButton =
   'grid size-16 place-items-center rounded-full border-2 bg-panel font-display text-[1.3rem] leading-none text-ink'
 
 const headerButton =
-  'relative rounded border-2 border-panel-edge bg-panel px-3 py-1 font-display text-ink hover:border-lens'
+  'relative rounded border-2 border-panel-edge bg-panel px-3 py-1 font-display text-ink hover:border-sun'
 
 const linkButton = 'mt-2.5 border-0 bg-transparent p-0 text-[0.8rem] text-muted underline'
 
@@ -232,7 +232,7 @@ const begin = () => {
 }
 
 const menuButton =
-  'w-full rounded border-2 border-panel-edge bg-panel px-4 py-2.5 text-left font-display text-[1.05rem] text-ink hover:border-lens focus-visible:border-lens'
+  'w-full rounded border-2 border-panel-edge bg-panel px-4 py-2.5 text-left font-display text-[1.05rem] text-ink hover:border-sun focus-visible:border-focus'
 
 function Splash() {
   const mode = useQuest((s) => s.mode)
@@ -420,7 +420,7 @@ function Kingdom() {
           </div>
           <div className="grid min-h-0 min-w-0 place-items-center [grid-area:game]" ref={slot}>
             <div
-              className="relative overflow-hidden rounded-md border-4 border-night-deep bg-night-deep shadow-[0_0_0_2px_var(--color-panel-edge),0_18px_50px_rgb(0_0_0/0.45)]"
+              className="relative overflow-hidden rounded-md border-4 border-night-deep bg-night-deep shadow-[0_0_0_2px_var(--color-panel-edge),0_18px_50px_rgb(0_0_0/0.45)] has-[>[role=application]:focus-visible]:border-focus"
               style={board ? { width: board.width, height: board.height } : { visibility: 'hidden' }}
             >
               <GameCanvas view={board?.view} />
@@ -454,7 +454,7 @@ function JournalButton() {
   const unread = useQuest((s) => s.journalUnread)
 
   return (
-    <button id="journal-button" className={headerButton} type="button" onClick={() => quest.openJournal()}>
+    <button className={headerButton} type="button" onClick={() => quest.openJournal()}>
       Journal
       {unread && (
         <span
@@ -491,9 +491,6 @@ function Journal({ drawer }: { readonly drawer: boolean }) {
 
 function JournalDrawer({ children }: { readonly children: ReactNode }) {
   const drawer = useRef<HTMLElement>(null)
-
-  // Hand focus back to the button that opened the drawer.
-  useEffect(() => () => document.getElementById('journal-button')?.focus(), [])
 
   const trapFocus = (event: ReactKeyboardEvent) => {
     if (event.key !== 'Tab' || !drawer.current) return
@@ -677,9 +674,15 @@ function SoundToggle({ setting, label }: { readonly setting: keyof SoundSettings
   )
 }
 
+/** Focuses the board with no ring: the ring is for someone who Tabbed here, not for play resuming. */
+const focusBoard = (board: HTMLElement | null) => board?.focus({ preventScroll: true, focusVisible: false })
+
 function GameCanvas({ view }: { readonly view: Board['view'] | undefined }) {
   const host = useRef<HTMLDivElement>(null)
   const [game, setGame] = useState<import('phaser').Game | null>(null)
+  const waiting = useQuest(paused)
+  // Not the view itself: it's a new object on every resize, and a resize shouldn't move focus.
+  const ready = game !== null && view !== undefined
 
   useEffect(() => {
     let destroyed = false
@@ -704,8 +707,41 @@ function GameCanvas({ view }: { readonly view: Board['view'] | undefined }) {
     void import('../game/scene.ts').then(({ resizeGame }) => resizeGame(game, view))
   }, [game, view])
 
+  // The game hears keys only while this board has focus, so hand it focus whenever play starts or resumes:
+  // whatever held focus until then (a menu, a dialog's answer) is gone.
+  useEffect(() => {
+    if (ready && !waiting) focusBoard(host.current)
+  }, [ready, waiting])
+
+  // A click that leaves nothing focused is the player coming back to the game. Whatever the click did focus
+  // keeps it (Safari and Firefox on macOS don't focus a clicked button), and so does text being selected.
+  useEffect(() => {
+    const onClick = () => {
+      const selecting = window.getSelection()?.isCollapsed === false
+      const nothingFocused = document.activeElement === null || document.activeElement === document.body
+
+      if (quest.isPaused() || selecting || !nothingFocused) return
+      focusBoard(host.current)
+    }
+
+    document.addEventListener('click', onClick)
+
+    return () => document.removeEventListener('click', onClick)
+  }, [])
+
   // Tapping the scene above an open dialog advances it, as A does.
-  return <div className="pixelated" ref={host} onClick={() => quest.get().dialog && quest.advance()} />
+  return (
+    <div
+      className="pixelated outline-hidden"
+      ref={host}
+      tabIndex={0}
+      role="application"
+      aria-label="Game board"
+      // Phaser cancels mousedown on its canvas, which also cancels the browser's focus change.
+      onMouseDown={() => focusBoard(host.current)}
+      onClick={() => quest.get().dialog && quest.advance()}
+    />
+  )
 }
 
 function Hud() {
@@ -834,7 +870,7 @@ function Choices({ choices }: { readonly choices: readonly Choice[] }) {
       {choices.map((choice, i) => (
         <button
           key={choice.label}
-          className="rounded border-2 border-panel-edge bg-panel px-3.5 py-2 font-display text-ink hover:border-lens focus-visible:border-lens"
+          className="rounded border-2 border-panel-edge bg-panel px-3.5 py-2 font-display text-ink hover:border-sun focus-visible:border-focus"
           type="button"
           autoFocus={i === 0}
           onClick={(event) => {
@@ -980,7 +1016,7 @@ function FinalePomerium({ identity }: { readonly identity: Identity }) {
   const lines = decide(keep, identity, { method: 'GET', path }).lines
 
   return (
-    <div className="flex flex-col rounded-tr-lg rounded-b-lg border-t-6 border-allow bg-paper px-5 py-[18px] text-paper-ink [&_a]:text-paper-link">
+    <div className="flex flex-col rounded-tr-lg rounded-b-lg border-t-6 border-allow bg-paper px-5 py-[18px] text-paper-ink [&_a]:text-paper-link [&_:focus-visible]:outline-paper-focus">
       <p className="m-0 font-mono text-[2.2rem] leading-none font-bold text-[#15803d]">200</p>
       <h2 className="mt-0.5 mb-2 text-[1.25rem] font-bold" id="finale-title-pomerium">
         Access allowed
@@ -1064,7 +1100,7 @@ function DenyStory({ deny }: { readonly deny: DenyView }) {
       </p>
       <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-3.5">
         <button
-          className="rounded border-2 border-ink bg-panel px-3.5 py-2 font-display text-ink hover:border-lens"
+          className="rounded border-2 border-ink bg-panel px-3.5 py-2 font-display text-ink hover:border-sun"
           type="button"
           onClick={() => quest.closeDeny()}
         >
@@ -1078,7 +1114,7 @@ function DenyStory({ deny }: { readonly deny: DenyView }) {
 
 function DenyPomerium({ deny }: { readonly deny: DenyView }) {
   return (
-    <div className="flex flex-col rounded-tr-lg rounded-b-lg border-t-6 border-deny bg-paper px-5 py-[18px] text-paper-ink [&_a]:text-paper-link">
+    <div className="flex flex-col rounded-tr-lg rounded-b-lg border-t-6 border-deny bg-paper px-5 py-[18px] text-paper-ink [&_a]:text-paper-link [&_:focus-visible]:outline-paper-focus">
       {deny.onBehalfOf && (
         <p className="mb-2 rounded bg-paper-tint px-2.5 py-1.5 text-[0.8rem] text-paper-muted">
           Not your request: this is what {deny.onBehalfOf} was told by the guard.

@@ -18,11 +18,14 @@
   --color-lime: #c6f432;
   --color-allow: #4ade80;
   --color-deny: #ff5d73;
+  --color-focus: var(--color-sun);
   --color-paper: #f7f3ff;
   --color-paper-ink: #1b1530;
   --color-paper-muted: #5e5680;
   --color-paper-tint: #ece6fb;
   --color-paper-link: #5b2fd1;
+  /* Sun on near-white paper is far under 3:1, so the paper cards ring focus in a dark gold. */
+  --color-paper-focus: #a16207;
   --color-locked: #5f557f;
   --color-heart-empty: #4a3f6b;
   --color-code-bg: #0a0716;
@@ -71,7 +74,7 @@
   }
 
   :focus-visible {
-    outline: 2px solid var(--color-lens);
+    outline: 2px solid var(--color-focus);
     outline-offset: 2px;
   }
 }
