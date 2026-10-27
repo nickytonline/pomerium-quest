@@ -38,6 +38,10 @@ interface Check {
 
 const pad = (n: number) => ' '.repeat(n)
 
+/** A claim value as YAML reads it: quoted when it could pass for a number, boolean or null, so it stays a string. */
+const claimValue = (claim: ClaimName, value: string) =>
+  claim === 'deed' || /^([-+.\d]|(true|false|null|yes|no|on|off|y|n|~)$)/i.test(value) ? `"${value}"` : value
+
 /** The YAML lines Pomerium reads for one criterion. */
 function criterionYaml(node: Criterion): readonly string[] {
   switch (node.kind) {
@@ -46,8 +50,7 @@ function criterionYaml(node: Criterion): readonly string[] {
     case 'authenticated_user':
       return ['authenticated_user: true']
     case 'claim':
-      // A deed is a hex id that can look like a number, so YAML needs it quoted to keep it a string.
-      return [`claim/${node.claim}: ${node.claim === 'deed' ? `"${node.value}"` : node.value}`]
+      return [`claim/${node.claim}: ${claimValue(node.claim, node.value)}`]
     case 'domain':
     case 'email':
     case 'http_method':
@@ -63,7 +66,7 @@ function criterionLabel(node: Criterion): string {
     case 'authenticated_user':
       return 'authenticated_user: true'
     case 'claim':
-      return `claim/${node.claim}: ${node.value}`
+      return `claim/${node.claim}: ${claimValue(node.claim, node.value)}`
     case 'domain':
     case 'email':
     case 'http_method':

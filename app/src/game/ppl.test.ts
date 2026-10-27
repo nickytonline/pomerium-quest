@@ -122,4 +122,20 @@ describe('the policy Pomerium reads', () => {
       { allow: { and: [{ 'claim/groups': 'knights' }] } },
     ])
   })
+
+  it('keeps claim values that look like numbers or booleans as strings in the YAML', () => {
+    const rules: readonly PolicyRule[] = [
+      {
+        action: 'allow',
+        match: 'or',
+        criteria: ['123', 'true', '1e5', 'scholars'].map((value) => ({
+          kind: 'claim' as const,
+          claim: 'groups' as const,
+          value,
+        })),
+      },
+    ]
+
+    expect(parse(policyYaml(rules, 0).join('\n'))).toEqual(policyDocument(rules))
+  })
 })
