@@ -115,8 +115,7 @@ export const handleZone = (request: Request, splat: string) =>
       case 'POST oracle/citizen': {
         const oracle = yield* OracleAdmin
         const deed = houseId(player.email)
-        yield* oracle.grant(player.email, 'citizen')
-        yield* oracle.setClaim(player.email, 'deed', deed)
+        yield* oracle.grantCitizen(player.email, deed)
 
         return json(200, { granted: ['citizen'], deed, refreshRequired: true, verifiedBy })
       }

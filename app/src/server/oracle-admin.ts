@@ -9,8 +9,12 @@ export class OracleAdmin extends Context.Service<
   OracleAdmin,
   {
     readonly grant: (email: string, group: string) => Effect.Effect<void, OracleUnavailable>
-    /** Sets a claim on the player, as a user attribute the Oracle puts in their token: the deed, say. */
-    readonly setClaim: (email: string, claim: string, value: string) => Effect.Effect<void, OracleUnavailable>
+    /**
+     * Makes the player a citizen holding the deed to their house, in one pass. The deed is a user attribute the
+     * Oracle puts in their token. It's set first, so a failure leaves them not yet a citizen and the grant is
+     * offered again.
+     */
+    readonly grantCitizen: (email: string, deed: string) => Effect.Effect<void, OracleUnavailable>
   }
 >()('OracleAdmin') {}
 
@@ -58,30 +62,46 @@ export const OracleAdminLive = Layer.effect(
         Effect.flatMap(readJson(Found)),
       )
 
+    const mapError = <A, R>(effect: Effect.Effect<A, unknown, R>) =>
+      effect.pipe(
+        Effect.mapError((error) =>
+          error instanceof OracleUnavailable
+            ? error
+            : new OracleUnavailable({ reason: error instanceof Error ? error.message : String(error) }),
+        ),
+      )
+
+    const findGroup = (group: string, accessToken: string) =>
+      Effect.gen(function* () {
+        const groups = yield* find('groups', { search: group, exact: 'true' }, accessToken)
+        const found = groups.find((candidate) => candidate.name === group)
+
+        if (!found) return yield* new OracleUnavailable({ reason: `no group ${group}` })
+
+        return found
+      })
+
+    const addToGroup = (userId: string, groupId: string, accessToken: string) =>
+      HttpClientRequest.put(`${adminUrl}/users/${userId}/groups/${groupId}`).pipe(
+        HttpClientRequest.bearerToken(accessToken),
+        client.execute,
+      )
+
     const grant = (email: string, group: string) =>
       Effect.gen(function* () {
         const accessToken = yield* token
         const [user] = yield* find('users', { email, exact: 'true' }, accessToken)
-        const groups = yield* find('groups', { search: group, exact: 'true' }, accessToken)
-        const found = groups.find((candidate) => candidate.name === group)
 
-        if (!user || !found) {
-          return yield* new OracleUnavailable({
-            reason: `no ${user ? 'group' : 'user'} for ${email} / ${group}`,
-          })
-        }
+        if (!user) return yield* new OracleUnavailable({ reason: `no user for ${email}` })
 
-        yield* HttpClientRequest.put(`${adminUrl}/users/${user.id}/groups/${found.id}`).pipe(
-          HttpClientRequest.bearerToken(accessToken),
-          client.execute,
-        )
-      }).pipe(
-        Effect.mapError((error) =>
-          error instanceof OracleUnavailable ? error : new OracleUnavailable({ reason: error.message }),
-        ),
-      )
+        const found = yield* findGroup(group, accessToken)
+        yield* addToGroup(user.id, found.id, accessToken)
+      }).pipe(mapError)
 
-    const setClaim = (email: string, claim: string, value: string) =>
+    // The deed attribute goes first, since it's the step that can fail (see below). If the group were added
+    // first and the attribute then failed, the player would be a citizen with no deed, and the Oracle would
+    // never offer the grant again.
+    const grantCitizen = (email: string, deed: string) =>
       Effect.gen(function* () {
         const accessToken = yield* token
 
@@ -97,10 +117,11 @@ export const OracleAdminLive = Layer.effect(
         if (!user) return yield* new OracleUnavailable({ reason: `no user for ${email}` })
 
         const { id, attributes } = yield* Schema.decodeUnknownEffect(UserIdentity)(user)
+        const citizen = yield* findGroup('citizen', accessToken)
 
         yield* HttpClientRequest.put(`${adminUrl}/users/${id}`).pipe(
           HttpClientRequest.bearerToken(accessToken),
-          HttpClientRequest.bodyJsonUnsafe({ ...user, attributes: { ...attributes, [claim]: [value] } }),
+          HttpClientRequest.bodyJsonUnsafe({ ...user, attributes: { ...attributes, deed: [deed] } }),
           client.execute,
         )
 
@@ -112,17 +133,15 @@ export const OracleAdminLive = Layer.effect(
           Effect.flatMap(readJson(UserIdentity)),
         )
 
-        if (stored.attributes?.[claim]?.[0] !== value) {
+        if (stored.attributes?.deed?.[0] !== deed) {
           return yield* new OracleUnavailable({
-            reason: `the Oracle didn't keep the ${claim} claim; run ./quest deploy`,
+            reason: "the Oracle didn't keep the deed claim; run ./quest deploy",
           })
         }
-      }).pipe(
-        Effect.mapError((error) =>
-          error instanceof OracleUnavailable ? error : new OracleUnavailable({ reason: String(error) }),
-        ),
-      )
 
-    return { grant, setClaim }
+        yield* addToGroup(id, citizen.id, accessToken)
+      }).pipe(mapError)
+
+    return { grant, grantCitizen }
   }),
 ).pipe(Layer.provide(FetchHttpClient.layer))
