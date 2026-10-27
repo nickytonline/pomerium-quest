@@ -296,7 +296,7 @@ function signInWithPomerium(url: string, onSignedIn: (next: Identity) => void, o
 
         groupsBeforeSignIn = identity().authenticated ? identity().groups : null
         quest.setIdentity(next)
-        quest.send({ type: 'SIGNED_IN', groups: next.groups })
+        quest.signedIn(next)
         onSignedIn(next)
       })
     },

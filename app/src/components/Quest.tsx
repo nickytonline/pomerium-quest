@@ -117,7 +117,7 @@ function useBoot() {
     void probe().then(({ mode, identity }) => {
       quest.setMode(mode, identity)
 
-      if (identity.authenticated) quest.send({ type: 'SIGNED_IN', groups: identity.groups })
+      if (identity.authenticated) quest.signedIn(identity)
       else quest.send({ type: 'SIGNED_OUT' })
 
       if (returning) {

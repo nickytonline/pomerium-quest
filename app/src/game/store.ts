@@ -295,6 +295,12 @@ export const quest = {
     const snapshot = questActor.getSnapshot()
     update({ stage: snapshot.value, defeated: snapshot.context.defeated })
   },
+  /** Tells the quest someone signed in. A session holding the deed owns a house, whichever browser it's in. */
+  signedIn: (identity: Identity) => {
+    quest.send({ type: 'SIGNED_IN', groups: identity.groups })
+
+    if (identity.deed) quest.sendHouse({ type: 'DEED_GIVEN' })
+  },
   sendHouse: (event: HouseEvent) => {
     houseActor.send(event)
     persistHouse()
