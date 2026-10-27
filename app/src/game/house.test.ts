@@ -28,6 +28,11 @@ describe("the owner's deed", () => {
       false,
     )
   })
+
+  it('catches a deny on a single method', () => {
+    expect(turnsAwayOwner([rule('deny', { kind: 'http_method', is: 'POST' })], owner)).toBe(true)
+    expect(turnsAwayOwner([rule('deny', { kind: 'http_method', is: 'GET' })], owner)).toBe(true)
+  })
 })
 
 describe('rules that would turn the owner away', () => {

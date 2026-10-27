@@ -25,6 +25,9 @@ export const deedRule = (houseId: string): PolicyRule => ({
   criteria: [{ kind: 'claim', claim: 'deed', value: houseId }],
 })
 
+/** The methods the game sends to a house. */
+const GAME_METHODS = ['GET', 'POST'] as const
+
 /**
  * Whether these rules would turn the owner away at their own door despite the deed: a deny that matches
  * them always wins over the deed's allow. The desk refuses to save such rules.
@@ -32,7 +35,10 @@ export const deedRule = (houseId: string): PolicyRule => ({
 export function turnsAwayOwner(rules: readonly HouseRule[], owner: Identity) {
   const anyone: PolicyRule = { action: 'allow', match: 'or', criteria: [{ kind: 'accept' }] }
 
-  return !decide({ policy: [anyone, ...rules] }, owner, { method: 'GET', path: '/' }).allow
+  // A deny can name a method, so check each one the game uses.
+  return GAME_METHODS.some(
+    (method) => !decide({ policy: [anyone, ...rules] }, owner, { method, path: '/' }).allow,
+  )
 }
 
 /** The checks the editor offers. All of them work in open-source Pomerium. */
