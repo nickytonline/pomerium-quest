@@ -49,12 +49,37 @@ describe("chapter one's quest", () => {
 
   it('sends a session from before citizens were a claim back to be granted it', () => {
     const actor = toProven()
-    const old = start()
 
-    old.send({ type: 'SIGNED_IN', groups: ['citizen'] })
-    old.send({ type: 'SIGNED_IN', groups: [] })
-    expect(old.getSnapshot().value).toBe('invited')
+    actor.send({ type: 'SIGNED_IN', groups: [] })
+    expect(actor.getSnapshot().value).toBe('invited')
+    actor.send({ type: 'CITIZEN_GRANTED' })
+    actor.send({ type: 'SIGNED_IN', groups: ['citizen'] })
     expect(actor.getSnapshot().value).toBe('proven')
+  })
+
+  it('gives a knight their rank back once the Oracle has granted citizenship', () => {
+    const actor = toProven()
+
+    actor.send({ type: 'KNIGHTED' })
+    actor.send({ type: 'SIGNED_IN', groups: ['citizen', 'knights'] })
+    actor.send({ type: 'STEEL_TAKEN' })
+    actor.send({ type: 'SIGNED_IN', groups: ['knights'] })
+    actor.send({ type: 'CITIZEN_GRANTED' })
+    actor.send({ type: 'SIGNED_IN', groups: ['citizen', 'knights'] })
+    expect(actor.getSnapshot().value).toBe('armed')
+    expect(actor.getSnapshot().context.resume).toBeUndefined()
+  })
+
+  it('keeps a knighted player knighted until the session carries the knights claim', () => {
+    const actor = toProven()
+
+    actor.send({ type: 'KNIGHTED' })
+    actor.send({ type: 'SIGNED_IN', groups: [] })
+    actor.send({ type: 'CITIZEN_GRANTED' })
+    actor.send({ type: 'SIGNED_IN', groups: ['citizen'] })
+    expect(actor.getSnapshot().value).toBe('knighted')
+    actor.send({ type: 'SIGNED_IN', groups: ['citizen', 'knights'] })
+    expect(actor.getSnapshot().value).toBe('knight')
   })
 
   it('is proven only after the full quota of slimes, however they were counted before signing in', () => {

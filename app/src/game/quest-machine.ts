@@ -33,8 +33,13 @@ export type QuestEvent =
   | { readonly type: 'KNIGHTED' }
   | { readonly type: 'STEEL_TAKEN' }
 
+/** Stages a pre-citizen session had reached, which the Oracle's grant must give back. */
+export type Resume = 'knighted' | 'knight' | 'armed'
+
 export interface QuestContext {
   readonly defeated: Defeated
+  /** Set when a session from before citizens were a claim is sent back to the Oracle. */
+  readonly resume: Resume | undefined
 }
 
 export const questMachine = setup({
@@ -49,11 +54,27 @@ export const questMachine = setup({
     hasCitizenClaim: ({ event }) => event.type === 'SIGNED_IN' && event.groups.includes('citizen'),
     lacksCitizenClaim: ({ event }) => event.type === 'SIGNED_IN' && !event.groups.includes('citizen'),
     hasKnightsClaim: ({ event }) => event.type === 'SIGNED_IN' && event.groups.includes('knights'),
+    resumesArmed: ({ context, event }) =>
+      event.type === 'SIGNED_IN' &&
+      event.groups.includes('citizen') &&
+      event.groups.includes('knights') &&
+      context.resume === 'armed',
+    resumesKnight: ({ context, event }) =>
+      event.type === 'SIGNED_IN' &&
+      event.groups.includes('citizen') &&
+      event.groups.includes('knights') &&
+      context.resume !== undefined,
+    // Knighted before, but this session lacks the knights claim: the armory says no until they sign in again.
+    resumesKnighted: ({ context, event }) =>
+      event.type === 'SIGNED_IN' && event.groups.includes('citizen') && context.resume !== undefined,
+  },
+  actions: {
+    clearResume: assign({ resume: undefined }),
   },
 }).createMachine({
   id: 'quest',
   initial: 'anonymous',
-  context: { defeated: { bot: 0 } },
+  context: { defeated: { bot: 0 }, resume: undefined },
   on: {
     MONSTER_DEFEATED: {
       actions: assign({
@@ -87,14 +108,24 @@ export const questMachine = setup({
         'The sage told you that you are entitled to citizenship and a house. The Oracle grants them.',
       on: {
         CITIZEN_GRANTED: 'granted',
-        SIGNED_IN: { guard: 'hasCitizenClaim', target: 'citizen' },
+        SIGNED_IN: [
+          { guard: 'resumesArmed', target: 'armed', actions: 'clearResume' },
+          { guard: 'resumesKnight', target: 'knight', actions: 'clearResume' },
+          { guard: 'resumesKnighted', target: 'knighted', actions: 'clearResume' },
+          { guard: 'hasCitizenClaim', target: 'citizen' },
+        ],
         SIGNED_OUT: 'anonymous',
       },
     },
     granted: {
       description: "The identity provider lists 'citizen', but the Pomerium session holds older claims.",
       on: {
-        SIGNED_IN: { guard: 'hasCitizenClaim', target: 'citizen' },
+        SIGNED_IN: [
+          { guard: 'resumesArmed', target: 'armed', actions: 'clearResume' },
+          { guard: 'resumesKnight', target: 'knight', actions: 'clearResume' },
+          { guard: 'resumesKnighted', target: 'knighted', actions: 'clearResume' },
+          { guard: 'hasCitizenClaim', target: 'citizen' },
+        ],
         SIGNED_OUT: 'anonymous',
       },
     },
@@ -121,7 +152,7 @@ export const questMachine = setup({
       on: {
         // A session from before citizens were a claim: the Oracle grants it the next time they visit.
         SIGNED_IN: [
-          { guard: 'lacksCitizenClaim', target: 'invited' },
+          { guard: 'lacksCitizenClaim', target: 'invited', actions: assign({ resume: 'knighted' }) },
           { guard: 'hasKnightsClaim', target: 'knight' },
         ],
       },
@@ -129,13 +160,15 @@ export const questMachine = setup({
     knight: {
       description: 'The session carries groups: [knights]; the armory policy matches.',
       on: {
-        SIGNED_IN: { guard: 'lacksCitizenClaim', target: 'invited' },
+        SIGNED_IN: { guard: 'lacksCitizenClaim', target: 'invited', actions: assign({ resume: 'knight' }) },
         STEEL_TAKEN: 'armed',
       },
     },
     armed: {
       description: 'Holds the steel sword; can break the rocks to the library.',
-      on: { SIGNED_IN: { guard: 'lacksCitizenClaim', target: 'invited' } },
+      on: {
+        SIGNED_IN: { guard: 'lacksCitizenClaim', target: 'invited', actions: assign({ resume: 'armed' }) },
+      },
     },
   },
 })
@@ -154,7 +187,9 @@ function restore() {
     // SAFETY: saves from before defeated bot slimes were counted by kind kept one `xp` total.
     const legacy = snapshot.context as Partial<QuestContext> & { readonly xp?: number }
 
-    return legacy.defeated ? snapshot : { ...snapshot, context: { defeated: { bot: legacy.xp ?? 0 } } }
+    return legacy.defeated
+      ? snapshot
+      : { ...snapshot, context: { defeated: { bot: legacy.xp ?? 0 }, resume: undefined } }
   } catch {
     return undefined
   }
