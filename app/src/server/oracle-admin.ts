@@ -1,6 +1,6 @@
 import { Context, Effect, Layer, Redacted, Schema } from 'effect'
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from 'effect/http'
-import { GROUPS } from '../game/groups.ts'
+import { GROUPS, NO_DEED } from '../game/groups.ts'
 import { QuestConfig } from './config.ts'
 import { OracleUnavailable } from './errors.ts'
 
@@ -183,7 +183,7 @@ export const OracleAdminLive = Layer.effect(
 
         yield* HttpClientRequest.put(`${adminUrl}/users/${id}`).pipe(
           HttpClientRequest.bearerToken(accessToken),
-          HttpClientRequest.bodyJsonUnsafe({ ...user, attributes: { ...attributes, deed: [] } }),
+          HttpClientRequest.bodyJsonUnsafe({ ...user, attributes: { ...attributes, deed: [NO_DEED] } }),
           client.execute,
         )
 
@@ -194,9 +194,9 @@ export const OracleAdminLive = Layer.effect(
           Effect.flatMap(readJson(UserIdentity)),
         )
 
-        if (stored.attributes?.deed?.[0] !== undefined) {
+        if (stored.attributes?.deed?.[0] !== NO_DEED) {
           return yield* new OracleUnavailable({
-            reason: 'the Oracle kept the deed claim; run ./quest deploy',
+            reason: "the Oracle didn't empty the deed claim; run ./quest deploy",
           })
         }
       }).pipe(mapError)
@@ -218,7 +218,9 @@ export const OracleAdminLive = Layer.effect(
 
         const { attributes } = yield* Schema.decodeUnknownEffect(UserIdentity)(user)
 
-        return attributes?.deed?.[0] ?? null
+        const deed = attributes?.deed?.[0]
+
+        return !deed || deed === NO_DEED ? null : deed
       }).pipe(mapError)
 
     return { grant, grantCitizen, wipeClaims, deedOf }

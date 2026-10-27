@@ -1,5 +1,6 @@
 import { Context, Effect, Layer, Schema } from 'effect'
 import { createRemoteJWKSet, jwtVerify } from 'jose'
+import { NO_DEED } from '../game/groups.ts'
 import { QuestConfig } from './config.ts'
 import { InvalidAssertion, MissingAssertion } from './errors.ts'
 
@@ -66,7 +67,7 @@ export const PomeriumIdentityLive = Layer.effect(
           email,
           name: claims.name || (email.split('@')[0] ?? email),
           groups: headerGroups.length > 0 ? headerGroups : (claims.groups ?? []),
-          deed: claims.deed || null,
+          deed: !claims.deed || claims.deed === NO_DEED ? null : claims.deed,
           issuer: claims.iss,
         }
       })
