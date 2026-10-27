@@ -674,7 +674,6 @@ function SoundToggle({ setting, label }: { readonly setting: keyof SoundSettings
   )
 }
 
-/** Whether a click landed on something that takes focus by itself: a button, a link, a field or the board. */
 const takesFocus = (target: EventTarget | null) =>
   target instanceof Element &&
   target.closest('a[href], button, input, select, textarea, summary, [tabindex], [contenteditable]') !== null

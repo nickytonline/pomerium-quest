@@ -506,8 +506,7 @@ export class KingdomScene extends Phaser.Scene {
         string,
         Phaser.Input.Keyboard.Key
       >
-      // Phaser handles these keys first, then stops the browser from scrolling the page. It only hears
-      // the board, so a button elsewhere keeps its own Space.
+      // Phaser handles these keys first, then stops the browser from scrolling the page.
       // (A page-level preventDefault would hide them from Phaser altogether.)
       keyboard.addCapture('UP,DOWN,LEFT,RIGHT,SPACE')
       // Queue presses as events so a tap shorter than a frame still counts. A press while the game waits
