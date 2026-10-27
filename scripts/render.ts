@@ -10,6 +10,7 @@ import { generateKeyPairSync, randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { parseAllDocuments, stringify } from 'yaml'
+import { GROUPS } from '../app/src/game/groups.ts'
 import { VISITORS, VISITOR_IDS, visitorPassword } from '../app/src/game/house.ts'
 import { policyDocument } from '../app/src/game/ppl.ts'
 import { ZONES } from '../app/src/game/zones.ts'
@@ -381,7 +382,7 @@ function realm(secrets: Secrets): Yaml {
     resetPasswordAllowed: false,
     rememberMe: false,
     sslRequired: 'external',
-    groups: [{ name: 'citizen' }, { name: 'knights' }, { name: 'scholars' }],
+    groups: [GROUPS.citizen, GROUPS.knights, GROUPS.scholars].map((name) => ({ name })),
     clients: [
       {
         clientId: 'pomerium',

@@ -13,6 +13,7 @@ import {
   type Page,
   type SignId,
 } from './content.ts'
+import { GROUPS } from './groups.ts'
 import { decide, routeYaml, type Identity } from './ppl.ts'
 import { VISITORS, type VisitorId } from './house.ts'
 import { addDeed, citizenshipPages } from './house-story.ts'
@@ -44,10 +45,9 @@ const who = (id: Identity) => (id.authenticated ? id.email : 'anonymous')
 const claimsCode = (id: Identity) =>
   JSON.stringify({ email: id.email, email_verified: true, groups: id.groups, deed: id.deed }, null, 2)
 
-const isCitizen = (id: Identity) => id.groups.includes('citizen')
+const isCitizen = (id: Identity) => id.groups.includes(GROUPS.citizen)
 
-const NOT_A_CITIZEN =
-  "Every allow rule needs claim/groups: citizen, and the groups claim in your session doesn't include it. When no rule matches, Pomerium denies the request."
+const NOT_A_CITIZEN = `Every allow rule needs claim/groups: ${GROUPS.citizen}, and the groups claim in your session doesn't include it. When no rule matches, Pomerium denies the request.`
 
 /** The Royal Keep checks three things at once; say which ones the player still lacks. */
 function keepRefusal(id: Identity): Refusal {
@@ -56,16 +56,16 @@ function keepRefusal(id: Identity): Refusal {
 
   if (!isCitizen(id)) missing.push('a citizen (the Oracle can make you one)')
 
-  if (!id.groups.includes('knights'))
+  if (!id.groups.includes(GROUPS.knights))
     missing.push(
-      vouched.includes('knights')
+      vouched.includes(GROUPS.knights)
         ? "carrying your knight's papers (the Oracle can sign you in again at his temple)"
         : "a knight (the Captain in the Knights' Guild can vouch for you)",
     )
 
-  if (!id.groups.includes('scholars'))
+  if (!id.groups.includes(GROUPS.scholars))
     missing.push(
-      vouched.includes('scholars')
+      vouched.includes(GROUPS.scholars)
         ? "carrying your scholar's papers (the Oracle can sign you in again at his temple)"
         : 'a scholar (read every book in the library, then talk to the Librarian)',
     )
@@ -75,7 +75,7 @@ function keepRefusal(id: Identity): Refusal {
       title: 'Knights who are scholars only',
       text: `The guard of the Royal Keep reads your papers twice. "My orders: only knights who are also scholars. You still need to be ${missing.join(', and ')}."`,
     },
-    hint: `The keep's one rule needs claim/groups: citizen, claim/groups: knights and claim/groups: scholars. In an and rule every check must pass; the ✗ lines are the ones your session fails.`,
+    hint: `The keep's one rule needs claim/groups: ${GROUPS.citizen}, claim/groups: ${GROUPS.knights} and claim/groups: ${GROUPS.scholars}. In an and rule every check must pass; the ✗ lines are the ones your session fails.`,
   }
 }
 
@@ -108,7 +108,7 @@ function refusal(zone: Zone, id: Identity): Refusal {
           title: 'Knights only',
           text: 'The guard doesn\'t budge. "My orders say knights only, and nothing in your papers says knight. The Captain in the Knights\' Guild can vouch for you."',
         },
-        hint: "The armory's only rule needs claim/groups: knights, and the groups claim in your session doesn't include knights.",
+        hint: `The armory's only rule needs claim/groups: ${GROUPS.knights}, and the groups claim in your session doesn't include ${GROUPS.knights}.`,
       }
     case 'keep':
       return keepRefusal(id)
@@ -122,7 +122,7 @@ function refusal(zone: Zone, id: Identity): Refusal {
           title: 'Scribes only',
           text: 'The scriptorium guard bars the door. "This room is for writing in the Royal Ledger, and my orders say only scribes may come in. Your papers say you may read, not write."',
         },
-        hint: `The scriptorium's path, ${zone.prefix}, is inside the library's, so Pomerium matched this more specific route and checked its policy instead. Its only rule needs claim/groups: scribes, and the groups claim in your session doesn't include scribes. No rule matched, so Pomerium denied it. This denial is the lesson.`,
+        hint: `The scriptorium's path, ${zone.prefix}, is inside the library's, so Pomerium matched this more specific route and checked its policy instead. Its only rule needs claim/groups: ${GROUPS.scribes}, and the groups claim in your session doesn't include ${GROUPS.scribes}. No rule matched, so Pomerium denied it. This denial is the lesson.`,
       }
 
     default:
@@ -369,11 +369,11 @@ const welcomeBack = (next: Identity, onDone?: () => void) =>
 function vouchedGroups() {
   const vouched: string[] = []
 
-  if (isAtLeast('granted')) vouched.push('citizen')
+  if (isAtLeast('granted')) vouched.push(GROUPS.citizen)
 
-  if (isAtLeast('knighted')) vouched.push('knights')
+  if (isAtLeast('knighted')) vouched.push(GROUPS.knights)
 
-  if (quest.get().progress.scholar) vouched.push('scholars')
+  if (quest.get().progress.scholar) vouched.push(GROUPS.scholars)
 
   return vouched
 }

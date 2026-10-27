@@ -1,5 +1,6 @@
 import { Effect, Exit, Layer, Redacted, Schema } from 'effect'
 import { describe, expect, it } from 'vite-plus/test'
+import { GROUPS } from '../game/groups.ts'
 import { HOUSE_LIMITS, HOUSE_VALUE, type HouseRule } from '../game/house.ts'
 import { QuestConfig } from './config.ts'
 import { HouseRules, Houses, HousesLive, houseId } from './houses.ts'
@@ -23,7 +24,7 @@ describe('the rules a player may save', () => {
         rule([{ kind: 'domain', is: 'game.localhost.pomerium.io' }]),
         rule([{ kind: 'email', is: 'baker@game.localhost.pomerium.io' }], 'deny', 'or'),
         rule([
-          { kind: 'claim', claim: 'groups', value: 'knights' },
+          { kind: 'claim', claim: 'groups', value: GROUPS.knights },
           { kind: 'http_method', is: 'GET' },
         ]),
         rule([{ kind: 'accept' }]),
@@ -49,7 +50,7 @@ describe('the rules a player may save', () => {
   })
 
   it('refuses criteria the editor never offers, even ones real Pomerium has', () => {
-    expect(accepts([rule([{ kind: 'groups', is: 'knights' }])])).toBe(false)
+    expect(accepts([rule([{ kind: 'groups', is: GROUPS.knights }])])).toBe(false)
     expect(accepts([rule([{ kind: 'claim', claim: 'email', value: 'a@x.io' }])])).toBe(false)
     expect(accepts([rule([{ kind: 'http_method', is: 'DELETE' }])])).toBe(false)
     expect(accepts([rule([{ kind: 'email', is: 'a@x.io' }], 'allow', 'xor')])).toBe(false)
@@ -138,7 +139,7 @@ function fakeCluster() {
 
 describe("a player's saved rules", () => {
   const knights: readonly HouseRule[] = [
-    { action: 'allow', match: 'or', criteria: [{ kind: 'claim', claim: 'groups', value: 'knights' }] },
+    { action: 'allow', match: 'or', criteria: [{ kind: 'claim', claim: 'groups', value: GROUPS.knights }] },
   ]
 
   it('come back from the server, so a browser that has never seen them does not make the house public', async () => {

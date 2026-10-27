@@ -11,6 +11,7 @@
 // in the knights group, but their Pomerium session still holds the claims from sign-in,
 // so the armory still says no until they sign in again.
 import { assign, createActor, setup, type SnapshotFrom } from 'xstate'
+import { GROUPS } from './groups.ts'
 
 /** The Captain vouches for anyone who has cleared this many of each monster kind. */
 export const KNIGHT_QUOTA = 3
@@ -46,9 +47,9 @@ export const questMachine = setup({
   },
   guards: {
     proven: ({ context }) => isProven(context.defeated),
-    hasCitizenClaim: ({ event }) => event.type === 'SIGNED_IN' && event.groups.includes('citizen'),
-    lacksCitizenClaim: ({ event }) => event.type === 'SIGNED_IN' && !event.groups.includes('citizen'),
-    hasKnightsClaim: ({ event }) => event.type === 'SIGNED_IN' && event.groups.includes('knights'),
+    hasCitizenClaim: ({ event }) => event.type === 'SIGNED_IN' && event.groups.includes(GROUPS.citizen),
+    lacksCitizenClaim: ({ event }) => event.type === 'SIGNED_IN' && !event.groups.includes(GROUPS.citizen),
+    hasKnightsClaim: ({ event }) => event.type === 'SIGNED_IN' && event.groups.includes(GROUPS.knights),
   },
 }).createMachine({
   id: 'quest',
@@ -92,7 +93,7 @@ export const questMachine = setup({
       },
     },
     granted: {
-      description: "The identity provider lists 'citizen', but the Pomerium session holds older claims.",
+      description: `The identity provider lists '${GROUPS.citizen}', but the Pomerium session holds older claims.`,
       on: {
         SIGNED_IN: { guard: 'hasCitizenClaim', target: 'citizen' },
         SIGNED_OUT: 'anonymous',
@@ -113,13 +114,13 @@ export const questMachine = setup({
       },
     },
     knighted: {
-      description: "The identity provider lists 'knights', but the Pomerium session holds older claims.",
+      description: `The identity provider lists '${GROUPS.knights}', but the Pomerium session holds older claims.`,
       on: {
         SIGNED_IN: { guard: 'hasKnightsClaim', target: 'knight' },
       },
     },
     knight: {
-      description: 'The session carries groups: [knights]; the armory policy matches.',
+      description: `The session carries groups: [${GROUPS.knights}]; the armory policy matches.`,
       on: {
         STEEL_TAKEN: 'armed',
       },

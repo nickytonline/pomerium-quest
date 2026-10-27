@@ -1,4 +1,5 @@
 import { Effect, Schema } from 'effect'
+import { GROUPS } from '../game/groups.ts'
 import { turnsAwayOwner, type HouseRule } from '../game/house.ts'
 import { SIGNED_IN_MESSAGE, ZONES } from '../game/zones.ts'
 import { QuestConfig } from './config.ts'
@@ -118,9 +119,9 @@ export const handleZone = (request: Request, splat: string) =>
           : Response.redirect(new URL('/?signedin=1', config.publicOrigin), 302)
       case 'POST guild/knight': {
         const oracle = yield* OracleAdmin
-        yield* oracle.grant(player.email, 'knights')
+        yield* oracle.grant(player.email, GROUPS.knights)
 
-        return json(200, { granted: 'knights', refreshRequired: true, verifiedBy })
+        return json(200, { granted: GROUPS.knights, refreshRequired: true, verifiedBy })
       }
 
       // The Oracle makes a newcomer a citizen and grants the deed to their house: the citizen group, and a
@@ -130,15 +131,15 @@ export const handleZone = (request: Request, splat: string) =>
         const deed = houseId(player.email)
         yield* oracle.grantCitizen(player.email, deed)
 
-        return json(200, { granted: ['citizen'], deed, refreshRequired: true, verifiedBy })
+        return json(200, { granted: [GROUPS.citizen], deed, refreshRequired: true, verifiedBy })
       }
 
       // The Librarian writes to the Oracle, like the Captain, once the player has read every book.
       case 'POST oracle/scholar': {
         const oracle = yield* OracleAdmin
-        yield* oracle.grant(player.email, 'scholars')
+        yield* oracle.grant(player.email, GROUPS.scholars)
 
-        return json(200, { granted: 'scholars', refreshRequired: true, verifiedBy })
+        return json(200, { granted: GROUPS.scholars, refreshRequired: true, verifiedBy })
       }
 
       // The owner is always the verified player, never something the request says.

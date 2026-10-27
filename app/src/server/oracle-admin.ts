@@ -1,5 +1,6 @@
 import { Context, Effect, Layer, Redacted, Schema } from 'effect'
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from 'effect/http'
+import { GROUPS } from '../game/groups.ts'
 import { QuestConfig } from './config.ts'
 import { OracleUnavailable } from './errors.ts'
 
@@ -117,7 +118,7 @@ export const OracleAdminLive = Layer.effect(
         if (!user) return yield* new OracleUnavailable({ reason: `no user for ${email}` })
 
         const { id, attributes } = yield* Schema.decodeUnknownEffect(UserIdentity)(user)
-        const citizen = yield* findGroup('citizen', accessToken)
+        const citizen = yield* findGroup(GROUPS.citizen, accessToken)
 
         yield* HttpClientRequest.put(`${adminUrl}/users/${id}`).pipe(
           HttpClientRequest.bearerToken(accessToken),

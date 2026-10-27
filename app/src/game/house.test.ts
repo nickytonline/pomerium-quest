@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vite-plus/test'
+import { GROUPS } from './groups.ts'
 import { TOWNSFOLK_DOMAIN, deedRule, turnsAwayOwner, type HouseRule } from './house.ts'
 import { decide, type Identity } from './ppl.ts'
 
 const owner: Identity = {
   authenticated: true,
   email: `nick@${TOWNSFOLK_DOMAIN}`,
-  groups: ['citizen'],
+  groups: [GROUPS.citizen],
   deed: '3f9a1c2b7d4e',
 }
 

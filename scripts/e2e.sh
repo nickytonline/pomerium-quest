@@ -14,6 +14,10 @@ GAME="https://game.${DOMAIN}${SUFFIX}"
 ORACLE="https://oracle.${DOMAIN}${SUFFIX}"
 JAR_DIR="$(mktemp -d)"
 JSON='accept: application/json'
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# The group names come from the game's own constants, so these checks can't drift from the policies.
+read -r GROUP_CITIZEN GROUP_KNIGHTS < <(node --input-type=module -e "import { GROUPS } from '$ROOT/app/src/game/groups.ts'; console.log(GROUPS.citizen, GROUPS.knights)")
+[ -n "$GROUP_KNIGHTS" ] || { echo 'could not read the group names from app/src/game/groups.ts'; exit 1; }
 # The process id keeps runs started in the same second (in parallel) from sharing accounts.
 RUN="$(date +%s)-$$"
 failures=0
@@ -184,14 +188,14 @@ check "letter 2: the traveler is refused" 403 "$(knock "$home" traveler)"
 check "letter 2: you are let in" 200 "$(status "$home" "${path}knock")"
 sleep 11
 
-knights='{"kind":"claim","claim":"groups","value":"knights"}'
+knights='{"kind":"claim","claim":"groups","value":"'"$GROUP_KNIGHTS"'"}'
 guild="$(rules "[{\"action\":\"allow\",\"match\":\"or\",\"criteria\":[${knights}]}]")"
 check "letter 3: save the knights" 200 "$(builder_status "$home" save "$guild")"
 check "letter 3: the Captain (a knight) is let in" 200 "$(knock "$home" captain)"
 check "letter 3: the Librarian is refused" 403 "$(knock "$home" librarian)"
 sleep 11
 
-citizens='{"kind":"claim","claim":"groups","value":"citizen"}'
+citizens='{"kind":"claim","claim":"groups","value":"'"$GROUP_CITIZEN"'"}'
 open_house="$(rules "[{\"action\":\"allow\",\"match\":\"and\",\"criteria\":[${citizens}]},{\"action\":\"deny\",\"match\":\"or\",\"criteria\":[$(email_is "baker@${TOWNSFOLK}")]}]")"
 check "letter 4: save citizens, but deny the baker" 200 "$(builder_status "$home" save "$open_house")"
 check "letter 4: the baker matches the allow, but the deny wins" 403 "$(knock "$home" baker)"

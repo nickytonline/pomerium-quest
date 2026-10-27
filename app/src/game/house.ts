@@ -1,5 +1,6 @@
 // The player's house: a route whose policy the player writes (docs/prd/your-house.md). Shared by the
 // editor in the browser and the server that turns the rules into a real Pomerium route.
+import { GROUPS } from './groups.ts'
 import { decide, type Identity } from './ppl.ts'
 import type { Criterion, PolicyRule } from './zones.ts'
 
@@ -67,13 +68,17 @@ export interface Visitor {
  * real session. The traveler comes from outside the kingdom, as at the town gate.
  */
 export const VISITORS: Record<VisitorId, Visitor> = {
-  baker: { name: 'the baker', email: `baker@${TOWNSFOLK_DOMAIN}`, groups: ['citizen'] },
+  baker: { name: 'the baker', email: `baker@${TOWNSFOLK_DOMAIN}`, groups: [GROUPS.citizen] },
   traveler: { name: 'the traveler', email: 'wanderer@outlands.net', groups: [] },
-  captain: { name: 'the Captain', email: `captain@${TOWNSFOLK_DOMAIN}`, groups: ['citizen', 'knights'] },
+  captain: {
+    name: 'the Captain',
+    email: `captain@${TOWNSFOLK_DOMAIN}`,
+    groups: [GROUPS.citizen, GROUPS.knights],
+  },
   librarian: {
     name: 'the Librarian',
     email: `librarian@${TOWNSFOLK_DOMAIN}`,
-    groups: ['citizen', 'scholars'],
+    groups: [GROUPS.citizen, GROUPS.scholars],
   },
 }
 

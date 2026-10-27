@@ -2,6 +2,7 @@
 // become a real Pomerium route; nothing here decides access.
 import { useEffect, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { LESSONS, link, type LessonId } from '../game/content.ts'
+import { GROUPS } from '../game/groups.ts'
 import {
   HOUSE_LIMITS,
   HOUSE_VALUE,
@@ -49,7 +50,7 @@ function blank(kind: Kind): HouseCriterion {
     case 'domain':
       return { kind, is: TOWNSFOLK_DOMAIN }
     case 'claim':
-      return { kind, claim: 'groups', value: 'knights' }
+      return { kind, claim: 'groups', value: GROUPS.knights }
     case 'http_method':
       return { kind, is: 'GET' }
   }

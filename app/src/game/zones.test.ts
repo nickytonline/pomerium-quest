@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test'
+import { GROUPS } from './groups.ts'
 import { VISITORS } from './house.ts'
 import { ZONES } from './zones.ts'
 
@@ -12,7 +13,7 @@ describe('citizens', () => {
       zone.policy.some((rule) =>
         rule.criteria.some(
           (criterion) =>
-            criterion.kind === 'claim' && criterion.claim === 'groups' && criterion.value === 'citizen',
+            criterion.kind === 'claim' && criterion.claim === 'groups' && criterion.value === GROUPS.citizen,
         ),
       ),
     )
@@ -28,10 +29,10 @@ describe('citizens', () => {
   })
 
   it('include the townsfolk but not the traveler, who comes from outside the kingdom', () => {
-    expect(VISITORS.baker.groups).toContain('citizen')
-    expect(VISITORS.captain.groups).toContain('citizen')
-    expect(VISITORS.librarian.groups).toContain('citizen')
-    expect(VISITORS.traveler.groups).not.toContain('citizen')
+    expect(VISITORS.baker.groups).toContain(GROUPS.citizen)
+    expect(VISITORS.captain.groups).toContain(GROUPS.citizen)
+    expect(VISITORS.librarian.groups).toContain(GROUPS.citizen)
+    expect(VISITORS.traveler.groups).not.toContain(GROUPS.citizen)
   })
 })
 
