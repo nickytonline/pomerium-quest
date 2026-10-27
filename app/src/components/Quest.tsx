@@ -1224,7 +1224,7 @@ function IdentityPanel() {
   const stage = useQuest((s) => s.stage)
 
   const claims = identity.authenticated
-    ? JSON.stringify({ email: identity.email, groups: identity.groups }, null, 2)
+    ? JSON.stringify({ email: identity.email, groups: identity.groups, deed: identity.deed }, null, 2)
     : null
 
   return (

@@ -1,12 +1,14 @@
 // A small PPL evaluator for the criteria the game uses. The real decision comes from
 // Pomerium; this evaluator only explains it (which line passed, which failed).
-import type { Criterion, PolicyRule, Zone } from './zones.ts'
+import type { ClaimName, Criterion, PolicyRule, Zone } from './zones.ts'
 
 export interface Identity {
   readonly authenticated: boolean
   readonly email: string
   /** The `groups` claim from the identity provider, as carried in the session. */
   readonly groups: readonly string[]
+  /** The `deed` claim: the id of the player's house, once the Oracle has granted it. */
+  readonly deed?: string | undefined
 }
 
 export interface RequestInfo {
@@ -81,6 +83,13 @@ export function policyYaml(policy: readonly PolicyRule[], indent: number): strin
   ])
 }
 
+/** What each claim holds in a session. */
+const CLAIM_VALUES: Record<ClaimName, (id: Identity) => readonly string[]> = {
+  groups: (id) => id.groups,
+  email: (id) => [id.email],
+  deed: (id) => (id.deed ? [id.deed] : []),
+}
+
 function check(node: Criterion, id: Identity, req: RequestInfo, whose: Viewpoint): Check {
   const domain = id.email.split('@')[1] ?? ''
 
@@ -99,7 +108,7 @@ function check(node: Criterion, id: Identity, req: RequestInfo, whose: Viewpoint
     case 'http_method':
       return { ok: req.method === node.is, actual: `this request: ${req.method}` }
     case 'claim': {
-      const values = node.claim === 'groups' ? id.groups : [id.email]
+      const values = CLAIM_VALUES[node.claim](id)
 
       return { ok: values.includes(node.value), actual: `${whose} ${node.claim}: [${values.join(', ')}]` }
     }

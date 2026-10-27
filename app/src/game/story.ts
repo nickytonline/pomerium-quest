@@ -15,7 +15,7 @@ import {
 } from './content.ts'
 import { decide, routeYaml, type Identity } from './ppl.ts'
 import { VISITORS, type VisitorId } from './house.ts'
-import { addDeed, deedClaim, citizenshipPages } from './house-story.ts'
+import { addDeed, citizenshipPages } from './house-story.ts'
 import { KNIGHT_QUOTA, hasSteel, isAtLeast, stage, type QuestStage } from './quest-machine.ts'
 import { sfx } from './sound.ts'
 import { MAX_HP, quest, type DenyView, type LogEntry } from './store.ts'
@@ -42,7 +42,7 @@ let groupsBeforeSignIn: readonly string[] | null = null
 const who = (id: Identity) => (id.authenticated ? id.email : 'anonymous')
 
 const claimsCode = (id: Identity) =>
-  JSON.stringify({ email: id.email, email_verified: true, groups: id.groups }, null, 2)
+  JSON.stringify({ email: id.email, email_verified: true, groups: id.groups, deed: id.deed }, null, 2)
 
 const isCitizen = (id: Identity) => id.groups.includes('citizen')
 
@@ -365,15 +365,8 @@ function vouchedGroups() {
 
   if (quest.get().progress.scholar) vouched.push('scholars')
 
-  const deed = deedClaim()
-
-  if (deed) vouched.push(deed)
-
   return vouched
 }
-
-/** How the Oracle names a group aloud: a deed's group is named for the deed it proves. */
-const groupName = (group: string) => (group.startsWith('deed-') ? 'your deed' : group)
 
 /** Groups the Oracle lists for the player that their session doesn't carry yet. */
 const staleGroups = () => vouchedGroups().filter((group) => !identity().groups.includes(group))
@@ -453,10 +446,7 @@ function oracle() {
 
   if (stale.length > 0) {
     quest.say(
-      [
-        { who: 'Oracle', text: `I have added ${stale.map(groupName).join(' and ')} to your groups.` },
-        refreshPage(),
-      ],
+      [{ who: 'Oracle', text: `I have added ${stale.join(' and ')} to your groups.` }, refreshPage()],
       () => {
         learn('refresh')
         refreshClaims(() => {})

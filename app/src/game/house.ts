@@ -15,14 +15,14 @@ export const HOUSE_LIMITS = { rules: 6, criteria: 6 } as const
  */
 export const HOUSE_VALUE = /^[A-Za-z0-9@._-]{1,254}$/
 
-/** The Oracle group that holds a house's deed: whoever carries it in their session always gets in. */
-export const deedGroup = (houseId: string) => `deed-${houseId}`
-
-/** The rule every saved house starts with, so its owner needs no rule of their own. */
+/**
+ * The rule every saved house starts with, so its owner needs no rule of their own: the Oracle gives the
+ * owner a `deed` claim holding their house's id, and whoever carries it always gets in.
+ */
 export const deedRule = (houseId: string): PolicyRule => ({
   action: 'allow',
   match: 'or',
-  criteria: [{ kind: 'claim', claim: 'groups', value: deedGroup(houseId) }],
+  criteria: [{ kind: 'claim', claim: 'deed', value: houseId }],
 })
 
 /**

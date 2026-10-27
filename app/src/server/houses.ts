@@ -4,7 +4,6 @@ import {
   HOUSE_LIMITS,
   HOUSE_PREFIX,
   HOUSE_VALUE,
-  deedGroup,
   deedRule,
   type HouseRule,
   type HouseState,
@@ -77,9 +76,6 @@ const hash = (text: string) => createHash('sha256').update(text).digest('hex').s
 
 /** A house's id: a hash of its owner's email, so it's DNS-safe and keeps the email out of URLs. */
 export const houseId = (owner: string) => hash(owner.toLowerCase())
-
-/** The group the Oracle adds the owner to for their deed. */
-export const deedGroupOf = (owner: string) => deedGroup(houseId(owner))
 
 /** Which rules a house is enforcing; Pomerium hands it to the house as X-House-Version. */
 const versionOf = (rules: readonly HouseRule[] | null) =>

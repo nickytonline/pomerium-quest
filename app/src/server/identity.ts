@@ -8,6 +8,8 @@ export type Player = {
   readonly email: string
   readonly name: string
   readonly groups: ReadonlyArray<string>
+  /** The id of the player's house, once the Oracle has granted the deed. */
+  readonly deed: string | null
   readonly issuer: string
 }
 
@@ -63,6 +65,7 @@ export const PomeriumIdentityLive = Layer.effect(
           email,
           name: claims.name || (email.split('@')[0] ?? email),
           groups: headerGroups.length > 0 ? headerGroups : (claims.groups ?? []),
+          deed: request.headers.get('x-pomerium-claim-deed') || null,
           issuer: claims.iss,
         }
       })

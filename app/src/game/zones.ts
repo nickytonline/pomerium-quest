@@ -27,7 +27,7 @@ export interface PolicyRule {
   readonly criteria: readonly Criterion[]
 }
 
-export type ClaimName = 'groups' | 'email'
+export type ClaimName = 'groups' | 'email' | 'deed'
 
 export type ZoneId =
   | 'oracle'

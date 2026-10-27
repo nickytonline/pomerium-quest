@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vite-plus/test'
-import { TOWNSFOLK_DOMAIN, deedGroup, deedRule, turnsAwayOwner, type HouseRule } from './house.ts'
+import { TOWNSFOLK_DOMAIN, deedRule, turnsAwayOwner, type HouseRule } from './house.ts'
 import { decide, type Identity } from './ppl.ts'
 
 const owner: Identity = {
   authenticated: true,
   email: `nick@${TOWNSFOLK_DOMAIN}`,
-  groups: [deedGroup('3f9a1c2b7d4e')],
+  groups: ['citizen'],
+  deed: '3f9a1c2b7d4e',
 }
 
 const rule = (action: HouseRule['action'], ...criteria: HouseRule['criteria']): HouseRule => ({
@@ -19,7 +20,7 @@ describe("the owner's deed", () => {
     const policy = [deedRule('3f9a1c2b7d4e')]
 
     expect(decide({ policy }, owner, { method: 'GET', path: '/' }).allow).toBe(true)
-    expect(decide({ policy }, { ...owner, groups: [] }, { method: 'GET', path: '/' }).allow).toBe(false)
+    expect(decide({ policy }, { ...owner, deed: undefined }, { method: 'GET', path: '/' }).allow).toBe(false)
   })
 
   it("doesn't open another owner's house", () => {

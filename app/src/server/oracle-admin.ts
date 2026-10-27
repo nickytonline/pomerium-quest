@@ -3,18 +3,27 @@ import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } fr
 import { QuestConfig } from './config.ts'
 import { OracleUnavailable } from './errors.ts'
 
-// The game asks the Oracle (Keycloak, our identity provider) to add a group to a player.
+// The game asks the Oracle (Keycloak, our identity provider) to add a group or a claim to a player.
 // Pomerium only sees the change once the player's session is refreshed with new claims.
 export class OracleAdmin extends Context.Service<
   OracleAdmin,
   {
-    /** Adds the player to a group. `create` makes the group first if the Oracle doesn't have it yet. */
-    readonly grant: (email: string, group: string, create?: boolean) => Effect.Effect<void, OracleUnavailable>
+    readonly grant: (email: string, group: string) => Effect.Effect<void, OracleUnavailable>
+    /** Sets a claim on the player, as a user attribute the Oracle puts in their token: the deed, say. */
+    readonly setClaim: (email: string, claim: string, value: string) => Effect.Effect<void, OracleUnavailable>
   }
 >()('OracleAdmin') {}
 
 const TokenResponse = Schema.Struct({ access_token: Schema.String })
 const Found = Schema.Array(Schema.Struct({ id: Schema.String, name: Schema.optional(Schema.String) }))
+
+// A user as Keycloak returns it. Updating a user sends the whole record back, so it's kept as it came.
+const UserRecord = Schema.Record(Schema.String, Schema.Unknown)
+
+const UserIdentity = Schema.Struct({
+  id: Schema.String,
+  attributes: Schema.optional(Schema.Record(Schema.String, Schema.Array(Schema.String))),
+})
 
 export const OracleAdminLive = Layer.effect(
   OracleAdmin,
@@ -49,21 +58,12 @@ export const OracleAdminLive = Layer.effect(
         Effect.flatMap(readJson(Found)),
       )
 
-    const grant = (email: string, group: string, create = false) =>
+    const grant = (email: string, group: string) =>
       Effect.gen(function* () {
         const accessToken = yield* token
         const [user] = yield* find('users', { email, exact: 'true' }, accessToken)
-        const lookup = () => find('groups', { search: group, exact: 'true' }, accessToken)
-        let found = (yield* lookup()).find((candidate) => candidate.name === group)
-
-        if (!found && create) {
-          yield* HttpClientRequest.post(`${adminUrl}/groups`).pipe(
-            HttpClientRequest.bearerToken(accessToken),
-            HttpClientRequest.bodyJsonUnsafe({ name: group }),
-            client.execute,
-          )
-          found = (yield* lookup()).find((candidate) => candidate.name === group)
-        }
+        const groups = yield* find('groups', { search: group, exact: 'true' }, accessToken)
+        const found = groups.find((candidate) => candidate.name === group)
 
         if (!user || !found) {
           return yield* new OracleUnavailable({
@@ -81,6 +81,34 @@ export const OracleAdminLive = Layer.effect(
         ),
       )
 
-    return { grant }
+    const setClaim = (email: string, claim: string, value: string) =>
+      Effect.gen(function* () {
+        const accessToken = yield* token
+
+        const users = yield* HttpClientRequest.get(`${adminUrl}/users`).pipe(
+          HttpClientRequest.setUrlParams({ email, exact: 'true' }),
+          HttpClientRequest.bearerToken(accessToken),
+          client.execute,
+          Effect.flatMap(readJson(Schema.Array(UserRecord))),
+        )
+
+        const [user] = users
+
+        if (!user) return yield* new OracleUnavailable({ reason: `no user for ${email}` })
+
+        const { id, attributes } = yield* Schema.decodeUnknownEffect(UserIdentity)(user)
+
+        yield* HttpClientRequest.put(`${adminUrl}/users/${id}`).pipe(
+          HttpClientRequest.bearerToken(accessToken),
+          HttpClientRequest.bodyJsonUnsafe({ ...user, attributes: { ...attributes, [claim]: [value] } }),
+          client.execute,
+        )
+      }).pipe(
+        Effect.mapError((error) =>
+          error instanceof OracleUnavailable ? error : new OracleUnavailable({ reason: String(error) }),
+        ),
+      )
+
+    return { grant, setClaim }
   }),
 ).pipe(Layer.provide(FetchHttpClient.layer))

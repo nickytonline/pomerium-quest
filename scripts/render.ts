@@ -168,7 +168,7 @@ function pomeriumSettings(): Yaml {
       // screen to start over (see app/src/game/access.ts).
       runtimeFlags: { allow_any_sign_out_redirect_uri: true },
       // Forward the identity provider's groups claim to the app as a header too.
-      jwtClaimHeaders: { 'X-Pomerium-Claim-Groups': 'groups' },
+      jwtClaimHeaders: { 'X-Pomerium-Claim-Groups': 'groups', 'X-Pomerium-Claim-Deed': 'deed' },
     },
   }
 }
@@ -333,6 +333,13 @@ const userProfile = {
       permissions: { view: ['admin', 'user'], edit: ['admin', 'user'] },
       multivalued: false,
     },
+    {
+      // The deed to a player's house: the id of their house. Only the game server may set it.
+      name: 'deed',
+      displayName: 'Deed',
+      permissions: { view: ['admin'], edit: ['admin'] },
+      multivalued: false,
+    },
   ],
 }
 
@@ -379,6 +386,20 @@ function realm(secrets: Secrets): Yaml {
             config: {
               'claim.name': 'groups',
               'full.path': 'false',
+              'id.token.claim': 'true',
+              'access.token.claim': 'true',
+              'userinfo.token.claim': 'true',
+              'introspection.token.claim': 'true',
+            },
+          },
+          {
+            name: 'deed',
+            protocol: 'openid-connect',
+            protocolMapper: 'oidc-usermodel-attribute-mapper',
+            config: {
+              'user.attribute': 'deed',
+              'claim.name': 'deed',
+              'jsonType.label': 'String',
               'id.token.claim': 'true',
               'access.token.claim': 'true',
               'userinfo.token.claim': 'true',

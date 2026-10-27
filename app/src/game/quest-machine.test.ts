@@ -43,7 +43,7 @@ describe("chapter one's quest", () => {
     actor.send({ type: 'SIGNED_IN', groups: [] })
     expect(actor.getSnapshot().value).toBe('granted')
 
-    actor.send({ type: 'SIGNED_IN', groups: ['citizen', 'deed-3f9a1c2b7d4e'] })
+    actor.send({ type: 'SIGNED_IN', groups: ['citizen'] })
     expect(actor.getSnapshot().value).toBe('citizen')
   })
 

@@ -2,7 +2,7 @@ import { Effect, Schema } from 'effect'
 import { SIGNED_IN_MESSAGE, ZONES } from '../game/zones.ts'
 import { QuestConfig } from './config.ts'
 import { InvalidRules } from './errors.ts'
-import { HouseRules, Houses, deedGroupOf } from './houses.ts'
+import { HouseRules, Houses, houseId } from './houses.ts'
 import { Visitors } from './visitors.ts'
 import { PomeriumIdentity, type Player } from './identity.ts'
 import { OracleAdmin } from './oracle-admin.ts'
@@ -110,15 +110,15 @@ export const handleZone = (request: Request, splat: string) =>
         return json(200, { granted: 'knights', refreshRequired: true, verifiedBy })
       }
 
-      // The Oracle makes a newcomer a citizen and grants the deed to their house: the citizen group, and the
-      // group that holds their own house's deed. Only the Oracle's own zone, since a newcomer isn't a citizen yet.
+      // The Oracle makes a newcomer a citizen and grants the deed to their house: the citizen group, and a
+      // deed claim holding their house's id. Only the Oracle's own zone, since a newcomer isn't a citizen yet.
       case 'POST oracle/citizen': {
         const oracle = yield* OracleAdmin
-        const deed = deedGroupOf(player.email)
+        const deed = houseId(player.email)
         yield* oracle.grant(player.email, 'citizen')
-        yield* oracle.grant(player.email, deed, true)
+        yield* oracle.setClaim(player.email, 'deed', deed)
 
-        return json(200, { granted: ['citizen', deed], refreshRequired: true, verifiedBy })
+        return json(200, { granted: ['citizen'], deed, refreshRequired: true, verifiedBy })
       }
 
       // The Librarian writes to the Oracle, like the Captain, once the player has read every book.

@@ -12,12 +12,6 @@ import { ANONYMOUS, quest } from './store.ts'
 const learn = (lesson: LessonId) => quest.learn(lesson, LESSONS[lesson].title)
 const rules = () => quest.get().progress.houseRules
 
-/** The group the Oracle added for the deed this visit, if it did. Kept in memory, so a reload forgets it. */
-let deed: string | null = null
-
-/** The deed's group, once the Oracle has added it, whether or not the session carries it yet. */
-export const deedClaim = () => deed
-
 /** The stage's letter, if there's one on the desk. */
 export const currentLetter = (): Letter | null => {
   const stage = houseStage()
@@ -63,7 +57,7 @@ export function houseRouteYaml(house: HouseState | null, saved: readonly HouseRu
 export const citizenshipPages = (): Page[] => [
   {
     who: 'Oracle',
-    text: 'The sage told you. Every newcomer is entitled to be a citizen, and a citizen to a house outside the walls. Yours is in the Slime Fields, just below the pond. I have added two claims to your papers: the group citizen, and the deed to your house.',
+    text: 'The sage told you. Every newcomer is entitled to be a citizen, and a citizen to a house outside the walls. Yours is in the Slime Fields, just below the pond. I have added two claims to your papers: the group citizen, and a deed claim that names your house.',
     links: [link('claims')],
   },
   {
@@ -82,7 +76,6 @@ export async function addDeed() {
 
   if (!claimed.ok) return false
 
-  deed = claimed.value.at(-1) ?? null
   quest.sendHouse({ type: 'DEED_GIVEN' })
   sfx('itemGet')
   quest.toast('The Oracle added the deed to your house', 'info')

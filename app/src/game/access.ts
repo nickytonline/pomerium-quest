@@ -12,7 +12,11 @@ export type Outcome =
   | { readonly kind: 'error'; readonly message: string }
 
 interface OracleResponse {
-  readonly player?: { readonly email: string; readonly groups: readonly string[] } | null
+  readonly player?: {
+    readonly email: string
+    readonly groups: readonly string[]
+    readonly deed: string | null
+  } | null
 }
 
 interface ZoneResponse {
@@ -57,9 +61,9 @@ export async function probe(): Promise<{ mode: Mode; identity: Identity }> {
     const body = (await response.json()) as OracleResponse
 
     if (!body.player) return { mode: 'unreachable', identity: ANONYMOUS }
-    const { email, groups } = body.player
+    const { email, groups, deed } = body.player
 
-    return { mode: 'pomerium', identity: { authenticated: true, email, groups } }
+    return { mode: 'pomerium', identity: { authenticated: true, email, groups, deed: deed ?? undefined } }
   } catch {
     return { mode: 'unreachable', identity: ANONYMOUS }
   }
@@ -160,8 +164,8 @@ async function builder<T>(action: string, body: BuilderRequest): Promise<Built<T
 export const openHouse = (rules: readonly HouseRule[] | null) => builder<HouseState>('open', { rules })
 export const saveHouse = (rules: readonly HouseRule[]) => builder<HouseState>('save', { rules })
 
-/** The Oracle makes the player a citizen and grants the deed: the groups he adds, the deed's group last. */
-export async function claimCitizenship(): Promise<Built<readonly string[]>> {
+/** The Oracle makes the player a citizen and grants the deed to their house. */
+export async function claimCitizenship(): Promise<Built<null>> {
   try {
     const response = await fetch('/zones/oracle/citizen', {
       method: 'POST',
@@ -171,10 +175,7 @@ export async function claimCitizenship(): Promise<Built<readonly string[]>> {
 
     if (!response.ok) return { ok: false, message: `${response.status} ${response.statusText}` }
 
-    // SAFETY: our own server route answers with this JSON shape (app/src/server/zones.ts).
-    const { granted } = (await response.json()) as { granted: readonly string[] }
-
-    return { ok: true, value: granted }
+    return { ok: true, value: null }
   } catch (error) {
     return { ok: false, message: String(error) }
   }
