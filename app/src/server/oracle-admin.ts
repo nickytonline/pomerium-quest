@@ -1,6 +1,6 @@
 import { Context, Effect, Layer, Redacted, Schema } from 'effect'
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from 'effect/http'
-import { GROUPS, NO_DEED } from '../game/groups.ts'
+import { BASE_GROUP, GROUPS, NO_DEED } from '../game/groups.ts'
 import { QuestConfig } from './config.ts'
 import { OracleUnavailable } from './errors.ts'
 
@@ -171,6 +171,11 @@ export const OracleAdminLive = Layer.effect(
         if (!user) return yield* new OracleUnavailable({ reason: `no user for ${email}` })
 
         const { id, attributes } = yield* Schema.decodeUnknownEffect(UserIdentity)(user)
+
+        // Players from before the base group don't have it from sign-up. Joining first means the groups claim
+        // is never empty, so the next sign-in replaces the stored groups instead of leaving them in place.
+        const base = yield* findGroup(BASE_GROUP, accessToken)
+        yield* addToGroup(id, base.id, accessToken)
 
         for (const name of GRANTED) {
           const group = yield* findGroup(name, accessToken)
