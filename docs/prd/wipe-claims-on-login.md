@@ -12,9 +12,9 @@ cached user record drops the old groups on the next sign-in (see "Still to check
   New game, Play again and the phish screen's Start over all use it. If the reset fails, the save is kept.
 - **Death:** running out of hearts now shows the Oracle dialog in `KNOCKED_OUT` and then starts over, instead of
   waking the player in the village still signed in.
-- **Deed:** the deed is held only while the player is a citizen in the current game. The Oracle grants it again when
-  they become a citizen. It is still `houseId(email)`, so the same house comes back. A random per-game deed would
-  need houses keyed by something other than the owner's email.
+- **Deed:** the deed is held only while the player is a citizen in the current game. The Oracle grants a new one
+  (`crypto.randomUUID()`) when they become a citizen again, so an old deed never opens a door. The house keeps its
+  `houseId(email)`, so the same house comes back; only its door is rebuilt with the new deed.
 
 Checked against the cluster: the same Keycloak calls, run on a throwaway user, removed all three memberships (204s,
 no groups left), and an emptied `deed` attribute disappeared. `npm run check` and `npm test` pass.
