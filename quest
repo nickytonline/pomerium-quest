@@ -134,11 +134,17 @@ deploy() {
 
 # The townsfolk who visit players' houses get real Oracle accounts, imported (and reset) at every deploy.
 # Keycloak only imports its realm on first start, so the groups they belong to are created first if an
-# older realm doesn't have them yet (an existing group is left alone, with its members).
+# older realm doesn't have them yet (an existing group is left alone, with its members). The base group every
+# player joins goes in too, since the Oracle adds players to it when it takes their claims back.
 townsfolk() {
   local password groups
   password="$(node -p "require('./${STATE}/secrets.json').keycloakAdminPassword")"
-  groups="$(node -p "[...new Set(require('./deploy/.generated/townsfolk.json').users.flatMap((u) => u.groups))].map((g) => g.slice(1)).join(' ')")"
+  groups="$(node --input-type=module -e "
+    import { BASE_GROUP } from './app/src/game/groups.ts'
+    import townsfolk from './deploy/.generated/townsfolk.json' with { type: 'json' }
+    const visiting = townsfolk.users.flatMap((u) => u.groups).map((g) => g.slice(1))
+    console.log([...new Set([BASE_GROUP, ...visiting])].join(' '))
+  ")"
   kc -n "$NAMESPACE" exec -i deploy/keycloak -- sh -c '
     cat >/tmp/townsfolk.json
     kcadm=/opt/keycloak/bin/kcadm.sh

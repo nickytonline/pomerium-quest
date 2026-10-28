@@ -8,8 +8,9 @@ import {
   type ReactNode,
 } from 'react'
 import { probe } from '../game/access.ts'
+import { startOver } from '../game/restart.ts'
 import { SHEETS } from '../game/sheets.ts'
-import { Celebration, playAgain } from './Celebration.tsx'
+import { Celebration } from './Celebration.tsx'
 import { HouseEditor } from './House.tsx'
 import { Phished } from './Phished.tsx'
 import { PolicyLines } from './PolicyLines.tsx'
@@ -277,8 +278,8 @@ function Splash() {
           {saved &&
             (confirmingNew ? (
               <p className="m-0 text-[0.9rem]">
-                Start a new game? Your lessons and progress are cleared.{' '}
-                <button className={linkButton} type="button" onClick={playAgain}>
+                Start a new game? Your lessons, progress and claims are cleared.{' '}
+                <button className={linkButton} type="button" onClick={() => void startOver()}>
                   Yes, start over
                 </button>{' '}
                 <button className={linkButton} type="button" onClick={() => setConfirmingNew(false)}>
@@ -631,9 +632,9 @@ function PauseMenu() {
         <SoundToggle setting="effects" label="Sound effects" />
         {confirmingRestart ? (
           <div className="grid gap-2 rounded border-2 border-deny p-3 text-[0.9rem]">
-            <span>Restart from the village? Your lessons and progress are cleared.</span>
+            <span>Restart from the village? Your lessons, progress and claims are cleared.</span>
             <div className="flex gap-2">
-              <button className={menuButton} type="button" onClick={playAgain}>
+              <button className={menuButton} type="button" onClick={() => void startOver()}>
                 Restart
               </button>
               <button className={menuButton} type="button" onClick={() => setConfirmingRestart(false)}>

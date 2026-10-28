@@ -1,5 +1,6 @@
 import { Context, Effect, Layer, Schema } from 'effect'
 import { createRemoteJWKSet, jwtVerify } from 'jose'
+import { BASE_GROUP, NO_DEED } from '../game/groups.ts'
 import { QuestConfig } from './config.ts'
 import { InvalidAssertion, MissingAssertion } from './errors.ts'
 
@@ -65,8 +66,12 @@ export const PomeriumIdentityLive = Layer.effect(
         return {
           email,
           name: claims.name || (email.split('@')[0] ?? email),
-          groups: headerGroups.length > 0 ? headerGroups : (claims.groups ?? []),
-          deed: claims.deed || null,
+          // The base group only keeps the claim in the token (see BASE_GROUP). No policy checks it, so the game
+          // doesn't show it.
+          groups: (headerGroups.length > 0 ? headerGroups : (claims.groups ?? [])).filter(
+            (group) => group !== BASE_GROUP,
+          ),
+          deed: !claims.deed || claims.deed === NO_DEED ? null : claims.deed,
           issuer: claims.iss,
         }
       })

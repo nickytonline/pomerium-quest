@@ -6,6 +6,9 @@ import { QuestConfig } from './config.ts'
 import { HouseRules, Houses, HousesLive, houseId } from './houses.ts'
 import { Kube, type KubeResponse } from './kube.ts'
 
+// The deed the Oracle granted for this game: the owner's door is built with it.
+const DEED = 'deed-this-game'
+
 /** Rules as a client might send them: any JSON object, valid or not. */
 type Sent = { readonly action: string; readonly match: string; readonly criteria: readonly object[] }
 
@@ -145,9 +148,9 @@ describe("a player's saved rules", () => {
   it('come back from the server, so a browser that has never seen them does not make the house public', async () => {
     const cluster = fakeCluster()
 
-    const saved = await cluster.run((houses) => houses.save('nick@example.org', knights))
+    const saved = await cluster.run((houses) => houses.save('nick@example.org', knights, DEED))
 
-    const opened = await cluster.run((houses) => houses.open('nick@example.org', null))
+    const opened = await cluster.run((houses) => houses.open('nick@example.org', null, DEED))
 
     expect(opened.rules).toEqual(knights)
     expect(opened.version).toBe(saved.version)
@@ -156,31 +159,42 @@ describe("a player's saved rules", () => {
 
   it('outlive the idle house: it is rebuilt from them when its Ingress has been taken down', async () => {
     const cluster = fakeCluster()
-    const saved = await cluster.run((houses) => houses.save('nick@example.org', knights))
+    const saved = await cluster.run((houses) => houses.save('nick@example.org', knights, DEED))
 
     cluster.objects.delete(`/apis/networking.k8s.io/v1/namespaces/quest-houses/ingresses/house-${saved.id}`)
 
-    const opened = await cluster.run((houses) => houses.open('nick@example.org', null))
+    const opened = await cluster.run((houses) => houses.open('nick@example.org', null, DEED))
 
     expect(opened.version).toBe(saved.version)
     expect(opened.rules).toEqual(knights)
+  })
+
+  it('give a new deed a new door, so a citizen who becomes one again gets the door rebuilt', async () => {
+    const cluster = fakeCluster()
+
+    const first = await cluster.run((houses) => houses.save('nick@example.org', knights, DEED))
+    const next = await cluster.run((houses) => houses.save('nick@example.org', knights, 'deed-next-game'))
+
+    expect(next.version).not.toBe(first.version)
   })
 
   it('win over whatever a browser sends, and a player with none saved keeps what they send', async () => {
     const cluster = fakeCluster()
     const stale: readonly HouseRule[] = [{ action: 'allow', match: 'or', criteria: [{ kind: 'accept' }] }]
 
-    await cluster.run((houses) => houses.save('nick@example.org', knights))
-    expect((await cluster.run((houses) => houses.open('nick@example.org', stale))).rules).toEqual(knights)
+    await cluster.run((houses) => houses.save('nick@example.org', knights, DEED))
+    expect((await cluster.run((houses) => houses.open('nick@example.org', stale, DEED))).rules).toEqual(
+      knights,
+    )
 
-    const fresh = await cluster.run((houses) => houses.open('sam@example.org', stale))
+    const fresh = await cluster.run((houses) => houses.open('sam@example.org', stale, DEED))
 
     expect(fresh.rules).toEqual(stale)
-    expect((await cluster.run((houses) => houses.open('sam@example.org', null))).rules).toEqual(stale)
+    expect((await cluster.run((houses) => houses.open('sam@example.org', null, DEED))).rules).toEqual(stale)
   })
 
   it('leave a house with none saved public', async () => {
-    const opened = await fakeCluster().run((houses) => houses.open('nick@example.org', null))
+    const opened = await fakeCluster().run((houses) => houses.open('nick@example.org', null, DEED))
 
     expect(opened.version).toBe('public')
     expect(opened.rules).toBeNull()

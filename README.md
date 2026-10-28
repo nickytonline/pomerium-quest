@@ -71,10 +71,10 @@ asks Pomerium whether to let you through, so what you can reach depends on who t
 The game takes the keys while its board has focus. Closing a menu, dialog or panel puts focus back on the
 board. If the keys stop working, click the board.
 
-The menu saves your game, restarts it, quits to the title screen, and turns music and sound effects on
-and off. Beside the board, your identity shows the claims in your session right now, and the access log
-lists every request a guard has checked. In a narrow window or on a phone, those panels move into the
-journal.
+The menu saves your game, restarts it (the Oracle takes back your claims too), quits to the title screen,
+and turns music and sound effects on and off. Beside the board, your identity shows the claims in your
+session right now, and the access log lists every request a guard has checked. In a narrow window or on a
+phone, those panels move into the journal.
 
 ### Sign in with the Oracle
 
@@ -86,9 +86,9 @@ temple is a real Keycloak login, and afterwards he shows you the claims Pomerium
 ### Fight, swim and get your strength back
 
 Bot slimes roam the Slime Fields. They bite for a whole heart, and your wooden sword takes two swings to
-pop one. The Captain wants three gone before they'll vouch for you. Run out of hearts and you wake up back
-in Hearth Village, still signed in and with all your gear. Catch a fish or drink from the town fountain
-to heal.
+pop one. The Captain wants three gone before they'll vouch for you. Run out of hearts and you start over:
+the Oracle takes back your citizenship, your deed and your progress, and you sign in again with no claims.
+Catch a fish or drink from the town fountain to heal.
 
 The dog can swim, too: only its head shows above the water, and it shakes itself dry on the bank.
 

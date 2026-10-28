@@ -1,6 +1,6 @@
 import { Context, Effect, Layer, Redacted, Schema } from 'effect'
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from 'effect/http'
-import { GROUPS } from '../game/groups.ts'
+import { BASE_GROUP, GROUPS, NO_DEED } from '../game/groups.ts'
 import { QuestConfig } from './config.ts'
 import { OracleUnavailable } from './errors.ts'
 
@@ -16,8 +16,18 @@ export class OracleAdmin extends Context.Service<
      * offered again.
      */
     readonly grantCitizen: (email: string, deed: string) => Effect.Effect<void, OracleUnavailable>
+    /**
+     * Takes back what the Oracle granted: the groups and the deed. A restart or a death does this, so the next
+     * sign-in carries no claims until the player becomes a citizen again.
+     */
+    readonly wipeClaims: (email: string) => Effect.Effect<void, OracleUnavailable>
+    /** The deed the Oracle last granted this player, or null when it has taken it back. */
+    readonly deedOf: (email: string) => Effect.Effect<string | null, OracleUnavailable>
   }
 >()('OracleAdmin') {}
+
+// The groups the Oracle grants. Scribes are never granted, so there is nothing to take back from them.
+const GRANTED = [GROUPS.citizens, GROUPS.knights, GROUPS.scholars]
 
 const TokenResponse = Schema.Struct({ access_token: Schema.String })
 const Found = Schema.Array(Schema.Struct({ id: Schema.String, name: Schema.optional(Schema.String) }))
@@ -143,6 +153,81 @@ export const OracleAdminLive = Layer.effect(
         yield* addToGroup(id, citizen.id, accessToken)
       }).pipe(mapError)
 
-    return { grant, grantCitizen }
+    // The groups go first: they open the doors, and the deed is only the key to one house. If the deed then fails,
+    // the player is still not a citizen to anyone's door, and a retry clears it.
+    const wipeClaims = (email: string) =>
+      Effect.gen(function* () {
+        const accessToken = yield* token
+
+        const users = yield* HttpClientRequest.get(`${adminUrl}/users`).pipe(
+          HttpClientRequest.setUrlParams({ email, exact: 'true' }),
+          HttpClientRequest.bearerToken(accessToken),
+          client.execute,
+          Effect.flatMap(readJson(Schema.Array(UserRecord))),
+        )
+
+        const [user] = users
+
+        if (!user) return yield* new OracleUnavailable({ reason: `no user for ${email}` })
+
+        const { id, attributes } = yield* Schema.decodeUnknownEffect(UserIdentity)(user)
+
+        // Players from before the base group don't have it from sign-up. Joining first means the groups claim
+        // is never empty, so the next sign-in replaces the stored groups instead of leaving them in place.
+        const base = yield* findGroup(BASE_GROUP, accessToken)
+        yield* addToGroup(id, base.id, accessToken)
+
+        for (const name of GRANTED) {
+          const group = yield* findGroup(name, accessToken)
+
+          yield* HttpClientRequest.delete(`${adminUrl}/users/${id}/groups/${group.id}`).pipe(
+            HttpClientRequest.bearerToken(accessToken),
+            client.execute,
+          )
+        }
+
+        yield* HttpClientRequest.put(`${adminUrl}/users/${id}`).pipe(
+          HttpClientRequest.bearerToken(accessToken),
+          HttpClientRequest.bodyJsonUnsafe({ ...user, attributes: { ...attributes, deed: [NO_DEED] } }),
+          client.execute,
+        )
+
+        // Read it back, as grantCitizen does: a deed that survived would let the old house's door open.
+        const stored = yield* HttpClientRequest.get(`${adminUrl}/users/${id}`).pipe(
+          HttpClientRequest.bearerToken(accessToken),
+          client.execute,
+          Effect.flatMap(readJson(UserIdentity)),
+        )
+
+        if (stored.attributes?.deed?.[0] !== NO_DEED) {
+          return yield* new OracleUnavailable({
+            reason: "the Oracle didn't empty the deed claim; run ./quest deploy",
+          })
+        }
+      }).pipe(mapError)
+
+    const deedOf = (email: string) =>
+      Effect.gen(function* () {
+        const accessToken = yield* token
+
+        const users = yield* HttpClientRequest.get(`${adminUrl}/users`).pipe(
+          HttpClientRequest.setUrlParams({ email, exact: 'true' }),
+          HttpClientRequest.bearerToken(accessToken),
+          client.execute,
+          Effect.flatMap(readJson(Schema.Array(UserRecord))),
+        )
+
+        const [user] = users
+
+        if (!user) return yield* new OracleUnavailable({ reason: `no user for ${email}` })
+
+        const { attributes } = yield* Schema.decodeUnknownEffect(UserIdentity)(user)
+
+        const deed = attributes?.deed?.[0]
+
+        return !deed || deed === NO_DEED ? null : deed
+      }).pipe(mapError)
+
+    return { grant, grantCitizen, wipeClaims, deedOf }
   }),
 ).pipe(Layer.provide(FetchHttpClient.layer))

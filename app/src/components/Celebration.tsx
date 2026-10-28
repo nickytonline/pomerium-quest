@@ -1,7 +1,7 @@
 // The end of the quest: fireworks over the kingdom, the Pomeranian, and the cast,
 // each with the part they played in Pomerium.
 import { useEffect, useRef } from 'react'
-import { signOutUrl } from '../game/access.ts'
+import { startOver } from '../game/restart.ts'
 import { SHEETS } from '../game/sheets.ts'
 import { quest, useQuest } from '../game/store.ts'
 import { NPC_FRAME, PHISH_FRAME } from '../game/world.ts'
@@ -247,16 +247,6 @@ function CastList({ hidden = false }: { readonly hidden?: boolean }) {
   )
 }
 
-/** Clears progress and signs out of the Oracle, so the next game starts as a stranger. */
-export const playAgain = () => {
-  const { identity } = quest.get()
-
-  quest.resetProgress()
-
-  if (identity.authenticated) location.assign(signOutUrl())
-  else location.reload()
-}
-
 /** The final screen, after the Royal Keep's Quest complete. */
 export function Celebration() {
   const open = useQuest((s) => s.celebrating)
@@ -333,7 +323,7 @@ function CelebrationScreen({ stats }: { readonly stats: string }) {
           <button
             className="rounded border-2 border-panel-edge bg-panel px-4 py-3 font-display text-ink hover:border-sun"
             type="button"
-            onClick={playAgain}
+            onClick={() => void startOver()}
           >
             Play again
           </button>

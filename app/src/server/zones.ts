@@ -4,7 +4,7 @@ import { turnsAwayOwner, type HouseRule } from '../game/house.ts'
 import { SIGNED_IN_MESSAGE, ZONES } from '../game/zones.ts'
 import { QuestConfig } from './config.ts'
 import { InvalidRules } from './errors.ts'
-import { HouseRules, Houses, houseId } from './houses.ts'
+import { HouseRules, Houses } from './houses.ts'
 import { Visitors } from './visitors.ts'
 import { PomeriumIdentity, type Player } from './identity.ts'
 import { OracleAdmin } from './oracle-admin.ts'
@@ -63,7 +63,7 @@ const keepOwnerIn = (player: Player, rules: readonly HouseRule[] | null) =>
     authenticated: true,
     email: player.email,
     groups: player.groups,
-    deed: houseId(player.email),
+    deed: player.deed ?? undefined,
   })
     ? Effect.fail(new InvalidRules({ reason: 'a deny rule would lock the owner out of their own door' }))
     : Effect.void
@@ -124,11 +124,12 @@ export const handleZone = (request: Request, splat: string) =>
         return json(200, { granted: GROUPS.knights, refreshRequired: true, verifiedBy })
       }
 
-      // The Oracle makes a newcomer a citizen and grants the deed to their house: the citizens group, and a
-      // deed claim holding their house's id. Only the Oracle's own zone, since a newcomer isn't a citizen yet.
+      // The Oracle makes a newcomer a citizen and grants the deed to their house: the citizens group, and a deed
+      // claim. The deed is fresh each time, so it belongs to this game: a restart takes it back, and becoming a
+      // citizen again grants a new one. Only the Oracle's own zone, since a newcomer isn't a citizen yet.
       case 'POST oracle/citizen': {
         const oracle = yield* OracleAdmin
-        const deed = houseId(player.email)
+        const deed = crypto.randomUUID()
         yield* oracle.grantCitizen(player.email, deed)
 
         return json(200, { granted: [GROUPS.citizens], deed, refreshRequired: true, verifiedBy })
@@ -142,13 +143,22 @@ export const handleZone = (request: Request, splat: string) =>
         return json(200, { granted: GROUPS.scholars, refreshRequired: true, verifiedBy })
       }
 
+      // A restart or a death takes the player's claims back, so the next sign-in carries none. The deed goes with
+      // them: the Oracle grants it again when the player becomes a citizen.
+      case 'POST oracle/reset': {
+        const oracle = yield* OracleAdmin
+        yield* oracle.wipeClaims(player.email)
+
+        return json(200, { cleared: true, verifiedBy })
+      }
+
       // The owner is always the verified player, never something the request says.
       case 'POST builder/open': {
         const houses = yield* Houses
         const { rules } = yield* readRules(request)
         yield* keepOwnerIn(player, rules)
 
-        return json(200, yield* houses.open(player.email, rules))
+        return json(200, yield* houses.open(player.email, rules, player.deed))
       }
 
       case 'POST builder/save': {
@@ -159,7 +169,7 @@ export const handleZone = (request: Request, splat: string) =>
 
         yield* keepOwnerIn(player, rules)
 
-        return json(200, yield* houses.save(player.email, rules))
+        return json(200, yield* houses.save(player.email, rules, player.deed))
       }
 
       // Whether Pomerium has taken up the house's latest rules yet.

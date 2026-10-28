@@ -77,7 +77,7 @@ become_citizen() {
   check "the Oracle grants citizenship and a deed" 200 "$(status "$jar" /zones/oracle/citizen POST)"
   sign_in_again "$jar" "$email" >/dev/null
   check "the new session carries a deed claim" yes \
-    "$(curl -s -b "$jar" -H "$JSON" "${GAME}/zones/oracle/" | grep -q '"deed":"[0-9a-f]\{12\}"' && echo yes || echo no)"
+    "$(curl -s -b "$jar" -H "$JSON" "${GAME}/zones/oracle/" | grep -q '"deed":"[0-9a-f-]\{36\}"' && echo yes || echo no)"
   # Pomerium takes a moment to see the new claims; wait, so the first request after this isn't a stale 403.
   local town=403
   for _ in $(seq 1 45); do
@@ -134,6 +134,22 @@ for _ in $(seq 1 45); do
   sleep 2
 done
 check "keep opens for a citizen who is a knight and a scholar" 200 "$keep"
+
+echo "Taking the claims back"
+deed_before="$(curl -s -b "$citizen" -H "$JSON" "${GAME}/zones/oracle/" | grep -o '"deed":"[^"]*"')"
+check "a restart takes the claims back at the Oracle" 200 "$(status "$citizen" /zones/oracle/reset POST)"
+check "taking them back again is harmless" 200 "$(status "$citizen" /zones/oracle/reset POST)"
+check "signing in again lands back in the game" "${GAME}/?signedin=1" "$(sign_in_again "$citizen" "$email")"
+check "the new session carries no deed" yes \
+  "$(curl -s -b "$citizen" -H "$JSON" "${GAME}/zones/oracle/" | grep -q '"deed":null' && echo yes || echo no)"
+# Pomerium keeps a copy of the user's claims for up to a minute. Wait that out, so an old copy would have expired.
+sleep 65
+check "after the cache has expired, the town still refuses" 403 "$(status "$citizen" /zones/town/enter)"
+check "and the keep refuses a player with no groups" 403 "$(status "$citizen" /zones/keep/enter)"
+become_citizen "$citizen" "$email"
+deed_after="$(curl -s -b "$citizen" -H "$JSON" "${GAME}/zones/oracle/" | grep -o '"deed":"[^"]*"')"
+check "becoming a citizen again grants a new deed" yes \
+  "$([ -n "$deed_after" ] && [ "$deed_after" != "$deed_before" ] && echo yes || echo no)"
 
 echo "Starting over"
 check "signing out to restart lands on the title screen" "${GAME}/" \
@@ -252,6 +268,21 @@ done
 check "a removed house has no route" 404 "$gone"
 check "walking back in rebuilds it from the saved rules" 200 "$(builder_status "$home" open "$only_you")"
 check "and it answers its owner again" 200 "$(status "$home" "${path}knock")"
+
+echo "The deed is for one game"
+# Only the deed may open the door now, so a player with no deed is refused at their own door.
+sleep 11
+check "save no rules, so only the deed opens the door" 200 "$(builder_status "$home" save "$only_you")"
+check "the builders say Pomerium has taken up the rules" true "$(live_within "$home" 60)"
+check "the owner's deed lets them in" 200 "$(status "$home" "${path}knock")"
+check "a restart takes the owner's deed back" 200 "$(status "$home" /zones/oracle/reset POST)"
+sign_in_again "$home" "$owner" >/dev/null
+sleep 65
+check "with no deed, the owner's own door refuses them" 403 "$(status "$home" "${path}knock")"
+become_citizen "$home" "$owner"
+check "the builders rebuild the door with the new deed" 200 "$(builder_status "$home" open "$only_you")"
+check "the builders say Pomerium has taken up the new door" true "$(live_within "$home" 60)"
+check "the owner's new deed lets them in again" 200 "$(status "$home" "${path}knock")"
 
 echo
 if [ "$failures" -eq 0 ]; then echo "All checks passed."; else echo "${failures} check(s) failed."; fi

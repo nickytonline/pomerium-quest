@@ -187,6 +187,18 @@ export const INTRO: Page[] = [
   },
 ]
 
+/** Running out of hearts is a restart: the Oracle takes the claims back, and the player starts over. */
+export const KNOCKED_OUT: Page[] = [
+  {
+    who: 'Slime Fields',
+    text: 'Your hearts run out, and everything goes dark.',
+  },
+  {
+    who: 'The Oracle',
+    text: 'Your citizenship and your deed go back to me. Sign in again, and you start over from the village with no claims.',
+  },
+]
+
 /** Who knocks in a letter's test: a townsperson, a slime, or the player at their own door. */
 export type Caller = Knocker | 'you'
 
