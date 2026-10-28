@@ -11,9 +11,10 @@ export const GROUPS = {
 } as const
 
 /**
- * Every player belongs to this group from sign-up, so the `groups` claim is never left out of a token. Pomerium
- * merges a new sign-in's claims into the user's stored ones and never drops a claim the token lacks, so an
- * emptied claim has to arrive with a value to replace the old one. Policies never check it.
+ * The Oracle adds a player to this group when it takes their claims back, so the `groups` claim is never left
+ * out of a token. Keycloak omits the claim when a player has no groups, and Pomerium merges a new sign-in's
+ * claims into the user's stored ones without dropping a claim the token lacks, so an emptied claim has to arrive
+ * with a value to replace the old one. Policies never check it, and the game hides it from the claims it shows.
  */
 export const BASE_GROUP = 'wanderers'
 

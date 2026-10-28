@@ -383,7 +383,6 @@ function realm(secrets: Secrets): Yaml {
     rememberMe: false,
     sslRequired: 'external',
     groups: [BASE_GROUP, GROUPS.citizens, GROUPS.knights, GROUPS.scholars].map((name) => ({ name })),
-    defaultGroups: [`/${BASE_GROUP}`],
     clients: [
       {
         clientId: 'pomerium',
