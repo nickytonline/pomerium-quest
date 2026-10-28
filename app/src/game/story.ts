@@ -905,6 +905,8 @@ const hearts = (halves: number) => {
 
 /** The player runs out of hearts: a restart, so the Oracle takes their claims back and they start over. */
 export function knockedOut() {
+  // Zero hearts stay if the Oracle can't be reached, so the next hit knocks them out again and retries the reset.
+  quest.setHp(0)
   quest.say(KNOCKED_OUT, () => void startOver())
 }
 
