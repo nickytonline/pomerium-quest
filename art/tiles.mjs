@@ -584,6 +584,20 @@ const painters = [
   (rect) => perch(rect, grass),
   // 43 the owl's perch indoors, on the floor
   (rect) => perch(rect, floor),
+  // 44 the throne: a tall gold back, a red cushion, and nobody on it
+  (rect) => {
+    floor(rect)
+    rect(2, 15, 12, 1, '#4a2f18')
+    rect(3, 0, 10, 15, '#241a2e')
+    rect(2, 8, 12, 7, '#241a2e')
+    rect(4, 1, 8, 8, '#e3b341')
+    rect(5, 2, 6, 6, '#a8432b')
+    rect(7, 3, 2, 2, '#ffd86b')
+    rect(3, 9, 10, 5, '#e3b341')
+    rect(5, 9, 6, 3, '#7a2a1c')
+    rect(5, 9, 6, 1, '#a8432b')
+    rect(3, 12, 10, 1, '#b8862b')
+  },
 ]
 
 export const tiles = painters.map((paint) => {
