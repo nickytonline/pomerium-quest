@@ -837,6 +837,43 @@ const CAGE_OPEN = CAGE.map(
     (row === '..E..E....E..E..' ? '..E..........E..' : row),
 )
 
+// What the keeper answers an owl at the cage, shown over the keeper's head: no, or yes.
+const bubble = (mark) => ({
+  palette: { r: '#e0413b', g: '#2f9e55' },
+  rows: [
+    '................',
+    '...KKKKKKKKK....',
+    '..KWWWWWWWWWK...',
+    ...mark,
+    '..KWWWWWWWWWK...',
+    '...KKKKWKKKK....',
+    '......KWK.......',
+    '.......K........',
+    '................',
+    '................',
+  ],
+})
+
+const KEEPER_NO = bubble([
+  '..KWrWWWWWrWK...',
+  '..KWWrWWWrWWK...',
+  '..KWWWrWrWWWK...',
+  '..KWWWWrWWWWK...',
+  '..KWWWrWrWWWK...',
+  '..KWWrWWWrWWK...',
+  '..KWrWWWWWrWK...',
+])
+
+const KEEPER_YES = bubble([
+  '..KWWWWWWWWWK...',
+  '..KWWWWWWWgWK...',
+  '..KWWWWWWgWWK...',
+  '..KWgWWWgWWWK...',
+  '..KWWgWgWWWWK...',
+  '..KWWWgWWWWWK...',
+  '..KWWWWWWWWWK...',
+])
+
 // Mochi's owl in flight: the same wingbeats in its own white, with its flecks and its ribbon.
 const inMochisColors = (owl) => ({
   ...MOCHIS_OWL,
@@ -858,6 +895,7 @@ const grids = {
   owl: [OWL.rows, OWL_BLINK.rows, OWL_WINGS_UP.rows, OWL_WINGS_DOWN.rows],
   mochis_owl: [MOCHIS_OWL.rows, MOCHIS_OWL_WINGS_UP.rows, MOCHIS_OWL_WINGS_DOWN.rows],
   cage: [CAGE, CAGE_OPEN],
+  keeper_answer: [KEEPER_NO.rows, KEEPER_YES.rows],
   sword_wood: [SWORD_WOOD],
   sword_steel: [SWORD_STEEL],
   shield_wood: [SHIELD_WOOD],
@@ -892,6 +930,8 @@ sheet(join(assets, 'items.png'), [
     MOCHIS_OWL_WINGS_DOWN,
     CAGE,
     CAGE_OPEN,
+    KEEPER_NO,
+    KEEPER_YES,
   ],
 ])
 
@@ -919,6 +959,8 @@ sheet(
       MOCHIS_OWL_WINGS_DOWN,
       CAGE,
       CAGE_OPEN,
+      KEEPER_NO,
+      KEEPER_YES,
     ],
     npcs.slice(0, 5),
     [npcs[5], npcs[6], npcs[7], npcs[8], npcs[9], tiles[15], tiles[42]],

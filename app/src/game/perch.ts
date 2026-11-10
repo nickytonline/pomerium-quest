@@ -57,9 +57,10 @@ export type OwlFlight = {
 /**
  * How far an errand at a perch has got. The owl sits on the perch while the player is asked whether to
  * send it, flies out of sight with the request, then comes back to the perch with the answer. Then the
- * errand is done, and can be read.
+ * errand is done, and can be read. An owl sent to the cage is watched all the way there, so it can also be
+ * seen `turned` away by the cage's keeper before it flies back.
  */
-export type PerchPhase = 'asking' | 'out' | 'back' | 'done'
+export type PerchPhase = 'asking' | 'out' | 'turned' | 'back' | 'done'
 
 /**
  * How long each part of the owl's flight takes to watch, in milliseconds, for players who have motion on:
@@ -70,5 +71,8 @@ export type PerchPhase = 'asking' | 'out' | 'back' | 'done'
  */
 export const FLIGHT_MS = { out: 1000, away: 1100, heard: 1000, call: 400, back: 900 } as const
 
-/** How long the Falconer's owl takes to fly to the cage, and how long it and Mochi's owl take to fly back. */
-export const CAGE_FLIGHT_MS = { out: 1400, back: 1600 } as const
+/**
+ * How long a flight to the cage takes to watch: there, the moment the keeper takes to answer (a shake of the
+ * head, or the key in the lock), and back again. The game follows the owl all the way, so these are longer.
+ */
+export const CAGE_FLIGHT_MS = { out: 1800, keeper: 1200, back: 1800 } as const

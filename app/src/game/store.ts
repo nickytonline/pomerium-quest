@@ -89,7 +89,7 @@ export interface FalconersErrand {
   /** The flight, once the owl is back: the MCP request and Pomerium's answer. */
   readonly flight: OwlFlight | null
   /** How far the errand has got: the scene flies the Falconer's owl, and Mochi's, to match. */
-  readonly phase: 'out' | 'back' | 'done'
+  readonly phase: 'out' | 'opening' | 'back' | 'done'
   /** The player asked to read what the owl brought back, so its panel is open. */
   readonly explained: boolean
 }
@@ -392,6 +392,10 @@ export const quest = {
       menuOpen: false,
       journalOpen: false,
     }),
+  /** The Falconer's owl is at the cage, and the keeper unlocks it. */
+  cageOpens: () => {
+    if (state.falconersErrand) update({ falconersErrand: { ...state.falconersErrand, phase: 'opening' } })
+  },
   /** The cage is open: the Falconer's owl and Mochi's fly back. */
   falconersOwlReturns: () => {
     if (state.falconersErrand) update({ falconersErrand: { ...state.falconersErrand, phase: 'back' } })

@@ -549,9 +549,11 @@ const watch = (ms: number) =>
 export async function flyOwl(tool: OwlTool) {
   const id = identity()
   const flew = flies()
+  // The cage is a place in the grounds, so an owl sent to open it is followed there and back.
+  const toCage = tool === OWL_TOOLS.openCage
   sfx('hoot')
   quest.perchPhase('out')
-  const away = watch(FLIGHT_MS.out + FLIGHT_MS.away)
+  const away = watch(toCage ? CAGE_FLIGHT_MS.out : FLIGHT_MS.out + FLIGHT_MS.away)
   const [sent] = await Promise.all([sendOwl({ method: 'tools/call', tool, ...argsFor(tool) }), away])
 
   if (!sent.ok) {
@@ -573,13 +575,19 @@ export async function flyOwl(tool: OwlTool) {
 
   // The owl calls from out of sight just before it comes back into view. With motion off it never left.
   // It keeps quiet when the errand is already being heard: the bell tolls it home.
-  if (flew && !heard) {
+  if (flew && !heard && !toCage) {
     sfx('hoot')
     await watch(FLIGHT_MS.call)
   }
 
+  // At the cage the keeper is seen to shake their head at an owl Pomerium refused.
+  if (toCage && outcome.kind === 'refused') {
+    quest.perchPhase('turned')
+    await watch(CAGE_FLIGHT_MS.keeper)
+  }
+
   quest.perchPhase('back')
-  await watch(FLIGHT_MS.back)
+  await watch(toCage ? CAGE_FLIGHT_MS.back : FLIGHT_MS.back)
   logFlight(flight, `tools/call ${tool}`, id)
 
   switch (outcome.kind) {
@@ -663,14 +671,15 @@ export function leaveFalconersErrand() {
 
 /**
  * The Falconer sends their own owl to the cage: the same tool call the player's owl was refused, made on
- * the Falconer's behalf. It flies out while the request does. If Pomerium allows it the keeper opens the
- * cage, and both owls fly back: the Falconer's to the glove, Mochi's to the player. Then the call can be read.
+ * the Falconer's behalf. It flies to the cage while the request does, and the game follows it there. If
+ * Pomerium allows the call the keeper opens the cage, and both owls fly back: the Falconer's to the glove,
+ * Mochi's to the player. Then the call can be read.
  */
 export async function flyFalconersOwl() {
   sfx('hoot')
   quest.sendFalconersOwl()
 
-  const [sent] = await Promise.all([sendFalconersOwl(), watch(CAGE_FLIGHT_MS.out + FLIGHT_MS.away)])
+  const [sent] = await Promise.all([sendFalconersOwl(), watch(CAGE_FLIGHT_MS.out)])
 
   if (!sent.ok) {
     leaveFalconersErrand()
@@ -699,10 +708,11 @@ export async function flyFalconersOwl() {
     return
   }
 
-  // The cage is out of sight from the Falconer's side of the grounds, so it is heard: the lock, then wings.
+  // The game has followed the owl to the cage, so the keeper is seen to read its papers and turn the key.
+  quest.cageOpens()
   sfx('gateOpen')
-  quest.toast('Across the grounds, a lock clicks open', 'info')
-  await watch(FLIGHT_MS.heard)
+  quest.toast('The keeper turns the key, and the cage swings open', 'info')
+  await watch(CAGE_FLIGHT_MS.keeper)
   quest.sendOwl({ type: 'MOCHIS_OWL_FOUND' })
   sfx('flutter')
   quest.falconersOwlReturns()

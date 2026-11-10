@@ -8,6 +8,7 @@ import { KNIGHT_QUOTA, defeated, hasSteel, type MonsterKind } from './quest-mach
 import { houseStage, type HouseStage } from './house-machine.ts'
 import { mochisOwlFound, owlAtLeast, owlStage } from './owl-machine.ts'
 import { catchOwl, readAviarySign, visitCage, visitPerch } from './owl-story.ts'
+import { OWL_TOOLS } from './owl.ts'
 import { CAGE_FLIGHT_MS, FLIGHT_MS, type PerchPhase } from './perch.ts'
 import {
   currentLetter,
@@ -122,6 +123,8 @@ const ITEM = {
   mochisOwlWingsDown: 13,
   cage: 14,
   cageOpen: 15,
+  keeperNo: 16,
+  keeperYes: 17,
 }
 
 /** Each kind of owl's frames: sitting, and with its wings up and down, which a flight swaps to make it flap. */
@@ -138,6 +141,12 @@ const OWL_SEAT = { x: 5, y: -8, hop: 14 }
 
 /** Mochi's owl rides on the dog's other side, and on the same shoulder of Mochi once it's back with them. */
 const MOCHIS_OWL_SEAT = { x: -5, y: -8 }
+
+/** Where an owl lands on the cage's roof, from the middle of the cage. */
+const CAGE_ROOF = { x: 0, y: -9 }
+
+/** The keeper's answer to an owl: where it shows above the keeper, and their nod or shake of the head. */
+const KEEPER_ANSWER = { lift: 14, nod: 3, shake: 2, ms: 90 }
 
 /** Where the Falconer's owl sits on their glove, from the middle of the Falconer. */
 const FALCONERS_GLOVE = { x: -6, y: 0 }
@@ -416,7 +425,7 @@ export class KingdomScene extends Phaser.Scene {
   /** The Falconer's owl in flight. On the glove it is part of the Falconer's own picture. */
   private falconersOwl: Phaser.GameObjects.Image | undefined
   /** How far the Falconer's owl's errand had got when the scene last looked. */
-  private cagePhase: 'out' | 'back' | 'done' | null = null
+  private cagePhase: 'out' | 'opening' | 'back' | 'done' | null = null
   private monsters: Monster[] = []
   private fish: Fish[] = []
   private phish: Phish[] = []
@@ -711,17 +720,28 @@ export class KingdomScene extends Phaser.Scene {
     const glove = { x: falconer.sprite.x + FALCONERS_GLOVE.x, y: falconer.sprite.y + FALCONERS_GLOVE.y }
     const curve = { lift: OWL_FLIGHT.lift, sway: OWL_FLIGHT.swoop }
 
+    const moving = matchMedia('(prefers-reduced-motion: no-preference)').matches
+
+    // Back on the glove, the owl is part of the Falconer's picture again, and the game looks at the dog.
     const land = () => {
       falconersOwl.setVisible(false)
       falconer.sprite.setFrame(NPC_FRAME.falconer)
+      this.follow()
     }
 
     if (phase === 'out') {
       falconer.sprite.setFrame(FALCONER_BARE_FRAME)
       falconersOwl.setPosition(glove.x, glove.y).setVisible(true)
-      this.glide(falconersOwl, () => ({ x: cage.x, y: cage.y }), CAGE_FLIGHT_MS.out, curve)
-    } else if (phase === 'back' || (phase === 'done' && before === 'out')) {
-      // With motion off nothing waits between the owls setting off and landing, so `back` can go unseen.
+
+      // The game follows the owl to the cage, to see the keeper answer it.
+      if (moving) this.follow(falconersOwl)
+
+      this.glide(falconersOwl, () => this.cageRoof(), CAGE_FLIGHT_MS.out, curve)
+    } else if (phase === 'opening') {
+      cage.setFrame(ITEM.cageOpen)
+      this.keeperAnswers(true)
+    } else if (phase === 'back' || (phase === 'done' && before !== 'back')) {
+      // With motion off nothing waits between the owls setting off and landing, so a phase can go unseen.
       cage.setFrame(ITEM.cageOpen)
       this.mochisOwlAloft = true
       this.glide(falconersOwl, () => glove, CAGE_FLIGHT_MS.back, curve, land)
@@ -734,7 +754,7 @@ export class KingdomScene extends Phaser.Scene {
           this.mochisOwlAloft = false
         },
       )
-    } else if (phase === null && before === 'out') {
+    } else if (phase === null && (before === 'out' || before === 'opening')) {
       // The errand came to nothing, so the owl comes back to the glove alone.
       this.glide(falconersOwl, () => glove, OWL_FLIGHT.homeMs, curve, land)
     }
@@ -851,9 +871,18 @@ export class KingdomScene extends Phaser.Scene {
     const owl = this.owl
     const spot = this.world.perches.find((candidate) => candidate.tool === perch?.tool)
 
+    // Whatever became of a flight the game followed, it looks at the dog again once the errand is over.
+    if (phase === null || phase === 'done') this.follow()
+
     if (!owl || !spot || !matchMedia('(prefers-reduced-motion: no-preference)').matches) return
 
     const bar = this.barOf(spot)
+
+    if (spot.tool === OWL_TOOLS.openCage) {
+      this.flyToCage(phase, owl, bar)
+
+      return
+    }
 
     if (phase === 'out') {
       // Up and away, past the top of what the player can see.
@@ -865,6 +894,70 @@ export class KingdomScene extends Phaser.Scene {
     } else if (phase === 'back') {
       this.glide(owl, () => bar, FLIGHT_MS.back, { sway: OWL_FLIGHT.swoop })
     }
+  }
+
+  /**
+   * The cage is a place in the grounds, so the owl sent to open it is seen all the way: the game follows it
+   * to the cage's roof, the keeper shakes their head, and it flies back to its perch.
+   */
+  private flyToCage(phase: PerchPhase | null, owl: Phaser.GameObjects.Image, bar: { x: number; y: number }) {
+    const curve = { lift: OWL_FLIGHT.lift, sway: OWL_FLIGHT.swoop }
+
+    if (phase === 'out') {
+      this.follow(owl)
+      this.glide(owl, () => this.cageRoof(), CAGE_FLIGHT_MS.out, { ...curve, sway: -curve.sway })
+    } else if (phase === 'turned') {
+      this.keeperAnswers(false)
+    } else if (phase === 'back') {
+      this.glide(
+        owl,
+        () => bar,
+        CAGE_FLIGHT_MS.back,
+        curve,
+        () => this.follow(),
+      )
+    }
+  }
+
+  /** Where an owl lands on the cage, in the game's pixels. */
+  private cageRoof() {
+    const at = this.world.mochisOwl
+
+    return { x: center(at.x) + CAGE_ROOF.x, y: center(at.y) + CAGE_ROOF.y }
+  }
+
+  /** Points the game's view at a bird in flight, or, with none, back at the dog. */
+  private follow(bird?: Phaser.GameObjects.Image) {
+    const target = bird ?? this.player
+
+    if (target) this.cameras.main.startFollow(target, true)
+  }
+
+  /**
+   * The keeper answers an owl at the cage: a nod and a tick, or a shake of the head and a cross. It is
+   * motion, so it is only shown to players who have asked for motion.
+   */
+  private keeperAnswers(yes: boolean) {
+    const keeper = this.npcs.find((npc) => npc.npcId === 'keeper')
+
+    if (!keeper || !matchMedia('(prefers-reduced-motion: no-preference)').matches) return
+
+    const home = { x: center(keeper.x), y: center(keeper.y) }
+
+    const answer = this.add
+      .image(home.x, home.y - KEEPER_ANSWER.lift, 'items', yes ? ITEM.keeperYes : ITEM.keeperNo)
+      .setDepth(20)
+
+    this.time.delayedCall(CAGE_FLIGHT_MS.keeper, () => answer.destroy())
+
+    this.tweens.add({
+      targets: keeper.sprite,
+      ...(yes ? { y: home.y + KEEPER_ANSWER.nod } : { x: home.x + KEEPER_ANSWER.shake }),
+      duration: KEEPER_ANSWER.ms,
+      yoyo: true,
+      repeat: 2,
+      onComplete: () => keeper.sprite.setPosition(home.x, home.y),
+    })
   }
 
   /** Where the owl's feet meet a perch's crossbar, in the game's pixels. */
