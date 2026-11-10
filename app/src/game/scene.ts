@@ -118,7 +118,7 @@ const OWL_BLINK = { shut: 140, every: [2200, 6000] } as const
 const OWL_SEAT = { x: 5, y: -8, hop: 14 }
 
 /** Mochi's falcon rides on the dog's other side, higher than the owl so its tail clears the sunglasses. */
-const FALCON_SEAT = { x: -4, y: -10 }
+const FALCON_SEAT = { x: -6, y: -10 }
 
 /** The owl hops away when the player comes within this many tiles of it, and how long and high a hop is. */
 const OWL_SHY = { tiles: 2, ms: 520, lift: 18 }
