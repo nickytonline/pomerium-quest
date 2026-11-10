@@ -562,6 +562,40 @@ const NPCS = {
       '.............D..',
     ],
   },
+  // Keeps the Aviary beyond the Royal Keep: a green cap with a red feather, and the owl on a gloved fist.
+  falconer: {
+    palette: {
+      G: '#3f8f5a',
+      g: '#2c6a41',
+      R: '#e0413b',
+      F: '#e8b48a',
+      T: '#8a5a2b',
+      t: '#6b4226',
+      V: '#5b3a22',
+      Q: '#9a6b3f',
+      q: '#d9b98a',
+      Y: '#ffd86b',
+      C: '#2b2b45',
+    },
+    rows: [
+      '..........R.....',
+      '.....KKKKKRK....',
+      '....KGGGGGRGK...',
+      '...KGGgGGGGGGK..',
+      '..KKKKKKKKKKKKK.',
+      '....KFKFFFKFK...',
+      '.KK.KFFFFFFFK...',
+      'KQQK.KFFKFFK....',
+      'KYQYKTTKKKTTK...',
+      'KQqQKTTTTTTTTK..',
+      'KQqQKVTTTTTTTK..',
+      '.KKKVVKTTtTTFK..',
+      '....KKKTTtTTTK..',
+      '....KCCCKKCCCK..',
+      '....KKKK..KKKK..',
+      '................',
+    ],
+  },
 }
 
 // Frame order is load-bearing: see NPC_FRAME in app/src/game/world.ts.
@@ -645,7 +679,7 @@ sheet(
     ...dogCells.map((r) => [...r, null, null]),
     [SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, ...BOT_SLIME, ...FISH],
     npcs.slice(0, 5),
-    [npcs[5], npcs[6], npcs[7], npcs[8], tiles[15]],
+    [npcs[5], npcs[6], npcs[7], npcs[8], npcs[9], tiles[15], tiles[42]],
   ],
   { scale: 10, checker: true },
 )

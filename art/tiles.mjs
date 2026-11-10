@@ -344,6 +344,25 @@ const signpost = (rect, ground) => {
   rect(4, 7, 6, 1, '#6b4a27')
 }
 
+/** The owl's perch: a wooden T-post with the owl on it, standing on `ground`. */
+const perch = (rect, ground) => {
+  ground(rect)
+  rect(7, 9, 2, 7, '#5b3a22')
+  rect(2, 9, 12, 2, '#7a5126')
+  rect(2, 9, 12, 1, '#a87a45')
+  // The owl: ear tufts, round body, pale belly, yellow eyes.
+  rect(4, 1, 2, 1, '#241a2e')
+  rect(10, 1, 2, 1, '#241a2e')
+  rect(4, 2, 8, 7, '#241a2e')
+  rect(5, 3, 6, 5, '#9a6b3f')
+  rect(6, 5, 4, 3, '#d9b98a')
+  rect(5, 3, 2, 2, '#ffd86b')
+  rect(9, 3, 2, 2, '#ffd86b')
+  rect(6, 4, 1, 1, '#241a2e')
+  rect(9, 4, 1, 1, '#241a2e')
+  rect(7, 5, 2, 1, '#e9b44c')
+}
+
 /** The writing desk and its quill, with a sheet of paper on it or a sealed letter waiting. */
 const desk = (rect, top) => {
   floor(rect)
@@ -561,6 +580,10 @@ const painters = [
   (rect) => eatenLoaf(rect, 2),
   // 41 sign indoors, on the floor
   (rect) => signpost(rect, floor),
+  // 42 the owl's perch, outdoors
+  (rect) => perch(rect, grass),
+  // 43 the owl's perch indoors, on the floor
+  (rect) => perch(rect, floor),
 ]
 
 export const tiles = painters.map((paint) => {
