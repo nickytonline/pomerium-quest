@@ -427,15 +427,27 @@ const BACK = 'Your owl is back on its perch, and it has a message for you.'
 /**
  * The owl is back, in full view on its perch, and nothing opens over it until the player asks. `read`
  * shows what it brought: the perch's panel for an errand that ran, the refusal screen for one that didn't.
+ * `notNow` is what happens when the player would rather not read it.
  */
-function tellReturn(tool: OwlTool, read: () => void) {
+function tellReturn(tool: OwlTool, read: () => void, notNow: () => void) {
   quest.say([
     {
       who: `Perch · ${OWL_ERRANDS[tool].title}`,
       text: BACK,
-      choices: [{ label: 'Read the message', pick: read }],
+      choices: [
+        { label: 'Read the message', pick: read },
+        { label: 'Not now', pick: notNow },
+      ],
     },
   ])
+}
+
+/** A refused errand moves the story on whether or not the player reads why: the owl was turned back. */
+function turnedBack() {
+  if (owlStage() !== 'fledged') return
+
+  quest.sendOwl({ type: 'OWL_TURNED_BACK' })
+  quest.toast('Tell the Falconer the owl was turned back', 'info')
 }
 
 /** What the player learns from a refused errand, once they have read why Pomerium refused it. */
@@ -448,10 +460,7 @@ function afterRefusal(tool: OwlTool, id: Identity) {
     learn('denyWins')
   }
 
-  if (owlStage() === 'fledged') {
-    quest.sendOwl({ type: 'OWL_TURNED_BACK' })
-    quest.toast('Tell the Falconer the owl was turned back', 'info')
-  }
+  turnedBack()
 }
 
 const flies = () => matchMedia('(prefers-reduced-motion: no-preference)').matches
@@ -512,14 +521,16 @@ export async function flyOwl(tool: OwlTool) {
       if (outcome.failed) quest.toast('The owl came back with nothing. See what the tool said.', 'deny')
       else DONE[tool]?.()
 
-      tellReturn(tool, () => quest.explainPerch())
+      tellReturn(tool, () => quest.explainPerch(), leavePerch)
 
       return
     case 'refused':
       leavePerch()
       sfx('denied')
-      tellReturn(tool, () =>
-        quest.showDeny(refusedView(tool, id, flight, outcome.requestId), () => afterRefusal(tool, id)),
+      tellReturn(
+        tool,
+        () => quest.showDeny(refusedView(tool, id, flight, outcome.requestId), () => afterRefusal(tool, id)),
+        turnedBack,
       )
 
       return
