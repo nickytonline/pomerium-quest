@@ -11,7 +11,7 @@ const ignored = [
 
 export default defineConfig({
   test: {
-    include: ['app/src/**/*.test.ts'],
+    include: ['app/src/**/*.test.ts', 'mcp/src/**/*.test.ts'],
   },
   fmt: {
     ignorePatterns: ignored,

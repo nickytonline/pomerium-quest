@@ -1,11 +1,13 @@
 # syntax=docker/dockerfile:1
-# The game's images: `--target app` (production build) and `--target app-dev` (`./quest dev`).
+# The images: `--target app` (the game's production build), `--target app-dev` (`./quest dev`) and
+# `--target mcp` (the owl's MCP server).
 ARG NODE_IMAGE=node:24.22.1-alpine
 
 FROM ${NODE_IMAGE} AS deps
 WORKDIR /repo
 COPY package.json package-lock.json ./
 COPY app/package.json app/
+COPY mcp/package.json mcp/
 RUN npm ci --no-audit --no-fund
 
 FROM deps AS app-build
@@ -29,3 +31,13 @@ COPY app app
 ENV PORT=3000
 EXPOSE 3000
 CMD ["npm", "run", "dev", "-w", "app", "--", "--host", "0.0.0.0"]
+
+# The owl's MCP server (mcp/). Node runs its TypeScript as it is, along with the two files of game
+# constants it shares with the game.
+FROM deps AS mcp
+ENV NODE_ENV=production PORT=3000
+COPY mcp mcp
+COPY app/src/game/groups.ts app/src/game/owl.ts app/src/game/
+USER node
+EXPOSE 3000
+CMD ["node", "mcp/src/index.ts"]
