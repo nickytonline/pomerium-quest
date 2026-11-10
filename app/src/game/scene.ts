@@ -117,7 +117,15 @@ const ITEM = {
   mochisOwl: 9,
   owlWingsUp: 10,
   owlWingsDown: 11,
+  mochisOwlWingsUp: 12,
+  mochisOwlWingsDown: 13,
 }
+
+/** Each kind of owl's frames: sitting, and with its wings up and down, which a flight swaps to make it flap. */
+const OWL_FRAMES = {
+  brown: { rest: ITEM.owl, up: ITEM.owlWingsUp, down: ITEM.owlWingsDown },
+  white: { rest: ITEM.mochisOwl, up: ITEM.mochisOwlWingsUp, down: ITEM.mochisOwlWingsDown },
+} as const
 
 /** How long the owl's eyes stay shut, and the shortest and longest it waits between blinks. */
 const OWL_BLINK = { shut: 140, every: [2200, 6000] } as const
@@ -687,17 +695,16 @@ export class KingdomScene extends Phaser.Scene {
 
     const current = () => this.flights.get(bird) === flight
     const isOwl = bird === this.owl
+    const frames = bird === this.mochisOwl ? OWL_FRAMES.white : OWL_FRAMES.brown
 
     const land = () => {
       if (!current()) return
       const end = to()
 
       bird.setPosition(end.x, end.y)
+      bird.setFrame(frames.rest)
 
-      if (isOwl) {
-        this.owlFlapping = false
-        bird.setFrame(ITEM.owl)
-      }
+      if (isOwl) this.owlFlapping = false
 
       onDone?.()
     }
@@ -732,7 +739,7 @@ export class KingdomScene extends Phaser.Scene {
           from.y + (end.y - from.y) * t - bend * lift * 2 + (beat % 2 === 0 ? 0 : 1),
         )
 
-        if (isOwl) bird.setFrame(beat % 2 === 0 ? ITEM.owlWingsUp : ITEM.owlWingsDown)
+        bird.setFrame(beat % 2 === 0 ? frames.up : frames.down)
       },
       onComplete: land,
     })

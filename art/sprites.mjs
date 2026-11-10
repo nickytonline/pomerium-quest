@@ -761,12 +761,26 @@ const OWL_WINGS_DOWN = {
   ],
 }
 
+// Mochi's owl in flight: the same wingbeats in its own white, with its flecks and its ribbon.
+const inMochisColors = (owl) => ({
+  ...MOCHIS_OWL,
+  rows: owl.rows.map(
+    (row, y) =>
+      ({ 8: row.replace('qqqq', 'qsqq'), 9: row.replace('qqqq', 'qqsq'), 11: row.replace('KKKK', 'KHKK') })[
+        y
+      ] ?? row,
+  ),
+})
+
+const MOCHIS_OWL_WINGS_UP = inMochisColors(OWL_WINGS_UP)
+const MOCHIS_OWL_WINGS_DOWN = inMochisColors(OWL_WINGS_DOWN)
+
 const grids = {
   ...dog,
   bot_slime: BOT_SLIME,
   fish: FISH.map((f) => f.rows),
   owl: [OWL.rows, OWL_BLINK.rows, OWL_WINGS_UP.rows, OWL_WINGS_DOWN.rows],
-  mochis_owl: [MOCHIS_OWL.rows],
+  mochis_owl: [MOCHIS_OWL.rows, MOCHIS_OWL_WINGS_UP.rows, MOCHIS_OWL_WINGS_DOWN.rows],
   sword_wood: [SWORD_WOOD],
   sword_steel: [SWORD_STEEL],
   shield_wood: [SHIELD_WOOD],
@@ -797,6 +811,8 @@ sheet(join(assets, 'items.png'), [
     MOCHIS_OWL,
     OWL_WINGS_UP,
     OWL_WINGS_DOWN,
+    MOCHIS_OWL_WINGS_UP,
+    MOCHIS_OWL_WINGS_DOWN,
   ],
 ])
 
@@ -820,6 +836,8 @@ sheet(
       MOCHIS_OWL,
       OWL_WINGS_UP,
       OWL_WINGS_DOWN,
+      MOCHIS_OWL_WINGS_UP,
+      MOCHIS_OWL_WINGS_DOWN,
     ],
     npcs.slice(0, 5),
     [npcs[5], npcs[6], npcs[7], npcs[8], npcs[9], tiles[15], tiles[42]],
