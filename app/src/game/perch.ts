@@ -49,4 +49,4 @@ export type PerchPhase = 'asking' | 'out' | 'landed' | 'turned' | 'done'
  * How long each part of the owl's flight takes to watch, in milliseconds, for players who have motion on.
  * The request is already on its way while the owl flies out.
  */
-export const FLIGHT_MS = { out: 750, landed: 1300, turned: 700 } as const
+export const FLIGHT_MS = { out: 750, landed: 700, turned: 700 } as const

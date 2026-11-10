@@ -368,7 +368,7 @@ export class KingdomScene extends Phaser.Scene {
   private owlPhase: PerchPhase | null = null
   /** The perch the owl's errand is at, kept until it is home again. */
   private owlPerch: Point | undefined
-  /** The owl is off the dog's shoulder: on a perch, or flying an errand. */
+  /** The owl is off the dog's shoulder: flying an errand, or on a perch until the dog walks away. */
   private owlAloft = false
   private falcon: Phaser.GameObjects.Image | undefined
   private monsters: Monster[] = []
@@ -681,7 +681,8 @@ export class KingdomScene extends Phaser.Scene {
 
   /**
    * Moves the owl as an errand at a perch goes: onto the perch while the player is asked, away with the
-   * request, then back. The flight is motion, so it is opt-in: without it the owl is simply at each place.
+   * request, then back. It stays on the perch until the player walks away. The flight is motion, so it is
+   * opt-in: without it the owl is simply at each place.
    */
   private syncFlight() {
     const perch = quest.get().perch
@@ -703,17 +704,6 @@ export class KingdomScene extends Phaser.Scene {
     const fade = (alpha: number, ms: number) =>
       motion ? this.tweens.add({ targets: owl, alpha, duration: ms }) : owl.setAlpha(alpha)
 
-    const home = () =>
-      this.glide(
-        owl,
-        { x: player.x + OWL_SEAT.x, y: player.y + OWL_SEAT.y },
-        OWL_FLIGHT.homeMs,
-        OWL_FLIGHT.lift,
-        () => {
-          this.owlAloft = false
-        },
-      )
-
     if (phase === 'asking') {
       this.owlAloft = true
       this.glide(owl, bar, OWL_FLIGHT.hopMs, OWL_FLIGHT.lift)
@@ -722,10 +712,8 @@ export class KingdomScene extends Phaser.Scene {
       this.glide(owl, afar, FLIGHT_MS.out, OWL_FLIGHT.lift)
       fade(0, FLIGHT_MS.out)
     } else if (phase === 'landed') {
-      // Pomerium allowed the call: the owl lands on the perch with its answer, then comes to the player.
-      const stay = motion ? FLIGHT_MS.landed - OWL_FLIGHT.landMs - OWL_FLIGHT.homeMs : 0
-
-      this.glide(owl, bar, OWL_FLIGHT.landMs, 0, () => this.time.delayedCall(stay, home))
+      // Pomerium allowed the call: the owl lands on the perch with its answer, and waits there.
+      this.glide(owl, bar, OWL_FLIGHT.landMs, 0)
       fade(1, OWL_FLIGHT.landMs / 2)
     } else if (phase === 'turned') {
       // Pomerium refused: the owl comes straight back to the player, with nothing.
@@ -733,11 +721,27 @@ export class KingdomScene extends Phaser.Scene {
         this.owlAloft = false
       })
       fade(1, FLIGHT_MS.turned / 2)
-    } else if (this.owlAloft && phase === null) {
-      // The player left the perch without sending the owl, or it never got away.
+    } else {
+      // Done, or left unsent: the owl stays where it is. If that's the perch, it waits to be walked away from.
       owl.setAlpha(1)
-      home()
     }
+  }
+
+  /** The owl leaves the perch it was waiting on and flies to the dog's shoulder, as the dog walks off to `target`. */
+  private callOwl(target: Point) {
+    const owl = this.owl
+
+    if (!owl || !this.owlAloft || quest.get().perch) return
+
+    this.glide(
+      owl,
+      { x: center(target.x) + OWL_SEAT.x, y: center(target.y) + OWL_SEAT.y },
+      OWL_FLIGHT.homeMs,
+      OWL_FLIGHT.lift,
+      () => {
+        this.owlAloft = false
+      },
+    )
   }
 
   override update(time: number) {
@@ -974,6 +978,7 @@ export class KingdomScene extends Phaser.Scene {
     if (!player) return
     this.mode.send({ type: 'WALK' })
     this.walkingTo = target
+    this.callOwl(target)
 
     if (this.tileAt(target) === TILE.water) sfx(this.tileAt(this.pos) === TILE.water ? 'paddle' : 'splash')
     this.swim(this.tileAt(target) === TILE.water)
