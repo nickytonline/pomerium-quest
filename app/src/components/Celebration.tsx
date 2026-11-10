@@ -238,6 +238,12 @@ const CAST: readonly {
     frame: NPC_FRAME.friend,
   },
   { name: "Mochi's owl", role: 'another MCP client, acting on Mochi’s behalf', sheet: ITEMS, frame: 9 },
+  {
+    name: 'The Keeper',
+    role: 'a tool that runs only for callers the policy allows',
+    sheet: NPCS,
+    frame: NPC_FRAME.keeper,
+  },
   { name: 'Bot slimes', role: 'automated bots hammering every gate', sheet: ITEMS, frame: 3 },
   { name: 'Phish', role: 'phishing: a fake Oracle after your sign-in', sheet: NPCS, frame: PHISH_FRAME },
 ]

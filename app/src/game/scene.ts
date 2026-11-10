@@ -720,7 +720,8 @@ export class KingdomScene extends Phaser.Scene {
       falconer.sprite.setFrame(FALCONER_BARE_FRAME)
       falconersOwl.setPosition(glove.x, glove.y).setVisible(true)
       this.glide(falconersOwl, () => ({ x: cage.x, y: cage.y }), CAGE_FLIGHT_MS.out, curve)
-    } else if (phase === 'back') {
+    } else if (phase === 'back' || (phase === 'done' && before === 'out')) {
+      // With motion off nothing waits between the owls setting off and landing, so `back` can go unseen.
       cage.setFrame(ITEM.cageOpen)
       this.mochisOwlAloft = true
       this.glide(falconersOwl, () => glove, CAGE_FLIGHT_MS.back, curve, land)
