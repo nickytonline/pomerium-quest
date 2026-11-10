@@ -81,7 +81,7 @@ const ADVICE: Record<
   fledged: () =>
     "You caught it! That's the hard part. Now send it to a perch, any perch, and see what the Aviary makes of it. Then come and tell me.",
   falconer: () =>
-    `Your papers say falconer, so the Aviary lets your owl in. Try every perch. Two of them never open, for any owl, and that's worth seeing. One matters most: the owl carries my letter to the Oracle, who makes you a keyholder. The Eyrie's gate asks for that.${mochisOwlHint()}`,
+    `Your papers say falconer, so the Aviary lets your owl in. Try every perch. Two of the errands are refused, for any owl, and that's worth seeing. One matters most: the owl carries my letter to the Oracle, who makes you a keyholder. The Eyrie's gate asks for that.${mochisOwlHint()}`,
   keyholder: () =>
     `Your papers say keyholder. The Eyrie's gate is at the south end of the road. Its guard asks for everything you've earned, in both chapters. Mochi is inside.${mochisOwlFound() ? '' : " Mochi will ask after their owl, and it's still lost somewhere in these grounds."}`,
   triumphant: () =>
@@ -333,7 +333,7 @@ function refusedView(tool: OwlTool, id: Identity, flight: OwlFlight, requestId: 
       return {
         story: {
           title: "Falconers' owls only",
-          text: 'The owl is back with nothing, turned away at the Aviary. "Whose owl is this?" its keeper had called, reading the papers on its leg. "Nothing in here says falconer. I don\'t care which perch it flew from."',
+          text: 'The owl brought back a message from the Aviary\'s keeper: "Whose owl is this? Nothing in its papers says falconer, so it runs no errands here. I don\'t care which perch it flew from."',
         },
         hint: `The Aviary's allow rule needs claim/groups: ${GROUPS.falconers}. The owl flies on your behalf, so Pomerium checked your session, and its groups claim doesn't include ${GROUPS.falconers}. No allow rule matched, so Pomerium refused the request before the MCP server saw it, whichever tool it named. ${readable}`,
         links: [link('mcpServer'), link('authz')],
@@ -343,8 +343,8 @@ function refusedView(tool: OwlTool, id: Identity, flight: OwlFlight, requestId: 
     if (isForbidden(tool)) {
       return {
         story: {
-          title: 'This perch never opens',
-          text: 'The owl comes back with nothing: the Aviary waved it off. "Not that errand," its keeper said. "My orders name every errand that starts with open, and they say no, whoever the owl flies for."',
+          title: 'Errand refused',
+          text: 'The owl brought back a message from the Aviary\'s keeper: "Not that errand. My orders name every errand that starts with open, and they say no, whoever the owl flies for."',
         },
         hint: `The allow rule matched: you are a falconer. But the deny rule matches any tool whose name starts with open_, and this call names ${tool}. A deny always beats an allow. Pomerium read the tool's name from the tools/call request itself. ${readable}`,
         links: [link('mcpTool'), link('denyWins')],
@@ -353,8 +353,8 @@ function refusedView(tool: OwlTool, id: Identity, flight: OwlFlight, requestId: 
 
     return {
       story: {
-        title: "The owl isn't let in",
-        text: 'The Aviary\'s keeper waves the owl off. "My orders don\'t cover whoever sent you."',
+        title: 'Errand refused',
+        text: 'The owl brought back a message from the Aviary\'s keeper: "My orders don\'t cover whoever sent you."',
       },
       hint: 'No allow rule matched this request, so Pomerium refused it. The owl flies on your behalf: what you may not do, it may not do.',
       links: [link('mcpServer'), link('authz')],

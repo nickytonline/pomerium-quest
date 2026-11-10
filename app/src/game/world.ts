@@ -377,7 +377,7 @@ export function buildWorld(): World {
   fill(21, 30, 21, 33, TILE.cobble)
   fill(21, 33, 35, 33, TILE.cobble)
   fill(28, 34, 28, EYRIE_WALL - 1, TILE.cobble)
-  // The Royal Vault: a landmark with no door. Nothing opens it, and one perch beside it never does either.
+  // The Royal Vault: a landmark with no door. Nothing opens it: the errand at the perch beside it is always refused.
   fill(34, 35, 37, 37, TILE.wall)
   // The Eyrie, behind the quest's last gate, where Mochi waits.
   fill(17, EYRIE_WALL, MAP_WIDTH - 2, EYRIE_WALL, TILE.wall)

@@ -46,7 +46,7 @@ tools):
 | The owl has no papers of its own; it carries yours              | The MCP client acts on your behalf: its token is tied to your session, and each request is checked against the policy |
 | No wall or gate stands around a perch                           | Policy alone decides whether a tool call is allowed                                                                   |
 | The Aviary turns back the owl of anyone who isn't a falconer    | The route's `allow` rule asks for `claim/groups: falconers`, before any tool is looked at                             |
-| Two perches never open, whoever the owl flies for               | One `deny` rule with `mcp_tool` and `starts_with: open_` forbids a class of tools                                     |
+| Two errands are refused, whoever the owl flies for              | One `deny` rule with `mcp_tool` and `starts_with: open_` forbids a class of tools                                     |
 | The owl's letter makes you a keyholder, and the last gate opens | A tool call changes a claim at the IdP; you sign in again for your session to see it                                  |
 | Mochi's owl flies for Mochi, not for you                        | Another MCP client acts on another user's behalf, with that user's claims                                             |
 | The perch shows what the owl carried and what came back         | The JSON-RPC request, Pomerium's answer (a JSON-RPC error when it refuses), and how the policy was evaluated          |
@@ -164,7 +164,7 @@ request the owl carried, what came back and how Pomerium decided. Walk away and 
 your shoulder.
 
 The first time, Pomerium turns the owl back: the Aviary only lets in a falconer's owl. Tell the Falconer,
-who has the Oracle make you a falconer. After that four perches work, and two never do: one rule forbids
+who has the Oracle make you a falconer. After that four errands run, and two are always refused: one rule forbids
 every errand whose name starts with `open_`, whoever the owl flies for. One errand carries a letter to the
 Oracle, who makes you a keyholder. The last gate, the Eyrie's, asks for every group in the quest.
 
