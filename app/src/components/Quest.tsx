@@ -1148,6 +1148,9 @@ function DenyStory({ deny }: { readonly deny: DenyView }) {
   )
 }
 
+const rpcLabel = 'mt-0 mb-1 text-[0.72rem] tracking-[0.08em] text-paper-muted uppercase'
+const rpcCode = 'mt-0 mb-2 overflow-x-auto rounded bg-paper-tint px-3 py-2.5 text-[0.8rem] leading-[1.45]'
+
 function DenyPomerium({ deny }: { readonly deny: DenyView }) {
   return (
     <div className="flex flex-col rounded-tr-lg rounded-b-lg border-t-6 border-deny bg-paper px-5 py-[18px] text-paper-ink [&_a]:text-paper-link [&_:focus-visible]:outline-paper-focus">
@@ -1165,6 +1168,14 @@ function DenyPomerium({ deny }: { readonly deny: DenyView }) {
       </p>
       <p className="mt-0.5 mb-2.5 text-[0.85rem] text-paper-muted">as {deny.who}</p>
       {deny.cachedClaims && <CachedClaims claims={deny.cachedClaims} />}
+      {deny.rpc && (
+        <>
+          <p className={rpcLabel}>The MCP request the owl carried</p>
+          <pre className={rpcCode}>{deny.rpc.request}</pre>
+          <p className={rpcLabel}>What came back · HTTP {deny.status}</p>
+          <pre className={`${rpcCode} mb-2.5`}>{deny.rpc.response ?? 'Nothing came back.'}</pre>
+        </>
+      )}
       {deny.lines.length > 0 && <PolicyLines lines={deny.lines} />}
       <p className="mt-3">{deny.hint}</p>
       {deny.requestId && (

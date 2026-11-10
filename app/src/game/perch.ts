@@ -38,11 +38,15 @@ export type OwlFlight = {
   readonly outcome: OwlOutcome
 }
 
-/** Where the owl is on an errand: on its way out, landed on the perch, or turned back before it could land. */
-export type OwlAway = 'out' | 'landed' | 'turned'
+/**
+ * How far an errand at a perch has got. The owl sits on the perch while the player is asked whether to
+ * send it, flies out with the request, then comes back: onto the perch again when Pomerium allowed the
+ * call, or straight to the player when it was turned back. Then the errand is done, and can be read.
+ */
+export type PerchPhase = 'asking' | 'out' | 'landed' | 'turned' | 'done'
 
 /**
  * How long each part of the owl's flight takes to watch, in milliseconds, for players who have motion on.
- * The request is already on its way while the owl flies out; the answer decides whether it lands.
+ * The request is already on its way while the owl flies out.
  */
-export const FLIGHT_MS = { out: 650, landed: 1100, turned: 750 } as const
+export const FLIGHT_MS = { out: 750, landed: 1300, turned: 700 } as const

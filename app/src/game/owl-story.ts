@@ -1,6 +1,6 @@
 // Chapter two's story: the Falconer, the owl to catch, the perches, and Mochi and their falcon. The owl is
-// an MCP client, and sending it to a perch is a real MCP tool call through Pomerium (see perch.ts), so
-// whether the owl may land is Pomerium's call.
+// an MCP client, and sending it from a perch is a real MCP tool call through Pomerium (see perch.ts), so
+// whether the errand runs is Pomerium's call.
 import { sendOwl } from './access.ts'
 import { SIGN_DOCS, SIGN_TEXT, STALE_DOCS, link, type Page } from './content.ts'
 import { GROUPS } from './groups.ts'
@@ -175,7 +175,10 @@ export function catchOwl() {
   return true
 }
 
-/** The player walks up to a perch: its panel opens, ready to send the owl there. */
+/**
+ * The player walks up to a perch: the owl hops onto it, and the perch asks whether to send the owl on its
+ * errand. Nothing is sent until the player says so.
+ */
 export function visitPerch(tool: OwlTool) {
   if (!owlAtLeast('fledged')) {
     quest.say([
@@ -188,8 +191,22 @@ export function visitPerch(tool: OwlTool) {
     return
   }
 
+  const { title, description } = OWL_ERRANDS[tool]
+
   quest.openPerch(tool)
+  quest.say([
+    {
+      who: `Perch · ${tool}`,
+      text: `Your owl hops onto the perch and looks back at you. ${title}: ${lowerFirst(description)} Send the owl?`,
+      choices: [
+        { label: 'Send the owl', pick: () => void flyOwl(tool) },
+        { label: 'Not now', pick: leavePerch },
+      ],
+    },
+  ])
 }
+
+const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1)
 
 /** A perch's sign names its one tool, above the Aviary's route: the only thing that decides who may land. */
 export function readPerchSign(tool: OwlTool) {
@@ -203,7 +220,7 @@ export function readPerchSign(tool: OwlTool) {
     [
       {
         who: `Sign · ${tool}`,
-        text: `${title}. ${description} This perch is one of the Aviary's tools, and sending your owl here is a call to it: tools/call ${tool}. No wall or gate stands around the perch. The Aviary's policy, below, decides whether the owl may land.${never}`,
+        text: `${title}. ${description} This perch is one of the Aviary's tools, and sending your owl here is a call to it: tools/call ${tool}. No wall or gate stands around the perch. The Aviary's policy, below, decides whether the owl may run the errand.${never}`,
         code: zoneRouteYaml(aviary()),
         links: [link('mcpTool'), link('mcpServer')],
       },
@@ -297,7 +314,7 @@ export async function readAviarySign() {
 }
 
 /** A refused flight, told twice like any refusal: the keeper's words, then how Pomerium decided. */
-function refusedView(tool: OwlTool, id: Identity, requestId: string | null): DenyView {
+function refusedView(tool: OwlTool, id: Identity, flight: OwlFlight, requestId: string | null): DenyView {
   const zone = aviary()
   const request = { method: 'POST', path: MCP_PATH, tool } as const
   const decision = decide(zone, id, request)
@@ -321,7 +338,7 @@ function refusedView(tool: OwlTool, id: Identity, requestId: string | null): Den
           title: 'The ink is still wet',
           text: 'The Aviary\'s keeper squints at the papers tied to the owl\'s leg. "Fresh from the Oracle, are they? Let the ink dry a minute, then send the owl again."',
         },
-        hint: 'Try again in a moment. Once the cached copy expires, Pomerium reads your updated user record and lets the owl land.',
+        hint: 'Try again in a moment. Once the cached copy expires, Pomerium reads your updated user record and lets the owl in.',
         links: STALE_DOCS,
       }
     }
@@ -330,7 +347,7 @@ function refusedView(tool: OwlTool, id: Identity, requestId: string | null): Den
       return {
         story: {
           title: "Falconers' owls only",
-          text: 'The owl is turned back before it reaches the perch. "Whose owl is this?" calls the Aviary\'s keeper, reading the papers on its leg. "Nothing in here says falconer. I don\'t care which perch it was after."',
+          text: 'The owl is back almost at once, turned away at the Aviary. "Whose owl is this?" its keeper had called, reading the papers on its leg. "Nothing in here says falconer. I don\'t care which perch it flew from."',
         },
         hint: `The Aviary's allow rule needs claim/groups: ${GROUPS.falconers}. The owl flies on your behalf, so Pomerium checked your session, and its groups claim doesn't include ${GROUPS.falconers}. No allow rule matched, so Pomerium refused the request before the MCP server saw it, whichever tool it named. ${readable}`,
         links: [link('mcpServer'), link('authz')],
@@ -341,7 +358,7 @@ function refusedView(tool: OwlTool, id: Identity, requestId: string | null): Den
       return {
         story: {
           title: 'This perch never opens',
-          text: 'The owl circles the perch and is waved off. "Not that one," says the Aviary\'s keeper. "My orders name every errand that starts with open, and they say no, whoever the owl flies for."',
+          text: 'The owl comes back with nothing: the Aviary waved it off. "Not that errand," its keeper said. "My orders name every errand that starts with open, and they say no, whoever the owl flies for."',
         },
         hint: `The allow rule matched: you are a falconer. But the deny rule matches any tool whose name starts with open_, and this call names ${tool}. A deny always beats an allow. Pomerium read the tool's name from the tools/call request itself. ${readable}`,
         links: [link('mcpTool'), link('denyWins')],
@@ -364,6 +381,7 @@ function refusedView(tool: OwlTool, id: Identity, requestId: string | null): Den
     requestLine: `POST ${aviaryOrigin(location.origin)}${MCP_PATH} · tools/call ${tool}`,
     who: who(id),
     lines: cached ? decide(zone, cached, request).lines : decision.lines,
+    rpc: { request: flight.request, response: flight.response },
     ...told(),
     ...fromPomerium,
     ...fromCache,
@@ -426,19 +444,20 @@ const watch = (ms: number) =>
     : Promise.resolve()
 
 /**
- * Sends the owl to a perch, which is one tool call, and tells the story of how it went. The owl flies out
- * while the request does, and comes back with the answer: the request, the response and how Pomerium decided
- * land in the perch's panel and the access log either way.
+ * Sends the owl on a perch's errand, which is one tool call, and tells the story of how it went. The owl
+ * flies out while the request does, and comes back with the answer. Only then is the call explained, in
+ * the kingdom's words and in Pomerium's: the perch's panel for an errand that ran, the refusal screen for
+ * one Pomerium turned back.
  */
 export async function flyOwl(tool: OwlTool) {
   const id = identity()
   sfx('hoot')
-  quest.perchAway('out')
+  quest.perchPhase('out')
   const [sent] = await Promise.all([sendOwl({ method: 'tools/call', tool }), watch(FLIGHT_MS.out)])
 
   if (!sent.ok) {
-    quest.perchAway(null)
-    quest.toast(`The owl never left your shoulder: ${sent.message}`, 'deny')
+    leavePerch()
+    quest.toast(`The owl never left the perch: ${sent.message}`, 'deny')
 
     return
   }
@@ -447,22 +466,26 @@ export async function flyOwl(tool: OwlTool) {
   const { outcome } = flight
   const landed = outcome.kind === 'result'
 
-  quest.perchAway(landed ? 'landed' : 'turned')
+  quest.perchPhase(landed ? 'landed' : 'turned')
   await watch(landed ? FLIGHT_MS.landed : FLIGHT_MS.turned)
-  quest.perchFlew(flight)
   logFlight(flight, `tools/call ${tool}`, id)
 
   switch (outcome.kind) {
     case 'tools':
+      leavePerch()
+
       return
     case 'result':
+      quest.perchFlew(flight)
+
       if (outcome.failed) quest.toast('The owl came back with nothing. See what the tool said.', 'deny')
       else DONE[tool]?.()
 
       return
     case 'refused':
+      leavePerch()
       sfx('denied')
-      quest.showDeny(refusedView(tool, id, outcome.requestId), () => {
+      quest.showDeny(refusedView(tool, id, flight, outcome.requestId), () => {
         learn('mcpServer')
 
         // The lesson is the deny rule that names a class of tools, not a route that refuses everything.
@@ -479,10 +502,12 @@ export async function flyOwl(tool: OwlTool) {
 
       return
     case 'signin':
+      leavePerch()
       quest.toast('The owl has no papers to fly with. Sign in with the Oracle again.', 'deny')
 
       return
     case 'error':
+      leavePerch()
       quest.toast(`The owl lost its way: ${outcome.message}`, 'deny')
   }
 }
