@@ -44,6 +44,24 @@ const APP_DEV_IMAGE = 'pomerium-quest/app-dev:dev'
 /** The owl's MCP server (mcp/), which Pomerium serves at the Aviary's address. */
 const MCP_IMAGE = 'pomerium-quest/mcp:dev'
 
+/**
+ * The domains whose client ID metadata documents (CIMD) Pomerium will fetch, so these MCP clients can sign in
+ * to the Aviary without registering first. Pomerium requires the list whenever MCP is on.
+ */
+const MCP_ALLOWED_CLIENT_ID_DOMAINS = [
+  'vscode.dev',
+  'claude.ai',
+  'chatgpt.com',
+  'cursor.com',
+  'github.com',
+  'zed.dev',
+  'antigravity.google',
+  'grok.com',
+  'opencode.ai',
+  'goose-docs.ai',
+  'www.mcpjam.com',
+]
+
 /** Where `./quest up` mounts this repo inside the k3d node. */
 const NODE_SOURCE = '/quest-src'
 
@@ -175,6 +193,7 @@ function pomeriumSettings(): Yaml {
       // client of the player's own (Claude Code, the MCP Inspector) register itself with Pomerium and
       // sign in to the Aviary; the game's perch doesn't need it.
       runtimeFlags: { allow_any_sign_out_redirect_uri: true, mcp_dynamic_client_registration: true },
+      mcpAllowedClientIdDomains: MCP_ALLOWED_CLIENT_ID_DOMAINS,
       // Forward the identity provider's groups claim to the app as a header too.
       jwtClaimHeaders: { 'X-Pomerium-Claim-Groups': 'groups', 'X-Pomerium-Claim-Deed': 'deed' },
     },
