@@ -6,6 +6,8 @@ import { SHEETS } from './sheets.ts'
 import { sfx } from './sound.ts'
 import { KNIGHT_QUOTA, defeated, hasSteel, type MonsterKind } from './quest-machine.ts'
 import { houseStage, type HouseStage } from './house-machine.ts'
+import { owlStage } from './owl-machine.ts'
+import { openVaultChest, visitPerch } from './owl-story.ts'
 import {
   currentLetter,
   enterHouse,
@@ -400,6 +402,8 @@ export class KingdomScene extends Phaser.Scene {
     }
 
     if (hasSteel()) this.setTile(this.world.chest, TILE.chestOpen, false)
+
+    if (owlStage() === 'crowned') this.setTile(this.world.vaultChest, TILE.chestOpen, false)
 
     const map = this.make.tilemap({ data: this.world.tiles, tileWidth: T, tileHeight: T })
     const tileset = map.addTilesetImage('tiles')
@@ -917,12 +921,20 @@ export class KingdomScene extends Phaser.Scene {
       return
     }
 
-    // Every sign stands beside a gate, and shows the route that gate asks.
+    // A sign beside a gate shows the route that gate asks; a perch's sign shows its MCP server's route.
     const sign = this.world.signs.find((candidate) => same(candidate, target))
-    const signGate = sign && this.world.gates.find((candidate) => candidate.signId === sign.signId)
 
-    if (signGate) {
-      readSign(signGate)
+    if (sign) {
+      const signGate = this.world.gates.find((candidate) => candidate.signId === sign.signId)
+      readSign(signGate ?? { signId: sign.signId, zoneId: sign.signId })
+
+      return
+    }
+
+    const perch = this.world.perches.find((candidate) => same(candidate, target))
+
+    if (perch) {
+      visitPerch(perch.roost)
 
       return
     }
@@ -940,7 +952,9 @@ export class KingdomScene extends Phaser.Scene {
 
     const tile = this.tileAt(target)
 
-    if (tile === TILE.chest && openChest()) {
+    if (tile === TILE.chest && same(target, this.world.vaultChest)) {
+      if (openVaultChest()) this.setTile(target, TILE.chestOpen)
+    } else if (tile === TILE.chest && openChest()) {
       this.setTile(target, TILE.chestOpen)
       this.raiseItem(target, ITEM.swordSteel)
     }

@@ -93,11 +93,26 @@ export const LESSONS = {
     title: 'A deny rule always beats an allow',
     link: { label: 'PPL: allow and deny', href: `${DOCS}/internals/ppl#actions` },
   },
+  mcpServer: {
+    title: 'An MCP server is a route with a policy',
+    link: { label: 'Protect an MCP server', href: `${DOCS}/capabilities/mcp/protect-mcp-server` },
+  },
+  mcpIdentity: {
+    title: 'An agent acts with your identity',
+    link: { label: 'MCP support', href: `${DOCS}/capabilities/mcp` },
+  },
+  mcpTool: {
+    title: 'A policy can refuse a single tool',
+    link: { label: 'Limit MCP tools', href: `${DOCS}/capabilities/mcp/limit-mcp-tools` },
+  },
 } as const
 
 export type LessonId = keyof typeof LESSONS
 
-export const LESSON_ORDER: readonly LessonId[] = [
+/** Chapter two's lessons, taught by the owl beyond the Royal Keep. */
+export const CHAPTER_TWO_LESSONS: readonly LessonId[] = ['mcpServer', 'mcpIdentity', 'mcpTool']
+
+export const CHAPTER_ONE_LESSONS: readonly LessonId[] = [
   'every',
   'idp',
   'route',
@@ -116,6 +131,8 @@ export const LESSON_ORDER: readonly LessonId[] = [
   'denyWins',
 ]
 
+export const LESSON_ORDER: readonly LessonId[] = [...CHAPTER_ONE_LESSONS, ...CHAPTER_TWO_LESSONS]
+
 export const link = (lesson: LessonId) => LESSONS[lesson].link
 
 /** What each gate's sign says above its route config. */
@@ -130,6 +147,13 @@ export const SIGN_TEXT: Partial<Record<SignId, string>> = {
   scriptorium:
     "The scriptorium, where the Royal Ledger is written. Its path is inside the library's, but it's a route of its own with its own policy. Pomerium picks the route whose path matches most closely, so the library's rule doesn't apply here: only scribes may enter.",
   keep: 'The Royal Keep. One rule, three checks: a citizen who is both a knight and a scholar. In an and rule, every check must pass.',
+  aviary:
+    "The Aviary is an MCP server: it offers tools for an agent to call, and your owl is the agent. It's a route like any gate, so Pomerium checks every call against the policy below, as you. Its deny rule names one tool. Any citizen's owl may call the others, but no owl may call open_vault here.",
+  rookery:
+    "The Rookery is the same MCP server behind a second route, with a policy of its own. Only a falconer's owl gets in, and no tool is denied here.",
+  mews: 'The Mews, where falconers keep their birds. Only falconers may enter, and only the owl can make you one: the letter it carries asks the Oracle to add you to the falconers group.',
+  vault:
+    'The Royal Vault. Only keyholders may enter. No one in the kingdom hands out that key: a tool the owl calls at the Rookery asks the Oracle for it.',
 }
 
 /** Where Pomerium documents the session and user records, and the cache in front of them. */
@@ -153,6 +177,10 @@ export const SIGN_DOCS: Partial<Record<SignId, readonly DocLink[]>> = {
     link('defaultDeny'),
   ],
   keep: [link('allOf'), link('claims')],
+  aviary: [link('mcpServer'), link('mcpTool')],
+  rookery: [link('mcpServer'), link('onroute')],
+  mews: [link('claims'), link('refresh')],
+  vault: [link('claims'), link('refresh')],
 }
 
 export const BOOKS: Page[] = [

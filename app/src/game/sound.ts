@@ -39,6 +39,8 @@ export type Effect =
   | 'doorOpen'
   | 'doorClose'
   | 'munch'
+  | 'bell'
+  | 'hoot'
 
 const STORAGE_KEY = 'pomerium-quest/sound/v1'
 
@@ -515,6 +517,19 @@ const EFFECTS: Record<Effect, (mix: Mixer, out: AudioNode, at: number) => void> 
     tone(out, at, { wave: 'triangle', freq: hz('C3'), dur: 0.68, peak: 0.3, hold: true })
     tone(out, at + 0.72, { wave: 'triangle', freq: hz('G3'), dur: 0.26, peak: 0.3, hold: true })
     tone(out, at + 1.0, { wave: 'triangle', freq: hz('C3'), dur: 1.3, peak: 0.3, hold: true })
+  },
+  /** The Aviary's bell, rung by the owl: two strikes, each a low hum under a bright, slowly fading partial. */
+  bell: (_mix, out, at) => {
+    for (const strike of [0, 0.7]) {
+      tone(out, at + strike, { wave: 'sine', freq: hz('E4'), dur: 1.6, peak: 0.22 })
+      tone(out, at + strike, { wave: 'sine', freq: hz('B5'), dur: 1.1, peak: 0.09 })
+      tone(out, at + strike, { wave: 'triangle', freq: hz('E6'), dur: 0.5, peak: 0.04 })
+    }
+  },
+  /** The owl setting off on an errand: a short hoot, then a longer one. */
+  hoot: (_mix, out, at) => {
+    tone(out, at, { wave: 'sine', freq: 392, to: 349, dur: 0.14, peak: 0.16, hold: true })
+    tone(out, at + 0.2, { wave: 'sine', freq: 392, to: 311, dur: 0.34, peak: 0.16, hold: true })
   },
   /** A text box popping open: two quick rising blips. */
   dialogOpen: (_mix, out, at) => {

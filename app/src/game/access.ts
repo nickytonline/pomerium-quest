@@ -1,6 +1,8 @@
 // How the game asks for access: every gate is a real HTTP request through Pomerium, and the
 // status code is the answer.
 import type { HouseRule, HouseState, Knock, Knocker, OpenedHouse } from './house.ts'
+import type { Roost } from './owl.ts'
+import type { OwlCall, OwlFlight } from './perch.ts'
 import { type Identity } from './ppl.ts'
 import { ANONYMOUS, type Mode } from './store.ts'
 import { type Zone } from './zones.ts'
@@ -225,5 +227,29 @@ export async function knockYourself(house: HouseState, method: 'GET' | 'POST'): 
     if (current || Date.now() - started > PICKUP_MS) return status
 
     await new Promise((resolve) => setTimeout(resolve, 1_000))
+  }
+}
+
+/**
+ * Sends the owl from its perch: the game server makes the MCP request to `roost` with the token Pomerium
+ * gave it for the player. The perch is a Pomerium route too, so it can refuse before the owl ever flies.
+ */
+export async function sendOwl(roost: Roost, call: OwlCall): Promise<Built<OwlFlight>> {
+  try {
+    const response = await fetch(`/zones/perch/${roost}`, {
+      method: 'POST',
+      redirect: 'manual',
+      headers: { accept: 'application/json', 'content-type': 'application/json' },
+      body: JSON.stringify(call),
+    })
+
+    if (needsSignIn(response)) return { ok: false, message: 'You have no session. Sign in with the Oracle.' }
+
+    if (!response.ok) return { ok: false, message: `${response.status} ${response.statusText}` }
+
+    // SAFETY: our own server route answers with this JSON shape (app/src/server/perch.ts).
+    return { ok: true, value: (await response.json()) as OwlFlight }
+  } catch (error) {
+    return { ok: false, message: String(error) }
   }
 }

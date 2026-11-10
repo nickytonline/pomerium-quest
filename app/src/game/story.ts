@@ -19,13 +19,23 @@ import { decide, routeYaml, type Identity } from './ppl.ts'
 import { startOver } from './restart.ts'
 import { VISITORS, type VisitorId } from './house.ts'
 import { addDeed, citizenshipPages } from './house-story.ts'
+import { owlAtLeast, owlStage } from './owl-machine.ts'
+import { falconer } from './owl-story.ts'
+import { roostOrigin } from './owl.ts'
 import { KNIGHT_QUOTA, hasSteel, isAtLeast, stage, type QuestStage } from './quest-machine.ts'
 import { sfx } from './sound.ts'
 import { MAX_HP, quest, type DenyView, type LogEntry } from './store.ts'
 import type { Gate, GateRequest, NpcId } from './world.ts'
-import { zoneById, type Zone } from './zones.ts'
+import { zoneById, type Zone, type ZoneId } from './zones.ts'
 
 const UPSTREAM = 'http://quest.quest.svc.cluster.local:3000'
+const MCP_UPSTREAM = 'http://mcp.quest.svc.cluster.local:3000'
+
+/** A zone's route as it appears in Pomerium's config: an MCP server on its own host, the rest on the game's. */
+export const zoneRouteYaml = (zone: Zone) =>
+  zone.host
+    ? routeYaml(zone, new URL(roostOrigin(location.origin, zone.host)).host, MCP_UPSTREAM)
+    : routeYaml(zone, location.host, UPSTREAM)
 
 /** Townsfolk as Pomerium sees them: the same accounts that visit the player's house. */
 const townsperson = (id: VisitorId): Identity => {
@@ -37,12 +47,16 @@ const townsperson = (id: VisitorId): Identity => {
 const TRAVELER = townsperson('traveler')
 const BAKER = townsperson('baker')
 
-const learn = (lesson: LessonId) => quest.learn(lesson, LESSONS[lesson].title)
+export const learn = (lesson: LessonId) => quest.learn(lesson, LESSONS[lesson].title)
 const identity = () => quest.get().identity
 
 /** The groups the player's session carried before they last signed in again, while known. */
 let groupsBeforeSignIn: readonly string[] | null = null
-const who = (id: Identity) => (id.authenticated ? id.email : 'anonymous')
+
+/** What Pomerium may still be deciding with for a minute after a sign-in: the groups from before it. */
+export const groupsBefore = () => groupsBeforeSignIn
+
+export const who = (id: Identity) => (id.authenticated ? id.email : 'anonymous')
 
 const claimsCode = (id: Identity) =>
   JSON.stringify({ email: id.email, email_verified: true, groups: id.groups, deed: id.deed }, null, 2)
@@ -114,6 +128,26 @@ function refusal(zone: Zone, id: Identity): Refusal {
       }
     case 'keep':
       return keepRefusal(id)
+    case 'mews':
+      return {
+        story: {
+          title: 'Falconers only',
+          text: owlAtLeast('vouched')
+            ? 'The guard shakes their head. "The Oracle may have your letter, but your papers don\'t say falconer yet. Sign in with him again, then come back."'
+            : 'The guard glances at your empty shoulder. "The Mews is for falconers, and nothing in your papers says falconer. The Falconer\'s owl can carry a letter to the Oracle for you."',
+        },
+        hint: `The Mews's only rule needs claim/groups: ${GROUPS.falconers}, and the groups claim in your session doesn't include ${GROUPS.falconers}. Only the owl's deliver_letter tool asks the Oracle to add it.`,
+      }
+    case 'vault':
+      return {
+        story: {
+          title: 'Keyholders only',
+          text: owlAtLeast('entrusted')
+            ? 'The guard taps your papers. "The Oracle may have added your key, but it isn\'t in here yet. Sign in with him again."'
+            : 'The vault\'s guard doesn\'t even look up. "Keyholders only. Nobody hands out that key. They say an owl can ask the Oracle for it, at the Rookery."',
+        },
+        hint: `The vault's only rule needs claim/groups: ${GROUPS.keyholders}, and the groups claim in your session doesn't include ${GROUPS.keyholders}. Only the owl's open_vault tool asks the Oracle to add it, and only the Rookery's route allows that tool.`,
+      }
     case 'library':
       return citizensOnly('The library')
     case 'scriptorium':
@@ -133,6 +167,18 @@ function refusal(zone: Zone, id: Identity): Refusal {
         hint: 'No allow rule matched this request, so Pomerium denied it.',
       }
   }
+}
+
+/** What a guard says to papers so new that Pomerium still decides with its cached copy of the old ones. */
+const STALE_STORY: Partial<Record<ZoneId, DenyView['story']>> = {
+  armory: {
+    title: 'Easy there, Sir Eager',
+    text: 'The guard squints at your papers. "Knighted this very minute, were you? The ink\'s still wet. Go polish your sword for a bit, then come back."',
+  },
+  keep: {
+    title: 'The ink is still wet',
+    text: 'The guard peers at your papers. "A scholar, is it? Then you\'ll know the first rule of scholarship: let the ink dry before you wave it about. Give it a minute."',
+  },
 }
 
 const LOG_DECISION: Record<Outcome['kind'], LogEntry['decision']> = {
@@ -182,16 +228,10 @@ function denyView(
 
   const { story, hint } = stale
     ? {
-        story:
-          zone.id === 'armory'
-            ? {
-                title: 'Easy there, Sir Eager',
-                text: 'The guard squints at your papers. "Knighted this very minute, were you? The ink\'s still wet. Go polish your sword for a bit, then come back."',
-              }
-            : {
-                title: 'The ink is still wet',
-                text: 'The guard peers at your papers. "A scholar, is it? Then you\'ll know the first rule of scholarship: let the ink dry before you wave it about. Give it a minute."',
-              },
+        story: STALE_STORY[zone.id] ?? {
+          title: 'The ink is still wet',
+          text: 'The guard peers at your papers. "Fresh from the Oracle, are they? Let the ink dry before you wave them about. Give it a minute."',
+        },
         hint: 'Try again in a moment. Once the cached copy expires, Pomerium reads your updated user record and the guard lets you through.',
       }
     : refusal(zone, id)
@@ -263,9 +303,11 @@ export async function enterGate(
 
   if (zone.id === 'armory' || zone.id === 'library') learn('jwt')
 
-  if (zone.id === 'keep') {
+  // The keep's doors open with a fanfare once; after that it's the way through to chapter two.
+  if (zone.id === 'keep' && owlStage() === 'afar') {
     learn('allOf')
     sfx('victory')
+    quest.sendOwl({ type: 'KEEP_ENTERED' })
     quest.openFinale()
   }
 
@@ -275,13 +317,13 @@ export async function enterGate(
 const signPage = (signId: SignId, zone: Zone): Page => ({
   who: `Sign · ${zone.name}`,
   text: SIGN_TEXT[signId] ?? '',
-  code: routeYaml(zone, location.host, UPSTREAM),
+  code: zoneRouteYaml(zone),
   links: SIGN_DOCS[signId] ?? [],
 })
 
 /** Shows a gate's sign: its own words above the route config of the zone the gate asks. */
 export function readSign({ signId, zoneId }: Pick<Gate, 'signId' | 'zoneId'>) {
-  quest.say([signPage(signId, zoneById(zoneId))], () => learn('route'))
+  quest.say([signPage(signId, zoneById(zoneId))], () => learn(zoneById(zoneId).mcp ? 'mcpServer' : 'route'))
 }
 
 /** Runs a Pomerium sign-in in a frame over the game, then reads the session it left behind. */
@@ -367,7 +409,7 @@ const welcomeBack = (next: Identity, onDone?: () => void) =>
     onDone,
   )
 
-/** Groups the Captain or the Librarian asked the Oracle to add, whether or not the session has them yet. */
+/** Groups the Captain, the Librarian or the owl asked the Oracle to add, whether or not the session has them yet. */
 function vouchedGroups() {
   const vouched: string[] = []
 
@@ -376,6 +418,10 @@ function vouchedGroups() {
   if (isAtLeast('knighted')) vouched.push(GROUPS.knights)
 
   if (quest.get().progress.scholar) vouched.push(GROUPS.scholars)
+
+  if (owlAtLeast('vouched')) vouched.push(GROUPS.falconers)
+
+  if (owlAtLeast('entrusted')) vouched.push(GROUPS.keyholders)
 
   return vouched
 }
@@ -403,7 +449,7 @@ const refreshPage = (): Page => ({
 })
 
 /** Rather than send the player back to his temple, the Oracle appears beside them with their new claim. */
-function oracleArrives(letter: string) {
+export function oracleArrives(letter: string) {
   quest.summonOracle()
   quest.say([{ who: 'Oracle', text: letter }, refreshPage()], () => {
     learn('refresh')
@@ -726,6 +772,7 @@ const SCRIPTS: Record<NpcId, () => void> = {
     quest.say([hasSteel() ? { who: 'Armorer', text, links: [link('onroute')] } : { who: 'Armorer', text }])
   },
   librarian: () => void librarian(),
+  falconer,
 }
 
 const LIBRARIAN_INTRO: Page[] = [

@@ -1,7 +1,8 @@
 import type { SignId } from './content.ts'
+import type { Roost } from './owl.ts'
 import type { ZoneId } from './zones.ts'
 
-// The kingdom map: a 40x30 tile grid built from a few drawing helpers, plus where every
+// The kingdom map: a 40x42 tile grid built from a few drawing helpers, plus where every
 // gate, sign, NPC, monster and prop sits. Tile ids match the order in art/tiles.mjs.
 
 export const TILE = {
@@ -39,6 +40,8 @@ export const TILE = {
   tableHalf: 39,
   tableHeel: 40,
   signIndoors: 41,
+  perch: 42,
+  perchIndoors: 43,
 } as const
 
 export type TileId = (typeof TILE)[keyof typeof TILE]
@@ -63,7 +66,10 @@ export const WALKABLE: ReadonlySet<number> = new Set([
 export const PLAYER_TERRAIN: ReadonlySet<number> = new Set([...WALKABLE, TILE.water, TILE.door])
 
 export const MAP_WIDTH = 40
-export const MAP_HEIGHT = 30
+export const MAP_HEIGHT = 42
+
+/** The Royal Keep's wall: chapter one's kingdom lies above this row, and the Aviary below it. */
+const KEEP_WALL = 29
 
 /** A tile's size in game pixels. */
 export const TILE_PX = 16
@@ -71,7 +77,15 @@ export const TILE_PX = 16
 /** About how much of the map the game board shows: this many tiles' worth, shaped to the window. */
 export const BOARD_TILES = { cols: 16, rows: 12 } as const
 
-export type NpcId = 'sage' | 'oracle' | 'traveler' | 'captain' | 'armorer' | 'librarian' | 'baker'
+export type NpcId =
+  | 'sage'
+  | 'oracle'
+  | 'traveler'
+  | 'captain'
+  | 'armorer'
+  | 'librarian'
+  | 'baker'
+  | 'falconer'
 
 /** Frame index of each NPC in npcs.png. */
 export const NPC_FRAME: Record<NpcId, number> = {
@@ -82,6 +96,7 @@ export const NPC_FRAME: Record<NpcId, number> = {
   armorer: 4,
   librarian: 5,
   baker: 6,
+  falconer: 9,
 }
 
 /** Phish dress as the Oracle, so their frame in npcs.png follows the real NPCs'. */
@@ -113,6 +128,11 @@ export interface Gate extends Point, GateRequest {
 
 export interface Sign extends Point {
   readonly signId: SignId
+}
+
+/** A perch the owl flies from, to one of the MCP server's two routes. */
+export interface Perch extends Point {
+  readonly roost: Roost
 }
 
 export interface Npc extends Point {
@@ -162,15 +182,27 @@ export interface World {
   readonly phish: readonly Point[]
   readonly rocks: readonly Point[]
   readonly chest: Point
+  /** The owl's perches: the Aviary's by the Falconer, the Rookery's inside the Mews. */
+  readonly perches: readonly Perch[]
+  /** The chest in the Royal Vault, at the end of chapter two. */
+  readonly vaultChest: Point
   /** Top-left tile of the 2x2 fountain. */
   readonly fountain: Point
   readonly spawn: Point
 }
 
-export type Region = 'Hearth Village' | 'Slime Fields' | 'Your House' | 'Kingdom Town' | 'Library Quarter'
+export type Region =
+  | 'Hearth Village'
+  | 'Slime Fields'
+  | 'Your House'
+  | 'Kingdom Town'
+  | 'Library Quarter'
+  | 'The Aviary'
 
 export function regionAt(point: Point): Region {
   if (inHouse(point) || same(point, HOUSE.door)) return 'Your House'
+
+  if (point.y > KEEP_WALL) return 'The Aviary'
 
   if (point.x <= 15) return point.y >= 18 ? 'Hearth Village' : 'Slime Fields'
 
@@ -323,6 +355,48 @@ export function buildWorld(): World {
     TILE.tree,
   )
 
+  // The Royal Keep's wall closes off the south of the kingdom. West of the road, thick forest stands
+  // behind it; east, beyond the keep's gate, lie the Aviary's grounds.
+  fill(0, KEEP_WALL, 16, KEEP_WALL, TILE.tree)
+  fill(17, KEEP_WALL, MAP_WIDTH - 2, KEEP_WALL, TILE.wall)
+  fill(1, KEEP_WALL + 1, 15, MAP_HEIGHT - 2, TILE.tree)
+
+  // The Aviary: a road from the keep past the Falconer, then east to the Mews and the Royal Vault.
+  fill(21, 30, 21, 33, TILE.cobble)
+  fill(21, 33, 35, 33, TILE.cobble)
+  set(27, 34, TILE.cobble)
+  set(35, 34, TILE.cobble)
+  room(24, 35, 30, 40)
+  room(32, 35, 38, 40)
+  each(
+    [
+      [18, 31],
+      [19, 36],
+      [22, 39],
+      [31, 31],
+      [37, 31],
+      [18, 39],
+    ],
+    TILE.tree,
+  )
+  each(
+    [
+      [19, 33],
+      [29, 31],
+      [34, 32],
+      [20, 37],
+    ],
+    TILE.flowers,
+  )
+
+  const perches: Perch[] = [
+    { x: 25, y: 32, roost: 'aviary' },
+    { x: 26, y: 38, roost: 'rookery' },
+  ]
+
+  set(25, 32, TILE.perch)
+  set(26, 38, TILE.perchIndoors)
+
   // Leaving through a gate puts the player back in the zone they passed to reach it, so its guard checks
   // that zone's rule again. The fields open onto Hearth Village, which no route guards.
   // Every guard asks with a GET to /enter.
@@ -335,7 +409,9 @@ export function buildWorld(): World {
     { x: 33, y: 7, zoneId: 'armory', signId: 'armory', ...enter, exitZoneId: 'town' },
     { x: 33, y: 20, zoneId: 'library', signId: 'library', ...enter, exitZoneId: 'town' },
     { x: 29, y: 24, zoneId: 'scriptorium', signId: 'scriptorium', ...enter, exitZoneId: 'library' },
-    { x: 21, y: 29, zoneId: 'keep', signId: 'keep', ...enter, exitZoneId: 'town' },
+    { x: 21, y: KEEP_WALL, zoneId: 'keep', signId: 'keep', ...enter, exitZoneId: 'town' },
+    { x: 27, y: 35, zoneId: 'mews', signId: 'mews', ...enter, exitZoneId: 'keep' },
+    { x: 35, y: 35, zoneId: 'vault', signId: 'vault', ...enter, exitZoneId: 'keep' },
   ]
 
   for (const gate of gates) set(gate.x, gate.y, TILE.gateClosed)
@@ -348,6 +424,11 @@ export function buildWorld(): World {
     { x: 35, y: 19, signId: 'library' },
     { x: 30, y: 25, signId: 'scriptorium' },
     { x: 22, y: 28, signId: 'keep' },
+    { x: 28, y: 34, signId: 'mews' },
+    { x: 36, y: 34, signId: 'vault' },
+    // The perches' signs show the MCP server's two routes; no gate stands beside them.
+    { x: 26, y: 32, signId: 'aviary' },
+    { x: 28, y: 38, signId: 'rookery' },
   ]
 
   // A sign takes on the ground it stands on, so one inside a building stands on its floor, not grass.
@@ -368,12 +449,17 @@ export function buildWorld(): World {
   // The Royal Ledger on its lectern. Getting past the scriptorium door is the write, so it's only scenery.
   set(26, 22, TILE.lectern)
 
+  const vaultChest = { x: 35, y: 38 }
+  set(vaultChest.x, vaultChest.y, TILE.chest)
+
   return {
     tiles,
     gates,
     signs,
     rocks,
     chest,
+    perches,
+    vaultChest,
     fountain,
     npcs: [
       { x: 12, y: 25, npcId: 'sage' },
@@ -383,6 +469,7 @@ export function buildWorld(): World {
       { x: 34, y: 9, npcId: 'armorer' },
       { x: 34, y: 25, npcId: 'librarian' },
       { x: 30, y: 13, npcId: 'baker' },
+      { x: 23, y: 32, npcId: 'falconer' },
     ],
     bots: [
       { x: 10, y: 2 },
