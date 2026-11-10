@@ -415,6 +415,12 @@ export class KingdomScene extends Phaser.Scene {
   private owlFlapping = false
   /** The latest flight each bird was sent on, so an older one still under way gives up. */
   private flights = new Map<Phaser.GameObjects.Image, number>()
+  /**
+   * What the view follows while it watches a bird fly: the bird's path without the bob of its wingbeats,
+   * which would otherwise shake the whole map a pixel up and down.
+   */
+  private readonly lens = { x: 0, y: 0 }
+  private watched: Phaser.GameObjects.Image | undefined
   /** The owl is off the dog's shoulder: flying an errand, or on a perch until the dog walks away. */
   private owlAloft = false
   private mochisOwl: Phaser.GameObjects.Image | undefined
@@ -818,10 +824,12 @@ export class KingdomScene extends Phaser.Scene {
         const bend = 2 * (1 - t) * t
         const beat = Math.floor((this.time.now - started) / WINGBEAT_MS)
 
-        bird.setPosition(
-          from.x + (end.x - from.x) * t + bend * sway,
-          from.y + (end.y - from.y) * t - bend * lift * 2 + (beat % 2 === 0 ? 0 : 1),
-        )
+        const x = from.x + (end.x - from.x) * t + bend * sway
+        const y = from.y + (end.y - from.y) * t - bend * lift * 2
+
+        bird.setPosition(x, y + (beat % 2 === 0 ? 0 : 1))
+
+        if (bird === this.watched) Object.assign(this.lens, { x, y })
 
         bird.setFrame(beat % 2 === 0 ? frames.up : frames.down)
       },
@@ -928,7 +936,11 @@ export class KingdomScene extends Phaser.Scene {
 
   /** Points the game's view at a bird in flight, or, with none, back at the dog. */
   private follow(bird?: Phaser.GameObjects.Image) {
-    const target = bird ?? this.player
+    this.watched = bird
+
+    if (bird) Object.assign(this.lens, { x: bird.x, y: bird.y })
+
+    const target = bird ? this.lens : this.player
 
     if (target) this.cameras.main.startFollow(target, true)
   }
