@@ -75,8 +75,10 @@ export interface PerchView {
   readonly tool: OwlTool
   /** The owl's last flight to this perch: the MCP request and Pomerium's answer. */
   readonly flight: OwlFlight | null
-  /** How far the errand has got: the scene flies the owl to match, and the panel waits for `done`. */
+  /** How far the errand has got: the scene flies the owl to match. */
   readonly phase: PerchPhase
+  /** The player asked to see the tool call the owl made, so the perch's panel is open. */
+  readonly explained: boolean
 }
 
 export interface LogEntry {
@@ -347,14 +349,22 @@ export const quest = {
   },
   /** The owl hops onto the perch, and waits there while the player is asked whether to send it. */
   openPerch: (tool: OwlTool) =>
-    update({ perch: { tool, flight: null, phase: 'asking' }, menuOpen: false, journalOpen: false }),
+    update({
+      perch: { tool, flight: null, phase: 'asking', explained: false },
+      menuOpen: false,
+      journalOpen: false,
+    }),
   /** The owl sets off, lands or is turned back; the scene flies it to match. */
   perchPhase: (phase: PerchPhase) => {
     if (state.perch) update({ perch: { ...state.perch, phase } })
   },
-  /** The owl is back with the player: the perch's panel shows the flight. */
+  /** The owl is back on the perch with its answer, which the text box tells. */
   perchFlew: (flight: OwlFlight) => {
-    if (state.perch) update({ perch: { ...state.perch, flight, phase: 'done' } })
+    if (state.perch) update({ perch: { ...state.perch, flight, phase: 'done', explained: false } })
+  },
+  /** The player asks to see the tool call the owl made: the perch's panel opens. */
+  explainPerch: () => {
+    if (state.perch) update({ perch: { ...state.perch, explained: true } })
   },
   closePerch: () => update({ perch: null, inputResumesAt: performance.now() + 200 }),
   openChapterTwoEnd: () => update({ chapterTwoDone: true, menuOpen: false, journalOpen: false }),

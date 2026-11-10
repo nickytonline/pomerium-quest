@@ -368,7 +368,7 @@ function refusedView(tool: OwlTool, id: Identity, flight: OwlFlight, requestId: 
 /** A part of the story that waits until the player leaves the perch, so they can read the call first. */
 let afterPerch: (() => void) | undefined
 
-/** Closes the perch's panel, then tells whatever the last errand set in motion. */
+/** Leaves the perch, then tells whatever the last errand set in motion. */
 export function leavePerch() {
   const next = afterPerch
   afterPerch = undefined
@@ -414,6 +414,77 @@ const DONE: Partial<Record<OwlTool, () => void>> = {
   },
 }
 
+/** How the kingdom tells what the owl brought back from each errand. */
+const BROUGHT: Partial<Record<OwlTool, string>> = {
+  [OWL_TOOLS.whoami]: 'The owl is back on its perch. This is who it flew for:',
+  [OWL_TOOLS.ringBell]: 'The owl is back on its perch, and the bell is still humming:',
+  [OWL_TOOLS.scoutGrounds]: 'The owl is back on its perch, with news from high above the grounds:',
+  [OWL_TOOLS.deliverLetter]: 'The owl is back on its perch, with a note from the Oracle tied to its leg:',
+}
+
+/** A tool's answer on one line, so the text box stays low enough to leave the owl and its perch in view. */
+function onOneLine(text: string) {
+  try {
+    return JSON.stringify(JSON.parse(text), null, 1).replace(/\n\s*/g, ' ')
+  } catch {
+    return text
+  }
+}
+
+/**
+ * The owl is back from an errand that ran. The text box tells what it brought, so the owl stays in view on
+ * its perch. The tool call behind the errand is there to look at, but only when the player asks.
+ */
+function tellReturn(tool: OwlTool, outcome: { readonly text: string; readonly failed: boolean }) {
+  const brought = outcome.failed
+    ? 'The owl is back on its perch, but the errand went wrong:'
+    : (BROUGHT[tool] ?? 'The owl is back on its perch, and it brought this:')
+
+  quest.say([
+    {
+      who: `Perch · ${OWL_ERRANDS[tool].title}`,
+      text: brought,
+      code: onOneLine(outcome.text),
+      choices: [
+        { label: 'See the tool call', pick: () => quest.explainPerch() },
+        { label: 'Send the owl again', pick: () => void flyOwl(tool) },
+        { label: 'Leave the perch', pick: leavePerch },
+      ],
+    },
+  ])
+}
+
+/**
+ * The owl is back from an errand Pomerium refused. One line comes first, with the owl in view on its perch;
+ * the refusal screen follows it.
+ */
+function tellRefusal(tool: OwlTool, id: Identity, refusal: DenyView) {
+  sfx('denied')
+  quest.say(
+    [
+      {
+        who: `Perch · ${OWL_ERRANDS[tool].title}`,
+        text: 'The owl lands back on its perch with nothing tied to its leg. It was turned away before it could run the errand.',
+      },
+    ],
+    () =>
+      quest.showDeny(refusal, () => {
+        learn('mcpServer')
+
+        // The lesson is the deny rule that names a class of tools, not a route that refuses everything.
+        if (id.groups.includes(GROUPS.falconers) && isForbidden(tool)) {
+          learn('mcpTool')
+          learn('denyWins')
+        }
+
+        if (owlStage() === 'fledged') {
+          quest.sendOwl({ type: 'OWL_TURNED_BACK' })
+          quest.toast('Tell the Falconer the owl was turned back', 'info')
+        }
+      }),
+  )
+}
+
 const flies = () => matchMedia('(prefers-reduced-motion: no-preference)').matches
 
 /** Waits out a part of the owl's flight, for players who have motion on; with it off the owl doesn't fly. */
@@ -422,9 +493,9 @@ const watch = (ms: number) =>
 
 /**
  * Sends the owl on a perch's errand, which is one tool call, and tells the story of how it went. The owl
- * flies out while the request does, and comes back with the answer. Only then is the call explained, in
- * the kingdom's words and in Pomerium's: the perch's panel for an errand that ran, the refusal screen for
- * one Pomerium turned back.
+ * flies out while the request does, and comes back to the perch with the answer. Nothing covers the owl as
+ * it lands: the text box tells what it brought, and offers the tool call to look at. An errand Pomerium
+ * turned back gets a line in the text box too, and then the refusal screen.
  */
 export async function flyOwl(tool: OwlTool) {
   const id = identity()
@@ -462,27 +533,14 @@ export async function flyOwl(tool: OwlTool) {
     case 'result':
       quest.perchFlew(flight)
 
-      if (outcome.failed) quest.toast('The owl came back with nothing. See what the tool said.', 'deny')
-      else DONE[tool]?.()
+      if (!outcome.failed) DONE[tool]?.()
+
+      tellReturn(tool, outcome)
 
       return
     case 'refused':
       leavePerch()
-      sfx('denied')
-      quest.showDeny(refusedView(tool, id, flight, outcome.requestId), () => {
-        learn('mcpServer')
-
-        // The lesson is the deny rule that names a class of tools, not a route that refuses everything.
-        if (id.groups.includes(GROUPS.falconers) && isForbidden(tool)) {
-          learn('mcpTool')
-          learn('denyWins')
-        }
-
-        if (owlStage() === 'fledged') {
-          quest.sendOwl({ type: 'OWL_TURNED_BACK' })
-          quest.toast('Tell the Falconer the owl was turned back', 'info')
-        }
-      })
+      tellRefusal(tool, id, refusedView(tool, id, flight, outcome.requestId))
 
       return
     case 'signin':
