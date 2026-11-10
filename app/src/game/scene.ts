@@ -6,7 +6,7 @@ import { SHEETS } from './sheets.ts'
 import { sfx } from './sound.ts'
 import { KNIGHT_QUOTA, defeated, hasSteel, type MonsterKind } from './quest-machine.ts'
 import { houseStage, type HouseStage } from './house-machine.ts'
-import { owlStage } from './owl-machine.ts'
+import { owlAtLeast, owlStage } from './owl-machine.ts'
 import { openVaultChest, visitPerch } from './owl-story.ts'
 import {
   currentLetter,
@@ -107,7 +107,10 @@ const SWING = { from: 100, to: -50, ms: 160 }
 /** What a player hears when the game has lost their session somewhere they could only be with one. */
 const LOST_SESSION = 'Something went wrong and your session was lost, so you start again in Hearth Village.'
 
-const ITEM = { swordWood: 0, swordSteel: 1 }
+const ITEM = { swordWood: 0, swordSteel: 1, owl: 7 }
+
+/** Where the owl sits on the dog, from the dog's center, and how high above that its hop starts. */
+const OWL_SEAT = { x: 5, y: -8, hop: 14 }
 
 /** Rows of the dog's frame left above the waterline while swimming: head and collar. */
 const SWIM_DEPTH = 11
@@ -337,6 +340,9 @@ export class KingdomScene extends Phaser.Scene {
   private guards: Guard[] = []
   /** An item shown rising out of a chest until the player closes its dialog. */
   private shownItem: Phaser.GameObjects.Image | undefined
+  private owl: Phaser.GameObjects.Image | undefined
+  /** How far above its seat the owl is, while it hops onto the dog's shoulder. */
+  private owlHop = 0
   private monsters: Monster[] = []
   private fish: Fish[] = []
   private phish: Phish[] = []
@@ -498,6 +504,7 @@ export class KingdomScene extends Phaser.Scene {
       .setDepth(10)
     this.swim(this.tileAt(this.pos) === TILE.water)
     this.sword = this.add.image(0, 0, 'items', ITEM.swordWood).setVisible(false).setDepth(9)
+    this.owl = this.add.image(0, 0, 'items', ITEM.owl).setVisible(owlAtLeast('fledged')).setDepth(12)
 
     this.cameras.main.setBounds(0, 0, MAP_WIDTH * T, MAP_HEIGHT * T)
     this.cameras.main.startFollow(this.player, true)
@@ -544,7 +551,27 @@ export class KingdomScene extends Phaser.Scene {
     })
   }
 
+  /** The owl rides on the dog's shoulder from the moment the Falconer hands it over, and hops there first. */
+  private carryOwl() {
+    const { owl, player } = this
+
+    if (!owl || !player || !owlAtLeast('fledged')) return
+
+    if (!owl.visible) {
+      owl.setVisible(true)
+
+      // Motion is opt-in: without it the owl is simply there.
+      if (matchMedia('(prefers-reduced-motion: no-preference)').matches) {
+        this.owlHop = OWL_SEAT.hop
+        this.tweens.add({ targets: this, owlHop: 0, duration: 420, ease: 'Bounce.easeOut' })
+      }
+    }
+
+    owl.setPosition(player.x + OWL_SEAT.x, player.y + OWL_SEAT.y - this.owlHop)
+  }
+
   override update(time: number) {
+    this.carryOwl()
     const { controls, inputResumesAt } = quest.get()
     const pending = this.pending
     this.pending = new Set()

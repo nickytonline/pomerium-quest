@@ -183,6 +183,29 @@ const BOT_SLIME = [
   ],
 ]
 
+// The Falconer's owl, small enough to ride on the dog's shoulder.
+const OWL = {
+  palette: { Q: '#9a6b3f', q: '#d9b98a', Y: '#ffd86b' },
+  rows: [
+    '................',
+    '................',
+    '................',
+    '....KK....KK....',
+    '....KQKKKKQK....',
+    '....KQQQQQQK....',
+    '....KYKQQKYK....',
+    '....KQQGGQQK....',
+    '....KQqqqqQK....',
+    '....KQqqqqQK....',
+    '.....KqqqqK.....',
+    '......KKKK......',
+    '................',
+    '................',
+    '................',
+    '................',
+  ],
+}
+
 // A pond koi the dog can catch and eat; its tail flicks between the two frames.
 const FISH_COLORS = { g: '#f08a4b', s: '#ffd2a8' }
 
@@ -648,6 +671,7 @@ const grids = {
   ...dog,
   bot_slime: BOT_SLIME,
   fish: FISH.map((f) => f.rows),
+  owl: [OWL.rows],
   sword_wood: [SWORD_WOOD],
   sword_steel: [SWORD_STEEL],
   shield_wood: [SHIELD_WOOD],
@@ -666,7 +690,7 @@ const dogCells = [dog.down, dog.up, dog.right, dog.left]
 // Game sheets. Frame order is load-bearing: see app/src/game/sprites.ts.
 sheet(join(assets, 'dog.png'), [dogCells.flat()])
 
-sheet(join(assets, 'items.png'), [[SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, ...BOT_SLIME, ...FISH]])
+sheet(join(assets, 'items.png'), [[SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, ...BOT_SLIME, ...FISH, OWL]])
 
 sheet(join(assets, 'npcs.png'), [npcs])
 
@@ -677,7 +701,7 @@ sheet(
   join(out, 'preview.png'),
   [
     ...dogCells.map((r) => [...r, null, null]),
-    [SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, ...BOT_SLIME, ...FISH],
+    [SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, ...BOT_SLIME, ...FISH, OWL],
     npcs.slice(0, 5),
     [npcs[5], npcs[6], npcs[7], npcs[8], npcs[9], tiles[15], tiles[42]],
   ],
