@@ -417,7 +417,7 @@ const DONE: Partial<Record<OwlTool, () => void>> = {
 const HEARD: Partial<Record<OwlTool, () => void>> = {
   [OWL_TOOLS.ringBell]: () => {
     sfx('bell')
-    quest.toast('High above the grounds, the bell rings twice', 'info')
+    quest.toast('High above the grounds, the bell tolls three times', 'info')
   },
 }
 
@@ -501,7 +501,8 @@ export async function flyOwl(tool: OwlTool) {
   }
 
   // The owl calls from out of sight just before it comes back into view. With motion off it never left.
-  if (flew) {
+  // It keeps quiet when the errand is already being heard: the bell tolls it home.
+  if (flew && !heard) {
     sfx('hoot')
     await watch(FLIGHT_MS.call)
   }
