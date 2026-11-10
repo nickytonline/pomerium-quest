@@ -83,6 +83,10 @@ function PerchPanel({ perch, flight }: { readonly perch: PerchView; readonly fli
   useEffect(() => {
     const onEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
+
+      // A menu or journal opened over the panel takes this Escape instead.
+      if (quest.get().menuOpen || quest.get().journalOpen) return
+
       event.preventDefault()
       leavePerch()
     }
@@ -218,6 +222,10 @@ function FalconersErrandPanel({ flight }: { readonly flight: OwlFlight }) {
   useEffect(() => {
     const onEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
+
+      // A menu or journal opened over the panel takes this Escape instead.
+      if (quest.get().menuOpen || quest.get().journalOpen) return
+
       event.preventDefault()
       leaveFalconersErrand()
     }

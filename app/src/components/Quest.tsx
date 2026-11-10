@@ -162,10 +162,20 @@ function useDialogKeys() {
       // So does the owl's perch, unless a dialog, a refusal or a sign-in is in front of it.
       if (celebrating || phished || houseEditor || (chapterTwoDone && !dialog)) return
 
-      if (perch && !dialog && !deny && !signIn) return
+      // A menu or journal opened over them is in front, so it gets Escape first.
+      const overlaid = menuOpen || journalOpen
+
+      if (perch && !overlaid && !dialog && !deny && !signIn) return
 
       // So does the Falconer's errand panel once it's open, so Escape leaves it without also opening the menu.
-      if (falconersErrand?.explained && falconersErrand.phase === 'done' && !dialog && !deny && !signIn)
+      if (
+        falconersErrand?.explained &&
+        falconersErrand.phase === 'done' &&
+        !overlaid &&
+        !dialog &&
+        !deny &&
+        !signIn
+      )
         return
 
       const journalKey = event.key === 'i' || event.key === 'I'
