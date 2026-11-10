@@ -10,7 +10,7 @@ import {
 import { probe } from '../game/access.ts'
 import { startOver } from '../game/restart.ts'
 import { SHEETS } from '../game/sheets.ts'
-import { ChapterTwoEnd, Perch } from './Aviary.tsx'
+import { ChapterTwoEnd, FalconersErrand, Perch } from './Aviary.tsx'
 import { Celebration } from './Celebration.tsx'
 import { HouseEditor } from './House.tsx'
 import { Phished } from './Phished.tsx'
@@ -450,6 +450,7 @@ function Kingdom() {
               <Toast />
               <DialogBox />
               <Perch />
+              <FalconersErrand />
               <DenyScreen />
               <HouseEditor />
               <PauseMenu />

@@ -5,8 +5,9 @@
 // `vouched` and `entrusted` are stale sessions, like chapter one's `knighted`: the Oracle has added a group
 // (the Falconer wrote for falconers, the owl's letter for keyholders), but the player's Pomerium session
 // still holds the claims from sign-in. A sign-in that already carries a group (a second browser, say) moves
-// straight to the stage that group earns. Finding Mochi's owl can happen at any point, so it is kept
-// beside the stages, not among them.
+// straight to the stage that group earns. Mochi's owl sits in a cage that only a distinguished falconer's
+// owl may open: the player's is refused there, and then the Falconer's owl frees it. That can happen at any
+// point once the player is a falconer, so it is kept beside the stages, not among them.
 import { assign, createActor, setup, type SnapshotFrom } from 'xstate'
 import { GROUPS } from './groups.ts'
 
@@ -18,11 +19,14 @@ export type OwlEvent =
   | { readonly type: 'FALCONER_VOUCHED' }
   | { readonly type: 'LETTER_DELIVERED' }
   | { readonly type: 'SIGNED_IN'; readonly groups: readonly string[] }
+  | { readonly type: 'CAGE_REFUSED' }
   | { readonly type: 'MOCHIS_OWL_FOUND' }
   | { readonly type: 'REUNITED' }
 
 interface OwlContext {
-  /** The player has found Mochi's owl, which follows them from then on. */
+  /** Pomerium refused the player's owl at the cage's perch, so the Falconer will send their own. */
+  readonly cageRefused: boolean
+  /** The Falconer's owl had the cage opened, and Mochi's owl follows the player from then on. */
   readonly mochisOwlFound: boolean
 }
 
@@ -37,6 +41,7 @@ export const owlMachine = setup({
     context: {} as OwlContext,
   },
   actions: {
+    refuse: assign({ cageRefused: true }),
     find: assign({ mochisOwlFound: true }),
   },
   guards: {
@@ -48,9 +53,9 @@ export const owlMachine = setup({
 }).createMachine({
   id: 'owl',
   initial: 'afar',
-  context: { mochisOwlFound: false },
-  // Mochi's owl is in the open ground, so it can be found whatever the owl's errands have come to.
-  on: { MOCHIS_OWL_FOUND: { actions: 'find' } },
+  context: { cageRefused: false, mochisOwlFound: false },
+  // The cage stands in the open ground, so its errand can be tried whatever the others have come to.
+  on: { CAGE_REFUSED: { actions: 'refuse' }, MOCHIS_OWL_FOUND: { actions: 'find' } },
   states: {
     afar: {
       description: 'Chapter two lies beyond the Royal Keep.',
@@ -111,7 +116,7 @@ const LEGACY_STAGES: ReadonlyMap<string, OwlStage> = new Map([['crowned', 'keyho
 
 /**
  * Brings a saved snapshot up to this version of the machine: a stage that no longer exists becomes the one
- * that replaced it, and a save from before Mochi's owl hasn't found it.
+ * that replaced it, and a save from before Mochi's owl, or before its cage, hasn't met either.
  */
 export function migrate(saved: {
   readonly value: string
@@ -124,7 +129,7 @@ export function migrate(saved: {
   return {
     ...saved,
     value: LEGACY_STAGES.get(saved.value) ?? saved.value,
-    context: { mochisOwlFound: falconFound, ...context },
+    context: { cageRefused: false, mochisOwlFound: falconFound, ...context },
   } as OwlSnapshot
 }
 
@@ -188,5 +193,8 @@ const ORDER: readonly OwlStage[] = [
 /** Whether the owl's story has reached `target`. */
 export const owlAtLeast = (target: OwlStage) => ORDER.indexOf(owlStage()) >= ORDER.indexOf(target)
 
-/** Whether the player has found Mochi's owl. */
+/** Whether Mochi's owl is out of its cage and following the player. */
 export const mochisOwlFound = () => owlActor.getSnapshot().context.mochisOwlFound
+
+/** Whether the player's owl has been refused at the cage's perch. */
+export const cageRefused = () => owlActor.getSnapshot().context.cageRefused

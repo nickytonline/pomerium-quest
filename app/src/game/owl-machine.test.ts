@@ -18,6 +18,26 @@ const TO_VOUCHED: OwlEvent[] = [...TO_CAUGHT, { type: 'OWL_TURNED_BACK' }, { typ
 const FALCONER = signedIn(GROUPS.falconers)
 const KEYHOLDER = signedIn(GROUPS.falconers, GROUPS.keyholders)
 
+describe('the cage', () => {
+  const context = (...events: OwlEvent[]) => {
+    const actor = createActor(owlMachine).start()
+
+    for (const event of events) actor.send(event)
+
+    return actor.getSnapshot().context
+  }
+
+  it('remembers the refusal and the rescue beside the stages, without moving them', () => {
+    expect(context()).toEqual({ cageRefused: false, mochisOwlFound: false })
+    expect(context({ type: 'CAGE_REFUSED' })).toEqual({ cageRefused: true, mochisOwlFound: false })
+    expect(context({ type: 'CAGE_REFUSED' }, { type: 'MOCHIS_OWL_FOUND' })).toEqual({
+      cageRefused: true,
+      mochisOwlFound: true,
+    })
+    expect(after(...TO_VOUCHED, FALCONER, { type: 'CAGE_REFUSED' })).toBe('falconer')
+  })
+})
+
 describe('the owl’s errands', () => {
   it('start only once the player is through the keep and has caught the owl', () => {
     expect(after({ type: 'OWL_CAUGHT' })).toBe('afar')
@@ -83,7 +103,11 @@ describe('a save from an older version of the chapter', () => {
       context: { falconFound: true },
     }
 
-    expect(migrate(saved).context).toEqual({ mochisOwlFound: true })
+    expect(migrate(saved).context).toEqual({ cageRefused: false, mochisOwlFound: true })
+  })
+
+  it('starts a save from before the cage with the cage still shut and untried', () => {
+    expect(resume('falconer').context.cageRefused).toBe(false)
   })
 
   it("keeps every stage that still exists, with Mochi's owl still to find", () => {

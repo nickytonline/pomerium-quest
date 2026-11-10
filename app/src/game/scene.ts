@@ -7,8 +7,8 @@ import { sfx } from './sound.ts'
 import { KNIGHT_QUOTA, defeated, hasSteel, type MonsterKind } from './quest-machine.ts'
 import { houseStage, type HouseStage } from './house-machine.ts'
 import { mochisOwlFound, owlAtLeast, owlStage } from './owl-machine.ts'
-import { catchOwl, findMochisOwl, readAviarySign, visitPerch } from './owl-story.ts'
-import { FLIGHT_MS, type PerchPhase } from './perch.ts'
+import { catchOwl, readAviarySign, visitCage, visitPerch } from './owl-story.ts'
+import { CAGE_FLIGHT_MS, FLIGHT_MS, type PerchPhase } from './perch.ts'
 import {
   currentLetter,
   enterHouse,
@@ -37,6 +37,7 @@ import {
 } from './story.ts'
 import {
   BOARD_TILES,
+  FALCONER_BARE_FRAME,
   GUARD_FRAME,
   HOUSE,
   MAP_HEIGHT,
@@ -119,6 +120,8 @@ const ITEM = {
   owlWingsDown: 11,
   mochisOwlWingsUp: 12,
   mochisOwlWingsDown: 13,
+  cage: 14,
+  cageOpen: 15,
 }
 
 /** Each kind of owl's frames: sitting, and with its wings up and down, which a flight swaps to make it flap. */
@@ -135,6 +138,9 @@ const OWL_SEAT = { x: 5, y: -8, hop: 14 }
 
 /** Mochi's owl rides on the dog's other side, and on the same shoulder of Mochi once it's back with them. */
 const MOCHIS_OWL_SEAT = { x: -5, y: -8 }
+
+/** Where the Falconer's owl sits on their glove, from the middle of the Falconer. */
+const FALCONERS_GLOVE = { x: -6, y: 0 }
 
 /** Mochi's owl flies to Mochi once the dog carrying it is within this many tiles. */
 const MOCHIS_OWL_REACH = 2
@@ -403,6 +409,14 @@ export class KingdomScene extends Phaser.Scene {
   /** The owl is off the dog's shoulder: flying an errand, or on a perch until the dog walks away. */
   private owlAloft = false
   private mochisOwl: Phaser.GameObjects.Image | undefined
+  /** Mochi's owl is flying from its cage to the dog, so it isn't on the dog's back yet. */
+  private mochisOwlAloft = false
+  /** The cage Mochi's owl is kept in: shut over the owl, then open and empty. */
+  private cage: Phaser.GameObjects.Image | undefined
+  /** The Falconer's owl in flight. On the glove it is part of the Falconer's own picture. */
+  private falconersOwl: Phaser.GameObjects.Image | undefined
+  /** How far the Falconer's owl's errand had got when the scene last looked. */
+  private cagePhase: 'out' | 'back' | 'done' | null = null
   private monsters: Monster[] = []
   private fish: Fish[] = []
   private phish: Phish[] = []
@@ -576,6 +590,11 @@ export class KingdomScene extends Phaser.Scene {
 
     const lost = this.world.mochisOwl
     this.mochisOwl = this.add.image(center(lost.x), center(lost.y), 'items', ITEM.mochisOwl).setDepth(12)
+    // The cage is drawn over the owl in it. Once the owl is out, the cage stands open and empty.
+    this.cage = this.add
+      .image(center(lost.x), center(lost.y), 'items', mochisOwlFound() ? ITEM.cageOpen : ITEM.cage)
+      .setDepth(13)
+    this.falconersOwl = this.add.image(0, 0, 'items', ITEM.owl).setDepth(14).setVisible(false)
     this.perchOwl()
     // A game saved beside Mochi, or after the quest's end, starts with their owl already back with them.
     this.homeMochisOwl({ fly: false })
@@ -634,7 +653,7 @@ export class KingdomScene extends Phaser.Scene {
     if (owl && owlAtLeast('fledged') && !this.owlAloft)
       owl.setPosition(player.x + OWL_SEAT.x, player.y + OWL_SEAT.y - this.owlHop)
 
-    if (mochisOwl && mochisOwlFound() && !this.mochisOwlHome)
+    if (mochisOwl && mochisOwlFound() && !this.mochisOwlHome && !this.mochisOwlAloft)
       mochisOwl.setPosition(player.x + MOCHIS_OWL_SEAT.x, player.y + MOCHIS_OWL_SEAT.y)
   }
 
@@ -671,9 +690,53 @@ export class KingdomScene extends Phaser.Scene {
     return owlAtLeast('fledged') ? undefined : this.world.owlSpots[this.owlAt]
   }
 
-  /** Where Mochi's owl sits until the player finds it. */
-  private mochisOwlSpot(): Point | undefined {
-    return mochisOwlFound() ? undefined : this.world.mochisOwl
+  /**
+   * Flies the Falconer's owl as its errand to the cage goes: off the glove and away to the cage with the
+   * request, then back to the glove once the cage is open, while Mochi's owl flies from the cage to the dog.
+   * The flights are motion, so they are opt-in: without it each bird is simply where it ends up.
+   */
+  private syncCageErrand() {
+    const phase = quest.get().falconersErrand?.phase ?? null
+
+    if (phase === this.cagePhase) return
+
+    const before = this.cagePhase
+    this.cagePhase = phase
+
+    const falconer = this.npcs.find((npc) => npc.npcId === 'falconer')
+    const { falconersOwl, mochisOwl, cage, player } = this
+
+    if (!falconer || !falconersOwl || !mochisOwl || !cage || !player) return
+
+    const glove = { x: falconer.sprite.x + FALCONERS_GLOVE.x, y: falconer.sprite.y + FALCONERS_GLOVE.y }
+    const curve = { lift: OWL_FLIGHT.lift, sway: OWL_FLIGHT.swoop }
+
+    const land = () => {
+      falconersOwl.setVisible(false)
+      falconer.sprite.setFrame(NPC_FRAME.falconer)
+    }
+
+    if (phase === 'out') {
+      falconer.sprite.setFrame(FALCONER_BARE_FRAME)
+      falconersOwl.setPosition(glove.x, glove.y).setVisible(true)
+      this.glide(falconersOwl, () => ({ x: cage.x, y: cage.y }), CAGE_FLIGHT_MS.out, curve)
+    } else if (phase === 'back') {
+      cage.setFrame(ITEM.cageOpen)
+      this.mochisOwlAloft = true
+      this.glide(falconersOwl, () => glove, CAGE_FLIGHT_MS.back, curve, land)
+      this.glide(
+        mochisOwl,
+        () => ({ x: player.x + MOCHIS_OWL_SEAT.x, y: player.y + MOCHIS_OWL_SEAT.y }),
+        CAGE_FLIGHT_MS.back,
+        { lift: curve.lift, sway: -curve.sway },
+        () => {
+          this.mochisOwlAloft = false
+        },
+      )
+    } else if (phase === null && before === 'out') {
+      // The errand came to nothing, so the owl comes back to the glove alone.
+      this.glide(falconersOwl, () => glove, OWL_FLIGHT.homeMs, curve, land)
+    }
   }
 
   /**
@@ -853,6 +916,7 @@ export class KingdomScene extends Phaser.Scene {
 
   override update(time: number) {
     this.syncFlight()
+    this.syncCageErrand()
     this.carryBirds()
     const { controls, inputResumesAt } = quest.get()
     const pending = this.pending
@@ -994,12 +1058,11 @@ export class KingdomScene extends Phaser.Scene {
     )
   }
 
-  /** Whether the owl, still to be caught, or Mochi's owl, still to be found, sits on a tile. */
+  /** Whether the owl, still to be caught, sits on a tile, or the cage stands on it. */
   private birdAt(p: Point) {
     const owl = this.owlSpot()
-    const mochisOwl = this.mochisOwlSpot()
 
-    return Boolean((owl && same(owl, p)) || (mochisOwl && same(mochisOwl, p)))
+    return Boolean(owl && same(owl, p)) || same(this.world.mochisOwl, p)
   }
 
   private face(dir: Dir) {
@@ -1300,10 +1363,8 @@ export class KingdomScene extends Phaser.Scene {
       return
     }
 
-    const mochisOwl = this.mochisOwlSpot()
-
-    if (mochisOwl && same(mochisOwl, target)) {
-      findMochisOwl()
+    if (same(this.world.mochisOwl, target)) {
+      visitCage()
 
       return
     }

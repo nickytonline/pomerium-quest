@@ -88,6 +88,7 @@ export type NpcId =
   | 'librarian'
   | 'baker'
   | 'falconer'
+  | 'keeper'
   | 'friend'
 
 /** Frame index of each NPC in npcs.png. */
@@ -100,8 +101,12 @@ export const NPC_FRAME: Record<NpcId, number> = {
   librarian: 5,
   baker: 6,
   falconer: 9,
-  friend: 10,
+  keeper: 10,
+  friend: 11,
 }
+
+/** The Falconer with an empty glove, while their owl is away on an errand. */
+export const FALCONER_BARE_FRAME = 12
 
 /** Phish dress as the Oracle, so their frame in npcs.png follows the real NPCs'. */
 export const PHISH_FRAME = 7
@@ -190,7 +195,7 @@ export interface World {
   readonly perches: readonly Perch[]
   /** Where the owl waits to be caught, in order: it hops to the next when the player gets close, and tires at the last. */
   readonly owlSpots: readonly Point[]
-  /** Where Mochi's owl is lost, until the player finds it. */
+  /** The cage Mochi's owl is kept in until the Falconer's owl has it opened. The cage stays, empty. */
   readonly mochisOwl: Point
   /** Where a game saved somewhere the Aviary's grounds no longer have resumes: just inside the keep. */
   readonly aviaryEntry: Point
@@ -377,7 +382,7 @@ export function buildWorld(): World {
   fill(21, 30, 21, 33, TILE.cobble)
   fill(21, 33, 35, 33, TILE.cobble)
   fill(28, 34, 28, EYRIE_WALL - 1, TILE.cobble)
-  // The Royal Vault: a landmark with no door. Nothing opens it: the errand at the perch beside it is always refused.
+  // The Royal Vault: a landmark with no door. The errand at the perch beside it is refused to a player's owl.
   fill(34, 35, 37, 37, TILE.wall)
   // The Eyrie, behind the quest's last gate, where Mochi waits.
   fill(17, EYRIE_WALL, MAP_WIDTH - 2, EYRIE_WALL, TILE.wall)
@@ -393,7 +398,7 @@ export function buildWorld(): World {
       [38, 36],
       [22, 38],
       [18, 39],
-      // The corner where Mochi's owl waits: trees on three sides.
+      // The corner where Mochi's owl sits in its cage: trees behind it, and the keeper beside it.
       [36, 40],
       [37, 40],
       [38, 41],
@@ -510,6 +515,8 @@ export function buildWorld(): World {
       { x: 34, y: 25, npcId: 'librarian' },
       { x: 30, y: 13, npcId: 'baker' },
       { x: 23, y: 32, npcId: 'falconer' },
+      // The keeper stands beside the cage, key in hand.
+      { x: 36, y: 41, npcId: 'keeper' },
       // Mochi waits in the Eyrie, at the end of the path from its gate.
       { x: 28, y: 46, npcId: 'friend' },
     ],

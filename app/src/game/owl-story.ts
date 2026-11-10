@@ -1,10 +1,10 @@
 // Chapter two's story: the Falconer, the owl to catch, the perches, and Mochi and their owl. The owl is
 // an MCP client, and sending it from a perch is a real MCP tool call through Pomerium (see perch.ts), so
 // whether the errand runs is Pomerium's call.
-import { sendOwl } from './access.ts'
+import { sendFalconersOwl, sendOwl } from './access.ts'
 import { SIGN_DOCS, SIGN_TEXT, STALE_DOCS, link, type Page } from './content.ts'
 import { GROUPS } from './groups.ts'
-import { mochisOwlFound, owlAtLeast, owlStage, type OwlStage } from './owl-machine.ts'
+import { cageRefused, mochisOwlFound, owlAtLeast, owlStage, type OwlStage } from './owl-machine.ts'
 import {
   MCP_PATH,
   MOCHIS_OWL,
@@ -15,7 +15,7 @@ import {
   type MochisOwlAt,
   type OwlTool,
 } from './owl.ts'
-import { FLIGHT_MS, type OwlFlight, type OwlOutcome } from './perch.ts'
+import { CAGE_FLIGHT_MS, FALCONER, FLIGHT_MS, type OwlFlight, type OwlOutcome } from './perch.ts'
 import { decide, type Identity } from './ppl.ts'
 import { sfx } from './sound.ts'
 import { quest, type DenyView } from './store.ts'
@@ -32,7 +32,7 @@ const MEET: readonly Page[] = [
   },
   {
     who: 'Falconer',
-    text: 'Mochi lost their owl on the way. It is somewhere out in the open ground. If you find it, Mochi will want it back.',
+    text: 'Mochi lost their owl on the way. It is somewhere out in these grounds. If you find it, Mochi will want it back.',
   },
   {
     who: 'Falconer',
@@ -81,7 +81,7 @@ const ADVICE: Record<
   fledged: () =>
     "You caught it! That's the hard part. Now send it to a perch, any perch, and see what the Aviary makes of it. Then come and tell me.",
   falconer: () =>
-    `Your papers say falconer, so the Aviary lets your owl in. Try every perch. Two of the errands are refused, for any owl, and that's worth seeing. One matters most: the owl carries my letter to the Oracle, who makes you a keyholder. The Eyrie's gate asks for that.${mochisOwlHint()}`,
+    `Your papers say falconer, so the Aviary lets your owl in. Try every perch. Two of the errands open things, and those are refused to your owl, which is worth seeing. One matters most: the owl carries my letter to the Oracle, who makes you a keyholder. The Eyrie's gate asks for that.${mochisOwlHint()}`,
   keyholder: () =>
     `Your papers say keyholder. The Eyrie's gate is at the south end of the road. Its guard asks for everything you've earned, in both chapters. Mochi is inside.${mochisOwlFound() ? '' : " Mochi will ask after their owl, and it's still lost somewhere in these grounds."}`,
   triumphant: () =>
@@ -122,6 +122,32 @@ async function vouch() {
   )
 }
 
+/** The Falconer, as Pomerium sees them: the papers their owl's errands are checked by. */
+export const FALCONERS_PAPERS: Identity = {
+  authenticated: true,
+  email: FALCONER.email,
+  groups: FALCONER.groups,
+}
+
+/** The Falconer offers to send their own owl to the cage, since the player's was refused there. */
+function offerCage() {
+  quest.say([
+    {
+      who: 'Falconer',
+      text: "Refused at the cage, was it? It would be. The keeper opens things for the owl of a distinguished falconer and for no one else, and your papers don't say that. A letter from me can't change it, either: that isn't a group anyone earns here.",
+    },
+    {
+      who: 'Falconer',
+      text: `My papers do say it. My owl flies on my behalf, so it carries them: ${FALCONER.email}, with ${GROUPS.distinguishedFalconers} among the groups. It would be the same errand, sent to the same Aviary under the same orders. Only the papers differ. Shall I send it to open the cage?`,
+      links: [link('mcpIdentity'), link('mcpTool')],
+      choices: [
+        { label: "Send the Falconer's owl", pick: () => void flyFalconersOwl() },
+        { label: 'Not now', pick: () => undefined },
+      ],
+    },
+  ])
+}
+
 /** The Falconer: sends the player after their owl, vouches for them, then points them at the next errand. */
 export function falconer() {
   const stage = owlStage()
@@ -137,6 +163,13 @@ export function falconer() {
 
   if (stage === 'turned') {
     void vouch()
+
+    return
+  }
+
+  // The player's owl was refused at the cage, and Mochi's owl is still in it: the Falconer's owl can ask.
+  if (cageRefused() && !mochisOwlFound() && (stage === 'falconer' || stage === 'keyholder')) {
+    offerCage()
 
     return
   }
@@ -344,9 +377,9 @@ function refusedView(tool: OwlTool, id: Identity, flight: OwlFlight, requestId: 
       return {
         story: {
           title: 'Errand refused',
-          text: 'The owl brought back a message from the Aviary\'s keeper: "Not that errand. I refuse any errand that asks me to open something, whoever the owl flies for."',
+          text: 'The owl brought back a message from the Aviary\'s keeper: "Not that errand. I open things for the owl of a distinguished falconer and for no one else, and nothing in this owl\'s papers says so."',
         },
-        hint: `The allow rule matched: you are a falconer. But the deny rule matches any tool whose name starts with open_, and this call names ${tool}. A deny always beats an allow. Pomerium read the tool's name from the tools/call request itself. ${readable}`,
+        hint: `The allow rule matched: you are a falconer. But the deny rule has two checks, and both are true of this call: it names ${tool}, which starts with open_, and your groups don't include ${GROUPS.distinguishedFalconers}. A deny always beats an allow. Pomerium read the tool's name from the tools/call request itself, and the groups from your session. ${readable}`,
         links: [link('mcpTool'), link('denyWins')],
       }
     }
@@ -385,7 +418,7 @@ export function leavePerch() {
   next?.()
 }
 
-/** Where Mochi's owl is by now: still lost, riding with the player, or back with Mochi. */
+/** Where Mochi's owl is by now: still in its cage, riding with the player, or back with Mochi. */
 const mochisOwlAt = (): MochisOwlAt => {
   if (owlStage() === 'triumphant') return MOCHIS_OWL.home
 
@@ -394,7 +427,7 @@ const mochisOwlAt = (): MochisOwlAt => {
 
 /** What the kingdom says the scouting owl saw. */
 const SCOUTED: Record<MochisOwlAt, string> = {
-  lost: 'From high up, your owl saw another owl in the trees, in the south-east corner',
+  lost: 'From high up, your owl saw another owl shut in a cage, in the south-east corner',
   carried: "From high up, your owl saw Mochi's owl: it is riding on your back",
   home: "From high up, your owl saw Mochi's owl in the Eyrie, back with Mochi",
 }
@@ -468,12 +501,24 @@ function tellReturn(tool: OwlTool, read: () => void, notNow: () => void) {
   ])
 }
 
-/** A refused errand moves the story on whether or not the player reads why: the owl was turned back. */
-function turnedBack() {
-  if (owlStage() !== 'fledged') return
+/**
+ * A refused errand moves the story on whether or not the player reads why: the owl was turned back at the
+ * Aviary, or, for a falconer, at the cage, which the Falconer's own owl may open.
+ */
+function turnedBack(tool: OwlTool, id: Identity) {
+  if (owlStage() === 'fledged') {
+    quest.sendOwl({ type: 'OWL_TURNED_BACK' })
+    quest.toast('Tell the Falconer the owl was turned back', 'info')
 
-  quest.sendOwl({ type: 'OWL_TURNED_BACK' })
-  quest.toast('Tell the Falconer the owl was turned back', 'info')
+    return
+  }
+
+  const atCage = tool === OWL_TOOLS.openCage && id.groups.includes(GROUPS.falconers)
+
+  if (!atCage || cageRefused() || mochisOwlFound()) return
+
+  quest.sendOwl({ type: 'CAGE_REFUSED' })
+  quest.toast('Ask the Falconer: their owl may open the cage', 'info')
 }
 
 /** What the player learns from a refused errand, once they have read why Pomerium refused it. */
@@ -486,7 +531,7 @@ function afterRefusal(tool: OwlTool, id: Identity) {
     learn('denyWins')
   }
 
-  turnedBack()
+  turnedBack(tool, id)
 }
 
 const flies = () => matchMedia('(prefers-reduced-motion: no-preference)').matches
@@ -560,7 +605,7 @@ export async function flyOwl(tool: OwlTool) {
           sfx('denied')
           quest.showDeny(refusedView(tool, id, flight, outcome.requestId), () => afterRefusal(tool, id))
         },
-        turnedBack,
+        () => turnedBack(tool, id),
       )
 
       return
@@ -575,25 +620,115 @@ export async function flyOwl(tool: OwlTool) {
   }
 }
 
-/** Mochi's owl, lost in the open ground: a second MCP client, which flies on Mochi's behalf. */
-export function findMochisOwl() {
-  if (mochisOwlFound()) return false
+/** The cage in the corner of the grounds: Mochi's owl is shut in it until the Falconer's owl has it opened. */
+export function visitCage() {
+  if (mochisOwlFound()) {
+    quest.say([{ who: 'Cage', text: 'An empty cage. Its door stands open, and the padlock is gone.' }])
 
-  quest.sendOwl({ type: 'MOCHIS_OWL_FOUND' })
-  sfx('itemGet')
+    return
+  }
+
   quest.say([
     {
       who: "Mochi's owl",
-      text: "A white owl sits low in the trees, a teal ribbon on its leg. This is Mochi's owl! It looks you over, then flutters down and settles on your back, beside your own.",
+      text: "A white owl looks out at you through the bars of a cage, a teal ribbon on its leg. This is Mochi's owl! The cage is locked, and the keeper beside it holds the key.",
     },
     {
       who: "Mochi's owl",
-      text: "Mochi's owl is an MCP client too, like yours, but it flies on Mochi's behalf, not yours. Your papers are no use to it, and it runs no errands for you. It will ride with you until you find Mochi.",
-      links: [link('mcpIdentity')],
+      text: `The keeper unlocks the cage for one errand: ${OWL_TOOLS.openCage}. Its perch stands on the far side of the grounds, to the west.`,
     },
   ])
+}
 
-  return true
+/** What the cage's keeper says, by how far the cage's errand has got. */
+const keepersWords = () => {
+  if (mochisOwlFound())
+    return "The Falconer's owl brought the errand, so I turned the key. I didn't ask who wanted it done, or why. I read whose owl it was, and what its papers said. That is the whole of my job."
+
+  if (cageRefused())
+    return `Your owl has been and gone. Nothing in its papers says ${GROUPS.distinguishedFalconers}, so the cage stays shut. Find an owl whose papers do. The Falconer's would.`
+
+  return `I found this one straying, with no falconer in sight, so I shut it in to keep it safe. I unlock the cage for one errand, ${OWL_TOOLS.openCage}, sent from its perch in the west of the grounds, and only for the owl of a distinguished falconer. Asking me nicely won't do it.`
+}
+
+/** The keeper of the cage, who holds its key and opens it on the Aviary's orders alone. */
+export function keeper() {
+  quest.say([{ who: 'Keeper', text: keepersWords() }])
+}
+
+/** Leaves what the Falconer's owl brought back, read or not. */
+export function leaveFalconersErrand() {
+  quest.closeFalconersErrand()
+}
+
+/**
+ * The Falconer sends their own owl to the cage: the same tool call the player's owl was refused, made on
+ * the Falconer's behalf. It flies out while the request does. If Pomerium allows it the keeper opens the
+ * cage, and both owls fly back: the Falconer's to the glove, Mochi's to the player. Then the call can be read.
+ */
+export async function flyFalconersOwl() {
+  sfx('hoot')
+  quest.sendFalconersOwl()
+
+  const [sent] = await Promise.all([sendFalconersOwl(), watch(CAGE_FLIGHT_MS.out + FLIGHT_MS.away)])
+
+  if (!sent.ok) {
+    leaveFalconersErrand()
+    quest.toast(`The Falconer's owl never left the glove: ${sent.message}`, 'deny')
+
+    return
+  }
+
+  const flight = sent.value
+  const { outcome } = flight
+
+  quest.log({
+    decision: LOG_DECISION[outcome.kind],
+    method: 'MCP',
+    path: `aviary · tools/call ${OWL_TOOLS.openCage}`,
+    who: who(FALCONERS_PAPERS),
+  })
+
+  if (outcome.kind !== 'result' || outcome.failed) {
+    leaveFalconersErrand()
+    quest.toast(
+      "The Falconer's owl came back alone, and the cage is still shut. Ask the Falconer again.",
+      'deny',
+    )
+
+    return
+  }
+
+  // The cage is out of sight from the Falconer's side of the grounds, so it is heard: the lock, then wings.
+  sfx('gateOpen')
+  quest.toast('Across the grounds, a lock clicks open', 'info')
+  await watch(FLIGHT_MS.heard)
+  quest.sendOwl({ type: 'MOCHIS_OWL_FOUND' })
+  sfx('flutter')
+  quest.falconersOwlReturns()
+  await watch(CAGE_FLIGHT_MS.back)
+  quest.falconersOwlFlew(flight)
+  sfx('itemGet')
+
+  quest.say([
+    {
+      who: 'Falconer',
+      text: "There. The keeper read my owl's papers and unlocked the cage. Here they both are: my owl back on my glove, and Mochi's owl on your back, beside your own.",
+    },
+    {
+      who: "Mochi's owl",
+      text: "Mochi's owl is an MCP client too, like yours and the Falconer's, but it flies on Mochi's behalf. Your papers are no use to it, and it runs no errands for you. It will ride with you until you find Mochi.",
+      links: [link('mcpIdentity')],
+    },
+    {
+      who: 'Falconer',
+      text: "My owl brought the keeper's answer back with it. Read it, and set it beside the one your owl got.",
+      choices: [
+        { label: 'Read the message', pick: () => quest.explainFalconersErrand() },
+        { label: 'Not now', pick: leaveFalconersErrand },
+      ],
+    },
+  ])
 }
 
 const SAME_GATE: Page = {
@@ -621,7 +756,7 @@ export function friend() {
       SAME_GATE,
       {
         who: 'Mochi',
-        text: "Have you seen my owl? I lost it out in the grounds, somewhere past the perches. The gate let you in without it, mind: a gate checks your claims, not what you carry. But I'd dearly like it back.",
+        text: "Have you seen my owl? I lost it out in the grounds, somewhere past the perches, and I hear a keeper has shut it in a cage. The gate let you in without it, mind: a gate checks your claims, not what you carry. But I'd dearly like it back.",
       },
     ])
 

@@ -2,7 +2,8 @@
 // Pomerium, and the chapter's ending. Nothing here decides access.
 import { useEffect, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { CHAPTER_TWO_LESSONS, LESSONS, link, type LessonId } from '../game/content.ts'
-import { flyOwl, leavePerch } from '../game/owl-story.ts'
+import { GROUPS } from '../game/groups.ts'
+import { FALCONERS_PAPERS, flyOwl, leaveFalconersErrand, leavePerch } from '../game/owl-story.ts'
 import { MCP_PATH, OWL_ERRANDS, OWL_TOOLS, aviaryOrigin, type OwlTool } from '../game/owl.ts'
 import { decide } from '../game/ppl.ts'
 import type { OwlFlight } from '../game/perch.ts'
@@ -188,6 +189,151 @@ function PerchPanel({ perch, flight }: { readonly perch: PerchView; readonly fli
   )
 }
 
+/** What the Falconer's errand's Pomerium tab links to. */
+const CAGE_DOCS: readonly LessonId[] = ['mcpTool', 'mcpIdentity', 'denyWins']
+
+/**
+ * What the Falconer's owl brought back from the cage: the same tool call the player's owl was refused,
+ * allowed on the Falconer's behalf. It opens when the player asks to read it, like a perch's panel.
+ */
+export function FalconersErrand() {
+  const errand = useQuest((s) => s.falconersErrand)
+  const covered = useQuest((s) => s.dialog !== null || s.deny !== null || s.signIn !== null)
+
+  if (!errand || covered || !errand.explained || errand.phase !== 'done' || !errand.flight) return null
+
+  return <FalconersErrandPanel flight={errand.flight} />
+}
+
+function FalconersErrandPanel({ flight }: { readonly flight: OwlFlight }) {
+  const tool = OWL_TOOLS.openCage
+  const { title } = OWL_ERRANDS[tool]
+  const zone = zoneById('aviary')
+  const url = `${aviaryOrigin(location.origin)}${MCP_PATH}`
+  const identity = useQuest((s) => s.identity)
+  const request = { method: 'POST', path: MCP_PATH, tool } as const
+  const { outcome } = flight
+
+  // Escape leaves the panel wherever focus is.
+  useEffect(() => {
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      leaveFalconersErrand()
+    }
+
+    window.addEventListener('keydown', onEscape)
+
+    return () => window.removeEventListener('keydown', onEscape)
+  }, [])
+
+  // The panel keeps its other keys: pressing a button must not walk the dog or open the menu.
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Escape') event.stopPropagation()
+  }
+
+  const actions = (focus: boolean) => (
+    <div className="flex flex-wrap items-center gap-2 pt-1">
+      <button className={smallButton} type="button" autoFocus={focus} onClick={leaveFalconersErrand}>
+        Back to the Falconer
+      </button>
+    </div>
+  )
+
+  const kingdom = (
+    <TabPane
+      className="rounded-tr-lg rounded-b-lg border-3 border-ink bg-night-deep"
+      body="gap-3"
+      actions={actions(true)}
+    >
+      <h2 className="m-0 font-display text-[1.4rem] text-sun" id="cage-title-kingdom">
+        {title} <code className="text-[0.85rem] text-lens">{tool}</code>
+      </h2>
+      <div className="grid gap-1">
+        <p className="m-0 text-[0.9rem]">
+          The Falconer's owl is back on the glove, and Mochi's owl is out of its cage. This is the keeper's
+          answer:
+        </p>
+        <pre className="m-0 overflow-x-auto rounded border border-panel-edge bg-code-bg px-3 py-2.5 text-[0.8rem] leading-[1.45] text-lens">
+          {outcome.kind === 'result' ? outcome.text : 'The owl came back without an answer.'}
+        </pre>
+      </div>
+      <p className="m-0 text-[0.9rem]">
+        It was the errand your owl was refused, under the same orders. The keeper didn't weigh who asked more
+        nicely. The Falconer's owl flies on the Falconer's behalf, and the Falconer's papers say{' '}
+        {GROUPS.distinguishedFalconers}. Yours don't.
+      </p>
+      <p className="m-0 text-[0.85rem] text-muted">
+        This was a real request to an MCP server, through Pomerium, made as the Falconer. See it beside yours
+        on the{' '}
+        <button className="border-0 bg-transparent p-0 text-lens underline" type="button" onClick={switchTab}>
+          In Pomerium
+        </button>{' '}
+        tab.
+      </p>
+    </TabPane>
+  )
+
+  const pomerium = (
+    <TabPane
+      className="rounded-tr-lg rounded-b-lg border-t-6 border-lens bg-paper text-paper-ink [&_a]:text-paper-link [&_:focus-visible]:outline-paper-focus"
+      body="gap-2.5"
+      actions={actions(false)}
+    >
+      <h2 className="m-0 text-[1.25rem] font-bold" id="cage-title-pomerium">
+        The same tool call, on someone else's behalf
+      </h2>
+      <p className="m-0 text-[0.9rem]">
+        The Falconer has an account of their own at the identity provider:{' '}
+        <code className="wrap-anywhere">{FALCONERS_PAPERS.email}</code>. The game signed in as the Falconer
+        and sent the same <code>tools/call</code> request for <code>{tool}</code> to{' '}
+        <code className="wrap-anywhere">{url}</code>. Pomerium checked it against the same route. The only
+        difference is whose session the token stands for.
+      </p>
+      <p className={paperLabel}>The route both owls fly to</p>
+      <pre className={paperCode}>{zoneRouteYaml(zone)}</pre>
+      <p className={paperLabel}>The MCP request the Falconer's owl carried</p>
+      <pre className={paperCode}>{flight.request}</pre>
+      <p className={paperLabel}>What came back{flight.status === null ? '' : ` · HTTP ${flight.status}`}</p>
+      <pre className={paperCode}>{flight.response ?? 'Nothing came back.'}</pre>
+      <p className={paperLabel}>How Pomerium decided for the Falconer</p>
+      <PolicyLines lines={decide(zone, FALCONERS_PAPERS, request, 'their').lines} />
+      <p className={paperLabel}>How it decided for you</p>
+      <PolicyLines lines={decide(zone, identity, request).lines} />
+      <p className="m-0 text-[0.9rem]">
+        The deny rule has two checks, and it only matches when both pass. <code>exclude</code> passes when a
+        list doesn't hold the value. The Falconer's groups do hold{' '}
+        <code>{GROUPS.distinguishedFalconers}</code>, so that check fails, the deny rule doesn't match, and
+        the allow stands. Your groups don't hold it, so both checks pass, the deny rule matches, and a deny
+        beats an allow.
+      </p>
+      <ul className="m-0 flex list-none flex-wrap gap-x-3.5 gap-y-1.5 p-0 text-[0.85rem]">
+        {CAGE_DOCS.map((lesson) => (
+          <li key={lesson}>
+            <a href={link(lesson).href} target="_blank" rel="noreferrer">
+              Docs: {LESSONS[lesson].link.label} ↗
+            </a>
+          </li>
+        ))}
+      </ul>
+    </TabPane>
+  )
+
+  return (
+    <div className="contents" onKeyDown={onKeyDown}>
+      <TabbedScreen
+        name="cage"
+        label="The Falconer's owl opens the cage"
+        showing={flight}
+        overlay={overlay}
+        role="dialog"
+        kingdom={kingdom}
+        pomerium={pomerium}
+      />
+    </div>
+  )
+}
+
 const ERRANDS: readonly { readonly what: string; readonly how: string }[] = [
   {
     what: 'You caught your owl',
@@ -202,12 +348,16 @@ const ERRANDS: readonly { readonly what: string; readonly how: string }[] = [
     how: 'your claims changed; the owl, the perches and the policy did not',
   },
   {
-    what: 'Two errands were always refused',
-    how: 'one deny rule matches every tool that starts with open_, and a deny beats an allow',
+    what: 'Two errands were refused to your owl',
+    how: 'one deny rule matches a tool that starts with open_, called for anyone who is no distinguished falconer',
   },
   {
     what: 'A letter made you a keyholder',
     how: 'a tool call asked the Oracle for a group, and the Eyrie’s gate was waiting for it',
+  },
+  {
+    what: 'The Falconer’s owl opened the cage',
+    how: 'the same tool call, allowed on the Falconer’s behalf: Pomerium checked another identity',
   },
   {
     what: 'You brought Mochi their owl',

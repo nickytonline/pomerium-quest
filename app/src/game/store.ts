@@ -81,6 +81,19 @@ export interface PerchView {
   readonly explained: boolean
 }
 
+/**
+ * The Falconer's owl, sent to the cage on the Falconer's behalf. It flies out with the request, comes back
+ * with Mochi's owl beside it, and then what it carried can be read.
+ */
+export interface FalconersErrand {
+  /** The flight, once the owl is back: the MCP request and Pomerium's answer. */
+  readonly flight: OwlFlight | null
+  /** How far the errand has got: the scene flies the Falconer's owl, and Mochi's, to match. */
+  readonly phase: 'out' | 'back' | 'done'
+  /** The player asked to read what the owl brought back, so its panel is open. */
+  readonly explained: boolean
+}
+
 export interface LogEntry {
   readonly id: number
   readonly at: string
@@ -147,6 +160,8 @@ export interface QuestState {
   readonly owlStage: OwlStage
   /** The perch the player is sending the owl from, until they leave it. Pauses the game. */
   readonly perch: PerchView | null
+  /** The errand the Falconer's owl is on, until the player has read it or walked away. Pauses the game. */
+  readonly falconersErrand: FalconersErrand | null
   /** The player brought Mochi their owl in the Eyrie: chapter two, and the quest, are complete. */
   readonly chapterTwoDone: boolean
 }
@@ -229,6 +244,7 @@ let state: QuestState = {
   houseEditor: false,
   owlStage: owlActor.getSnapshot().value,
   perch: null,
+  falconersErrand: null,
   chapterTwoDone: false,
 }
 
@@ -263,6 +279,7 @@ export const paused = (s: QuestState) =>
   s.journalOpen ||
   s.houseEditor ||
   s.perch !== null ||
+  s.falconersErrand !== null ||
   s.chapterTwoDone ||
   !s.started
 
@@ -308,6 +325,7 @@ export const quest = {
       finale: false,
       celebrating: false,
       perch: null,
+      falconersErrand: null,
       chapterTwoDone: false,
     })
   },
@@ -367,6 +385,25 @@ export const quest = {
     if (state.perch) update({ perch: { ...state.perch, explained: true } })
   },
   closePerch: () => update({ perch: null, inputResumesAt: performance.now() + 200 }),
+  /** The Falconer's owl sets off for the cage. */
+  sendFalconersOwl: () =>
+    update({
+      falconersErrand: { flight: null, phase: 'out', explained: false },
+      menuOpen: false,
+      journalOpen: false,
+    }),
+  /** The cage is open: the Falconer's owl and Mochi's fly back. */
+  falconersOwlReturns: () => {
+    if (state.falconersErrand) update({ falconersErrand: { ...state.falconersErrand, phase: 'back' } })
+  },
+  /** Both owls have landed, and what the Falconer's owl carried waits until the player asks to read it. */
+  falconersOwlFlew: (flight: OwlFlight) => {
+    if (state.falconersErrand) update({ falconersErrand: { flight, phase: 'done', explained: false } })
+  },
+  explainFalconersErrand: () => {
+    if (state.falconersErrand) update({ falconersErrand: { ...state.falconersErrand, explained: true } })
+  },
+  closeFalconersErrand: () => update({ falconersErrand: null, inputResumesAt: performance.now() + 200 }),
   openChapterTwoEnd: () => update({ chapterTwoDone: true, menuOpen: false, journalOpen: false }),
   /** Chapter two's ending is the quest's: it leads straight on to the celebration. */
   closeChapterTwoEnd: () => update({ chapterTwoDone: false, celebrating: true }),

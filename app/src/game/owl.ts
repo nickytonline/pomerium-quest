@@ -54,8 +54,9 @@ export const OWL_ERRANDS: Record<OwlTool, { readonly title: string; readonly des
 }
 
 /**
- * Where Mochi's owl is. Only the game knows how far the player has got, so the scouting errand is told, as
- * the tool call's one argument, and reports what there is to see from above.
+ * Where Mochi's owl is: still in the keeper's cage (`lost`, as Mochi would say), riding with the player, or
+ * home. Only the game knows how far the player has got, so the scouting errand is told, as the tool call's
+ * one argument, and reports what there is to see from above.
  */
 export const MOCHIS_OWL = { lost: 'lost', carried: 'carried', home: 'home' } as const
 
@@ -64,8 +65,8 @@ export type MochisOwlAt = (typeof MOCHIS_OWL)[keyof typeof MOCHIS_OWL]
 /** What the scouting owl sees of Mochi's owl, wherever it is. */
 export const SIGHTINGS: Record<MochisOwlAt, { readonly spotted: string; readonly where: string }> = {
   lost: {
-    spotted: 'a white owl, alone and far from any perch',
-    where: 'among the trees in the south-east corner of the grounds',
+    spotted: 'a white owl, shut in a cage with a keeper standing by',
+    where: 'under the trees in the south-east corner of the grounds',
   },
   carried: {
     spotted: 'a white owl with a teal ribbon on its leg',

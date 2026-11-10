@@ -643,6 +643,37 @@ const NPCS = {
       '................',
     ],
   },
+  // Keeps the cage in the Aviary's grounds, and its key: a leather cap, the Aviary's green, and a big gold
+  // key held out to one side. No spear: the keeper guards a lock, not a gateway.
+  keeper: {
+    palette: {
+      I: '#8a5a2b',
+      E: '#6b4226',
+      F: '#e8b48a',
+      P: '#3f8f5a',
+      p: '#2c6a41',
+      G: '#e9b44c',
+      C: '#2b2b45',
+    },
+    rows: [
+      '................',
+      '.....KKKKK......',
+      '....KIIIEEK.....',
+      '...KIIIIIEEK....',
+      '..KEEEEEEEEEK...',
+      '...KFKFFFKFK....',
+      '...KFFFFFFFK....',
+      '....KFFKFFK.KKK.',
+      '...KPPKKKPPKKGK.',
+      '..KPPPPpPPPPKGK.',
+      '..KPPPPpPPPPFGK.',
+      '..KFPPPpPPPPKGK.',
+      '...KPPPpPPPKGGK.',
+      '...KCCCKKCCCKGK.',
+      '...KKKK..KKKKKK.',
+      '................',
+    ],
+  },
   // Mochi, the friend waiting in the Eyrie: the dog's own shape in white fur and a teal jacket,
   // with bright eyes where the player's sunglasses are.
   friend: {
@@ -662,6 +693,24 @@ const NPCS = {
       FRONT_FEET.idle,
     ),
   },
+}
+
+// The Falconer once their owl has flown: the same figure with an empty glove. The game swaps to it while
+// the owl is away.
+NPCS.falconer_bare = {
+  ...NPCS.falconer,
+  rows: NPCS.falconer.rows.map(
+    (row, y) =>
+      ({
+        6: '....KFFFFFFFK...',
+        7: '.....KFFKFFK....',
+        8: '....KTTKKKTTK...',
+        9: '...KTTTTTTTTTK..',
+        10: '..KVVTTTTTTTTK..',
+        11: '..KVVKKTTtTTFK..',
+        12: '...KK.KTTtTTTK..',
+      })[y] ?? row,
+  ),
 }
 
 // Frame order is load-bearing: see NPC_FRAME in app/src/game/world.ts.
@@ -761,6 +810,33 @@ const OWL_WINGS_DOWN = {
   ],
 }
 
+// The cage the keeper shut Mochi's owl in, drawn over the owl: steel bars with room to see the bird between
+// them, and a gold padlock on the sill. Open, the middle bars are gone and the padlock with them.
+const CAGE = [
+  '................',
+  '.......KK.......',
+  '...KKKKKKKKKK...',
+  '..KIIIIIIIIIIK..',
+  '..KKKKKKKKKKKK..',
+  '..E..E....E..E..',
+  '..E..E....E..E..',
+  '..E..E....E..E..',
+  '..E..E....E..E..',
+  '..E..E....E..E..',
+  '..E..E....E..E..',
+  '..E..E....E..E..',
+  '..KKKKKGGKKKKK..',
+  '..KIIIKGGKIIIK..',
+  '..KKKKKKKKKKKK..',
+  '................',
+]
+
+const CAGE_OPEN = CAGE.map(
+  (row, y) =>
+    ({ 12: '..KKKKKKKKKKKK..', 13: '..KIIIIIIIIIIK..' })[y] ??
+    (row === '..E..E....E..E..' ? '..E..........E..' : row),
+)
+
 // Mochi's owl in flight: the same wingbeats in its own white, with its flecks and its ribbon.
 const inMochisColors = (owl) => ({
   ...MOCHIS_OWL,
@@ -781,6 +857,7 @@ const grids = {
   fish: FISH.map((f) => f.rows),
   owl: [OWL.rows, OWL_BLINK.rows, OWL_WINGS_UP.rows, OWL_WINGS_DOWN.rows],
   mochis_owl: [MOCHIS_OWL.rows, MOCHIS_OWL_WINGS_UP.rows, MOCHIS_OWL_WINGS_DOWN.rows],
+  cage: [CAGE, CAGE_OPEN],
   sword_wood: [SWORD_WOOD],
   sword_steel: [SWORD_STEEL],
   shield_wood: [SHIELD_WOOD],
@@ -813,6 +890,8 @@ sheet(join(assets, 'items.png'), [
     OWL_WINGS_DOWN,
     MOCHIS_OWL_WINGS_UP,
     MOCHIS_OWL_WINGS_DOWN,
+    CAGE,
+    CAGE_OPEN,
   ],
 ])
 
@@ -838,9 +917,12 @@ sheet(
       OWL_WINGS_DOWN,
       MOCHIS_OWL_WINGS_UP,
       MOCHIS_OWL_WINGS_DOWN,
+      CAGE,
+      CAGE_OPEN,
     ],
     npcs.slice(0, 5),
     [npcs[5], npcs[6], npcs[7], npcs[8], npcs[9], tiles[15], tiles[42]],
+    [npcs[10], npcs[11], npcs[12]],
   ],
   { scale: 10, checker: true },
 )

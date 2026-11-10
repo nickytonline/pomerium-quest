@@ -69,3 +69,6 @@ export type PerchPhase = 'asking' | 'out' | 'back' | 'done'
  * while the owl is out of sight, and goes on tolling as it flies back.
  */
 export const FLIGHT_MS = { out: 1000, away: 1100, heard: 1000, call: 400, back: 900 } as const
+
+/** How long the Falconer's owl takes to fly to the cage, and how long it and Mochi's owl take to fly back. */
+export const CAGE_FLIGHT_MS = { out: 1400, back: 1600 } as const

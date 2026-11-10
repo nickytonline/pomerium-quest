@@ -20,7 +20,7 @@ import { startOver } from './restart.ts'
 import { VISITORS, type VisitorId } from './house.ts'
 import { addDeed, citizenshipPages } from './house-story.ts'
 import { owlAtLeast, owlStage } from './owl-machine.ts'
-import { falconer, friend } from './owl-story.ts'
+import { falconer, friend, keeper } from './owl-story.ts'
 import { aviaryOrigin } from './owl.ts'
 import { KNIGHT_QUOTA, hasSteel, isAtLeast, stage, type QuestStage } from './quest-machine.ts'
 import { sfx } from './sound.ts'
@@ -793,6 +793,7 @@ const SCRIPTS: Record<NpcId, () => void> = {
   },
   librarian: () => void librarian(),
   falconer,
+  keeper,
   friend,
 }
 
