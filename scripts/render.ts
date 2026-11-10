@@ -190,8 +190,9 @@ function pomeriumSettings(): Yaml {
       caSecrets: [`${POMERIUM_NAMESPACE}/quest-ca`],
       // Signing out can land anywhere in the game: back at sign-in to refresh claims, or at the title
       // screen to start over (see app/src/game/access.ts). Dynamic client registration lets an MCP
-      // client of the player's own (Claude Code, the MCP Inspector) register itself with Pomerium and
-      // sign in to the Aviary; the game's perch doesn't need it.
+      // client of the player's own (such as the MCP Inspector) register itself with Pomerium and
+      // sign in to the Aviary. Hosted clients like Claude Code use a client ID metadata document
+      // instead (see mcpAllowedClientIdDomains). The game's perch needs neither.
       runtimeFlags: { allow_any_sign_out_redirect_uri: true, mcp_dynamic_client_registration: true },
       mcpAllowedClientIdDomains: MCP_ALLOWED_CLIENT_ID_DOMAINS,
       // Forward the identity provider's groups claim to the app as a header too.

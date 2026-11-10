@@ -194,8 +194,8 @@ from mkcert, so a client that doesn't use your system's certificates needs mkcer
 NODE_EXTRA_CA_CERTS="$(mkcert -CAROOT)/rootCA.pem" claude mcp add --transport http aviary https://aviary.localhost.pomerium.io/mcp
 ```
 
-This path hasn't been tried end to end with a real agent yet. `./quest test` covers the perch, and checks
-that the Aviary sends a client without a token to sign in.
+Claude Code has been tried end to end: it signs in and gets the same tools and refusals as the owl.
+`./quest test` covers the perch, and checks that the Aviary sends a client without a token to sign in.
 
 ## Play it on a real Pomerium (local k3d)
 
@@ -556,12 +556,12 @@ request with the token Pomerium put on the perch's request.
 - **Two operators in one rule are joined with "or".** `and` and `not` side by side in one rule don't mean
   "all of these and none of those", so the game's rules each use a single operator.
 - **MCP clients register themselves.** The `mcp_dynamic_client_registration` runtime flag is on, so a
-  client such as Claude Code can register with Pomerium without being set up by hand. That suits a local
+  client such as the MCP Inspector can register with Pomerium without being set up by hand. That suits a local
   game; think before turning it on anywhere real.
 - **Hosted MCP clients are allowed by name.** Pomerium needs `mcpAllowedClientIdDomains` whenever MCP is on.
   It lists the domains whose client ID metadata documents Pomerium will fetch, so clients such as VS Code,
-  Claude, ChatGPT, Cursor, GitHub, Zed, Antigravity, Grok, OpenCode, Goose and MCPJam can sign in to the
-  Aviary without registering first. `scripts/render.ts` keeps the list.
+  Claude (including Claude Code), ChatGPT, Cursor, GitHub, Zed, Antigravity, Grok, OpenCode, Goose and
+  MCPJam can sign in to the Aviary without registering first. `scripts/render.ts` keeps the list.
 - **PPL operators don't nest.** `and`/`or` hold criteria, not other operators. "Citizen and (GET or
   scribe)" is written as two allow rules, and a request is allowed when any rule matches.
 
