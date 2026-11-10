@@ -125,8 +125,11 @@ const OWL_BLINK = { shut: 140, every: [2200, 6000] } as const
 /** Where the owl sits on the dog, from the dog's center, and how high above that its hop starts. */
 const OWL_SEAT = { x: 5, y: -8, hop: 14 }
 
-/** Mochi's owl rides on the dog's other side. */
+/** Mochi's owl rides on the dog's other side, and on the same shoulder of Mochi once it's back with them. */
 const MOCHIS_OWL_SEAT = { x: -5, y: -8 }
+
+/** Mochi's owl flies to Mochi once the dog carrying it is within this many tiles. */
+const MOCHIS_OWL_REACH = 2
 
 /** The owl hops away when the player comes within this many tiles of it, and how long and high a hop is. */
 const OWL_SHY = { tiles: 2, ms: 520, lift: 18 }
@@ -381,6 +384,8 @@ export class KingdomScene extends Phaser.Scene {
   private owlPhase: PerchPhase | null = null
   /** The perch the owl is on, or flying an errand from, until it is back on the dog's shoulder. */
   private owlPerch: Perch | undefined
+  /** Mochi's owl has flown from the dog to Mochi, where it stays. */
+  private mochisOwlHome = false
   /** The perch the player last walked into, until they let go of the key or step away. */
   private bumpedPerch: Perch | undefined
   /** The owl is in the air, beating its wings, so it doesn't blink. */
@@ -564,6 +569,8 @@ export class KingdomScene extends Phaser.Scene {
     const lost = this.world.mochisOwl
     this.mochisOwl = this.add.image(center(lost.x), center(lost.y), 'items', ITEM.mochisOwl).setDepth(12)
     this.perchOwl()
+    // A game saved beside Mochi, or after the quest's end, starts with their owl already back with them.
+    this.homeMochisOwl({ fly: false })
 
     this.cameras.main.setBounds(0, 0, MAP_WIDTH * T, MAP_HEIGHT * T)
     this.cameras.main.startFollow(this.player, true)
@@ -619,8 +626,36 @@ export class KingdomScene extends Phaser.Scene {
     if (owl && owlAtLeast('fledged') && !this.owlAloft)
       owl.setPosition(player.x + OWL_SEAT.x, player.y + OWL_SEAT.y - this.owlHop)
 
-    if (mochisOwl && mochisOwlFound())
+    if (mochisOwl && mochisOwlFound() && !this.mochisOwlHome)
       mochisOwl.setPosition(player.x + MOCHIS_OWL_SEAT.x, player.y + MOCHIS_OWL_SEAT.y)
+  }
+
+  /**
+   * Mochi's owl knows its own: once the dog carrying it comes near Mochi, it flies over and settles on
+   * their shoulder. It stays there, since it only ever rode with the dog to get home.
+   */
+  private homeMochisOwl({ fly }: { readonly fly: boolean }) {
+    const { mochisOwl } = this
+    const mochi = this.world.npcs.find((npc) => npc.npcId === 'friend')
+
+    if (!mochisOwl || !mochi || this.mochisOwlHome || !mochisOwlFound()) return
+
+    const away = Math.max(Math.abs(mochi.x - this.pos.x), Math.abs(mochi.y - this.pos.y))
+
+    if (away > MOCHIS_OWL_REACH && owlStage() !== 'triumphant') return
+
+    const seat = { x: center(mochi.x) + MOCHIS_OWL_SEAT.x, y: center(mochi.y) + MOCHIS_OWL_SEAT.y }
+
+    this.mochisOwlHome = true
+
+    if (!fly) {
+      mochisOwl.setPosition(seat.x, seat.y)
+
+      return
+    }
+
+    sfx('flutter')
+    this.glide(mochisOwl, () => seat, OWL_FLIGHT.homeMs, { lift: OWL_FLIGHT.lift, sway: -OWL_FLIGHT.lift })
   }
 
   /** Where the owl waits while it's still to be caught: a tile the player can't walk onto. */
@@ -1099,6 +1134,7 @@ export class KingdomScene extends Phaser.Scene {
     this.startleOwl()
     this.callOwl()
     this.perchOwl()
+    this.homeMochisOwl({ fly: true })
 
     if (cameIn) void this.cameHome()
   }
