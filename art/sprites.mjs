@@ -206,9 +206,9 @@ const OWL = {
   ],
 }
 
-// Mochi's falcon, lost in the Aviary's grounds. It's as chunky as the owl but side-on, facing left, away
-// from the dog that carries it: a big dark-hooded head with a white eye and a hooked beak, a pale chest,
-// an outlined wing, a tail and a ribbon on one leg in the teal of Mochi's jacket.
+// Mochi's falcon, lost in the Aviary's grounds. It perches side-on and slim, facing left, away from the
+// dog that carries it: a dark-hooded head with a white eye and a hooked beak, a narrow pale chest, an
+// outlined wing, a tail and a ribbon on its leg in the teal of Mochi's jacket.
 const FALCON = {
   palette: {
     B: '#7f93b8',
@@ -221,19 +221,19 @@ const FALCON = {
   },
   rows: [
     '................',
-    '................',
-    '.....KKKKK......',
-    '....KbbbbbK.....',
-    '...KbbbbbbbK....',
-    '..KKbWKbbbbK....',
-    '.KYYwbwbbbbbK...',
-    '.KoKwwwKBBBBK...',
-    '..KKwswKBBBBK...',
-    '...KwwwKBBBbK...',
-    '...KwswwKBBbK...',
-    '....KwwwKKbbK...',
-    '....KYYKYHKbbK..',
-    '...........KK...',
+    '.....KKKK.......',
+    '....KbbbbK......',
+    '...KbbbbbbK.....',
+    '..KKbWKbbbK.....',
+    '.KYYwbwbbbK.....',
+    '.KoKwwKBBBK.....',
+    '..KKwsKBBBBK....',
+    '...KwwKBBBBK....',
+    '...KwsKBBBBK....',
+    '....KwKBBBbK....',
+    '....KHKBbbK.....',
+    '.....K.KbbK.....',
+    '........KK......',
     '................',
     '................',
   ],
