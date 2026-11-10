@@ -112,6 +112,12 @@ deploy() {
   kc -n "$POMERIUM_NAMESPACE" create secret generic quest-ca --from-file=ca.crt="${CERTS}/ca.crt" \
     --dry-run=client -o yaml | kc apply -f -
   kc apply -f deploy/.generated/manifests.yaml
+  # A zone taken out of zones.ts must lose its route too, so delete the zone Ingresses this render no longer has.
+  local wanted stale
+  wanted="$(awk '$1 == "name:" && $2 ~ /^zone-/ { print $2 }' deploy/.generated/manifests.yaml)"
+  for stale in $(kc -n "$NAMESPACE" get ingress -o name | sed 's|.*/||' | grep '^zone-'); do
+    grep -qx "$stale" <<<"$wanted" || kc -n "$NAMESPACE" delete ingress "$stale"
+  done
   kc -n "$NAMESPACE" create secret generic quest-tls \
     --from-file=tls.crt="${CERTS}/tls.crt" \
     --from-file=tls.key="${CERTS}/tls.key" \
