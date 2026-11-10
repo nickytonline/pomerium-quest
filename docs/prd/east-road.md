@@ -1,7 +1,8 @@
 # PRD: The East Road and chapter two
 
 Status: partly built. Chapter two starts beyond the Royal Keep, the gate that ends chapter one, and so far
-holds the owl familiar: the Aviary, the Mews and the Royal Vault (see the README). The Night Market, the
+holds the owl familiar: the Aviary, the Mews, the Royal Vault and the Throne Room, the gate that ends the
+quest (see the README). The Night Market, the
 Thieves' Guild and the 404 lesson below are still to do.
 
 ## Why it was removed

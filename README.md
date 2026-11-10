@@ -151,7 +151,8 @@ lists the errands the Aviary offers, and a button sends the owl on each one. Eve
 request through Pomerium, so you need no AI agent to play. The Aviary refuses one errand by name. Another
 has the Oracle make you a falconer, which opens the Mews, where a second perch reaches the Rookery: the
 same errands behind a different route, and the one the Aviary refused is allowed there. It earns the key
-to the Royal Vault.
+to the Royal Vault. One gate is left after that: the Throne Room, down the lane between the Mews and the
+vault. Its guard asks for every group in the quest, and letting you in ends the game, with fireworks.
 
 ### Bring your own agent
 
@@ -295,6 +296,7 @@ flowchart LR
       perch["/zones/perch/* · MCP client · the keep's rule"]
       mews["/zones/mews/* · claim/groups: falconers"]
       vault["/zones/vault/* · claim/groups: keyholders"]
+      throne["/zones/throne/* · the keep's rule, falconers and keyholders"]
       aviary["aviary.localhost.pomerium.io · MCP server · the keep's rule, deny mcp_tool: open_vault"]
       rookery["rookery.localhost.pomerium.io · MCP server · claim/groups: falconers"]
       shell["/* game shell · public"]
@@ -309,7 +311,7 @@ flowchart LR
 
   browser --> pomerium
   oracleRoute & fields & town & guild & armory & scriptorium & library & keep & builder & home & shell --> quest
-  perch & mews & vault --> quest
+  perch & mews & vault & throne --> quest
   aviary & rookery --> mcp
   quest -. "the owl's MCP requests, with the player's token" .-> pomerium
   mcp -- "adds you to falconers or keyholders" --> keycloak
@@ -443,12 +445,12 @@ keyboard.
 
 Progress lives in four [XState](https://stately.ai/docs/xstate) statecharts, saved to local storage:
 
-| Machine                                               | Tracks                                                                                               |
-| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| [`quest-machine.ts`](app/src/game/quest-machine.ts)   | Chapter one: anonymous → newcomer → invited → granted → citizen → proven → knighted → knight → armed |
-| [`house-machine.ts`](app/src/game/house-machine.ts)   | Your house: one stage per letter on the desk, solved by real visits                                  |
-| [`player-machine.ts`](app/src/game/player-machine.ts) | The dog: walking, waiting on a gate, swinging, and a moment's safety after a hit                     |
-| [`owl-machine.ts`](app/src/game/owl-machine.ts)       | Chapter two: afar → arrived → fledged → vouched → falconer → entrusted → keyholder → crowned         |
+| Machine                                               | Tracks                                                                                                    |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| [`quest-machine.ts`](app/src/game/quest-machine.ts)   | Chapter one: anonymous → newcomer → invited → granted → citizen → proven → knighted → knight → armed      |
+| [`house-machine.ts`](app/src/game/house-machine.ts)   | Your house: one stage per letter on the desk, solved by real visits                                       |
+| [`player-machine.ts`](app/src/game/player-machine.ts) | The dog: walking, waiting on a gate, swinging, and a moment's safety after a hit                          |
+| [`owl-machine.ts`](app/src/game/owl-machine.ts)       | Chapter two: afar → arrived → fledged → vouched → falconer → entrusted → keyholder → crowned → triumphant |
 
 `knighted` is the stage the chapter turns on: the Oracle lists you in `knights`, but your Pomerium
 session still holds the claims from when you signed in, so the armory says no until you sign in again.
