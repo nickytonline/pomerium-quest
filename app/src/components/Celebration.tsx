@@ -231,6 +231,12 @@ const CAST: readonly {
     frame: NPC_FRAME.falconer,
   },
   { name: 'The Owl', role: 'your MCP client: an agent, acting as you', sheet: ITEMS, frame: 7 },
+  {
+    name: 'Mochi',
+    role: 'another user: the same route and policy, checked just the same',
+    sheet: NPCS,
+    frame: NPC_FRAME.friend,
+  },
   { name: 'Bot slimes', role: 'automated bots hammering every gate', sheet: ITEMS, frame: 3 },
   { name: 'Phish', role: 'phishing: a fake Oracle after your sign-in', sheet: NPCS, frame: PHISH_FRAME },
 ]
@@ -254,7 +260,7 @@ function CastList({ hidden = false }: { readonly hidden?: boolean }) {
   )
 }
 
-/** The final screen, after the Throne Room's doors open at the end of chapter two. */
+/** The final screen, after the player finds their friend at the end of chapter two. */
 export function Celebration() {
   const open = useQuest((s) => s.celebrating)
   const defeated = useQuest((s) => s.defeated)
@@ -308,7 +314,7 @@ function CelebrationScreen({ stats }: { readonly stats: string }) {
           </h2>
           <p className="m-0 max-w-[48ch] text-muted">
             Every guard checked you, every time, and checked your owl on every errand it ran. You made it all
-            the way to the Throne Room.
+            the way to the Throne Room, and to Mochi.
           </p>
           <p className="m-0 font-display text-[0.9rem] text-lime">{stats}</p>
         </div>

@@ -19,7 +19,11 @@ const ROOST_NAME: Record<Roost, string> = { aviary: 'Aviary', rookery: 'Rookery'
 const MEET: readonly Page[] = [
   {
     who: 'Falconer',
-    text: "So you're the one the keep let through. I'm the Falconer. There are things beyond these walls a dog can't do: climb the bell tower, or carry a letter to the Oracle. An owl can.",
+    text: 'So you\'re the one the keep let through. I\'m the Falconer. Your friend Mochi came this way before you, and is waiting in the Throne Room at the far end of these grounds. "Send them after me," Mochi said.',
+  },
+  {
+    who: 'Falconer',
+    text: "You won't get there on four paws alone. There are things beyond these walls a dog can't do: climb the bell tower, or carry a letter to the Oracle. An owl can. Mochi had one too.",
   },
   {
     who: 'Falconer',
@@ -45,7 +49,7 @@ const ADVICE: Record<Exclude<OwlStage, 'afar' | 'arrived' | 'vouched' | 'entrust
   keyholder:
     'Your papers say keyholder. The Royal Vault is at the end of the road, east of the Mews. Go and see what the kingdom keeps there. Then take the lane south between the two, to the Throne Room.',
   crowned:
-    "You hold the Royal Seal. One gate is left: the Throne Room, south down the lane between the Mews and the vault. Its guard asks for everything you've earned, in both chapters.",
+    "You hold the Royal Seal. One gate is left: the Throne Room, south down the lane between the Mews and the vault. Its guard asks for everything you've earned, in both chapters. Mochi is inside.",
   triumphant:
     "Same owl, same tools, all along. What changed was which route it flew to, and what your papers said when it got there. That's all Pomerium ever checks.",
 }
@@ -314,11 +318,48 @@ export function openVaultChest(): boolean {
     },
     {
       who: 'Royal Vault',
-      text: 'One gate is left. Carry the seal to the Throne Room: the lane runs south between the Mews and the vault.',
+      text: 'One gate is left. Carry the seal to the Throne Room, where Mochi is waiting: the lane runs south between the Mews and the vault.',
     },
   ])
 
   return true
+}
+
+/** Mochi, the friend who went ahead: finding them in the Throne Room ends the quest. */
+export function friend() {
+  if (owlStage() === 'triumphant') {
+    quest.say([
+      {
+        who: 'Mochi',
+        text: 'Still here! Go on, have a look around the kingdom. No gate in it is closed to you now, and every one of them will still check.',
+      },
+    ])
+
+    return
+  }
+
+  quest.say(
+    [
+      {
+        who: 'Mochi',
+        text: "You made it! I knew you would. I've been keeping a spot on the carpet warm for you.",
+      },
+      {
+        who: 'Mochi',
+        text: 'The guard read my papers at that gate too, top to bottom, same as yours. Nobody waved me through for having been here before, and nobody let you in for knowing me. One route, one policy, checked for each of us, every time.',
+        links: [link('every'), link('allOf')],
+      },
+      {
+        who: 'Mochi',
+        text: 'Come on. The whole kingdom wants to celebrate.',
+      },
+    ],
+    () => {
+      quest.sendOwl({ type: 'REUNITED' })
+      sfx('victory')
+      quest.openChapterTwoEnd()
+    },
+  )
 }
 
 /** The throne, behind the quest's last gate. Nobody sits on it. */

@@ -43,9 +43,9 @@ describe('the owl’s errands', () => {
   it("end at the Throne Room, with or without the vault's chest", () => {
     const toKeyholder = [signedIn(GROUPS.falconers, GROUPS.keyholders)]
 
-    expect(after(...TO_VOUCHED, { type: 'THRONE_ENTERED' })).toBe('vouched')
-    expect(after(...toKeyholder, { type: 'THRONE_ENTERED' })).toBe('triumphant')
-    expect(after(...toKeyholder, { type: 'TREASURE_TAKEN' }, { type: 'THRONE_ENTERED' })).toBe('triumphant')
+    expect(after(...TO_VOUCHED, { type: 'REUNITED' })).toBe('vouched')
+    expect(after(...toKeyholder, { type: 'REUNITED' })).toBe('triumphant')
+    expect(after(...toKeyholder, { type: 'TREASURE_TAKEN' }, { type: 'REUNITED' })).toBe('triumphant')
   })
 
   it('pick up where the claims say, in a browser that has never seen the owl', () => {

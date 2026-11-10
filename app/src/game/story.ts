@@ -20,7 +20,7 @@ import { startOver } from './restart.ts'
 import { VISITORS, type VisitorId } from './house.ts'
 import { addDeed, citizenshipPages } from './house-story.ts'
 import { owlAtLeast, owlStage } from './owl-machine.ts'
-import { falconer } from './owl-story.ts'
+import { falconer, friend } from './owl-story.ts'
 import { roostOrigin } from './owl.ts'
 import { KNIGHT_QUOTA, hasSteel, isAtLeast, stage, type QuestStage } from './quest-machine.ts'
 import { sfx } from './sound.ts'
@@ -120,7 +120,7 @@ function throneRefusal(id: Identity): Refusal {
   return {
     story: {
       title: 'Not yet, friend',
-      text: `The Throne Room's guard reads your papers from top to bottom. "My orders are the longest in the kingdom: everything the keep asks, and a falconer, and a keyholder. You still need to be ${missing.join(', and ')}."`,
+      text: `The Throne Room's guard reads your papers from top to bottom. "My orders are the longest in the kingdom: everything the keep asks, and a falconer, and a keyholder. Your friend Mochi had all of it, and went in. You still need to be ${missing.join(', and ')}."`,
     },
     hint: `The Throne Room's one rule has five checks under and: claim/groups: ${GROUPS.citizens}, ${GROUPS.knights}, ${GROUPS.scholars}, ${GROUPS.falconers} and ${GROUPS.keyholders}. Every check must pass; the ✗ lines are the ones your session fails.`,
   }
@@ -340,13 +340,8 @@ export async function enterGate(
 
   if (zone.id === 'armory' || zone.id === 'library') learn('jwt')
 
-  // The Throne Room is the quest's last gate: the first time through plays the ending.
-  if (zone.id === 'throne' && owlStage() !== 'triumphant') {
-    learn('allOf')
-    sfx('victory')
-    quest.sendOwl({ type: 'THRONE_ENTERED' })
-    quest.openChapterTwoEnd()
-  }
+  // The quest's last gate. The ending waits inside, with the friend who got here first.
+  if (zone.id === 'throne') learn('allOf')
 
   // The keep's doors open with a fanfare once; after that it's the way through to chapter two.
   if (zone.id === 'keep' && owlStage() === 'afar') {
@@ -818,6 +813,7 @@ const SCRIPTS: Record<NpcId, () => void> = {
   },
   librarian: () => void librarian(),
   falconer,
+  friend,
 }
 
 const LIBRARIAN_INTRO: Page[] = [

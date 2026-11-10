@@ -5,7 +5,8 @@
 // `vouched` and `entrusted` are stale sessions, like chapter one's `knighted`: a tool call had the Oracle
 // add a group, but the player's Pomerium session still holds the claims from sign-in. A sign-in that
 // already carries a group (a second browser, say) moves straight to the stage that group earns. The vault's
-// chest is on the way to the Throne Room, not a lock on it: a keyholder may walk past it to the end.
+// chest is on the way to the Throne Room, not a lock on it: a keyholder may walk past it to the friend
+// waiting there, and finding them ends the quest.
 import { createActor, setup, type SnapshotFrom } from 'xstate'
 import { GROUPS } from './groups.ts'
 
@@ -16,7 +17,7 @@ export type OwlEvent =
   | { readonly type: 'VAULT_OPENED' }
   | { readonly type: 'SIGNED_IN'; readonly groups: readonly string[] }
   | { readonly type: 'TREASURE_TAKEN' }
-  | { readonly type: 'THRONE_ENTERED' }
+  | { readonly type: 'REUNITED' }
 
 const toKeyholder = { guard: 'hasKeyholdersClaim', target: 'keyholder' } as const
 const toFalconer = { guard: 'hasFalconersClaim', target: 'falconer' } as const
@@ -60,14 +61,14 @@ export const owlMachine = setup({
     },
     keyholder: {
       description: `The session carries '${GROUPS.keyholders}'; the vault's policy matches.`,
-      on: { TREASURE_TAKEN: 'crowned', THRONE_ENTERED: 'triumphant' },
+      on: { TREASURE_TAKEN: 'crowned', REUNITED: 'triumphant' },
     },
     crowned: {
-      description: 'The Royal Seal is yours. The Throne Room is the last gate.',
-      on: { THRONE_ENTERED: 'triumphant' },
+      description: 'The Royal Seal is yours. The Throne Room is the last gate, and Mochi is behind it.',
+      on: { REUNITED: 'triumphant' },
     },
     triumphant: {
-      description: 'The Throne Room let you in. Chapter two, and the quest, are complete.',
+      description: 'You found Mochi in the Throne Room. Chapter two, and the quest, are complete.',
     },
   },
 })

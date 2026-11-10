@@ -87,6 +87,7 @@ export type NpcId =
   | 'librarian'
   | 'baker'
   | 'falconer'
+  | 'friend'
 
 /** Frame index of each NPC in npcs.png. */
 export const NPC_FRAME: Record<NpcId, number> = {
@@ -98,6 +99,7 @@ export const NPC_FRAME: Record<NpcId, number> = {
   librarian: 5,
   baker: 6,
   falconer: 9,
+  friend: 10,
 }
 
 /** Phish dress as the Oracle, so their frame in npcs.png follows the real NPCs'. */
@@ -187,7 +189,7 @@ export interface World {
   readonly perches: readonly Perch[]
   /** The chest in the Royal Vault, which holds the Royal Seal. */
   readonly vaultChest: Point
-  /** The empty throne, in the room behind chapter two's last gate. */
+  /** The empty throne, in the room behind chapter two's last gate, where the player's friend waits. */
   readonly throne: Point
   /** Top-left tile of the 2x2 fountain. */
   readonly fountain: Point
@@ -493,6 +495,8 @@ export function buildWorld(): World {
       { x: 34, y: 25, npcId: 'librarian' },
       { x: 30, y: 13, npcId: 'baker' },
       { x: 23, y: 32, npcId: 'falconer' },
+      // Mochi waits on the carpet in front of the throne.
+      { x: 31, y: 45, npcId: 'friend' },
     ],
     bots: [
       { x: 10, y: 2 },

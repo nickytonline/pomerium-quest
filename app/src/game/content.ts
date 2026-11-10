@@ -155,7 +155,7 @@ export const SIGN_TEXT: Partial<Record<SignId, string>> = {
   vault:
     'The Royal Vault. Only keyholders may enter. No one in the kingdom hands out that key: a tool the owl calls at the Rookery asks the Oracle for it.',
   throne:
-    'The Throne Room, the last gate in the kingdom. One rule, five checks: everything the Royal Keep asks for, and a falconer, and a keyholder. You earned the first three yourself. Your owl earned the last two for you.',
+    'The Throne Room, the last gate in the kingdom. One rule, five checks: everything the Royal Keep asks for, and a falconer, and a keyholder. You earned the first three yourself. Your owl earned the last two for you. Mochi went through with papers of their own.',
 }
 
 /** Where Pomerium documents the session and user records, and the cache in front of them. */

@@ -267,7 +267,7 @@ const closeEnd = () => quest.closeChapterTwoEnd()
 const endButton =
   'motion-safe:animate-blink rounded border-3 border-night-deep bg-lime px-[18px] py-2.5 font-display text-[1.05rem] text-night-deep shadow-[4px_4px_0_var(--color-night-deep)]'
 
-/** The Throne Room's doors open: chapter two is done, and so is the quest. */
+/** The player found Mochi in the Throne Room: chapter two is done, and so is the quest. */
 export function ChapterTwoEnd() {
   const open = useQuest((s) => s.chapterTwoDone)
   const dialog = useQuest((s) => s.dialog)
@@ -295,8 +295,8 @@ export function ChapterTwoEnd() {
         Chapter two complete
       </h2>
       <p className="m-0">
-        The Throne Room opens its doors, the last gate in the kingdom. You walked in yourself, but your owl
-        did the work that got you here:
+        You found Mochi in the Throne Room, behind the last gate in the kingdom. You walked in yourself, but
+        your owl did the work that got you here:
       </p>
       <ul className="m-0 grid list-none gap-1.5 p-0">
         {ERRANDS.map(({ what, how }) => (
@@ -318,9 +318,9 @@ export function ChapterTwoEnd() {
       </p>
       <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-1">
         <button className={endButton} type="button" onClick={closeEnd} autoFocus>
-          Enter the Throne Room ▸
+          On to the celebration ▸
         </button>
-        <p className={`${tabHint} text-muted`}>Esc to go in</p>
+        <p className={`${tabHint} text-muted`}>Esc to go on</p>
       </div>
     </div>
   )
@@ -362,9 +362,9 @@ export function ChapterTwoEnd() {
       </p>
       <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-3">
         <button className={endButton} type="button" onClick={closeEnd}>
-          Enter the Throne Room ▸
+          On to the celebration ▸
         </button>
-        <p className={`${tabHint} text-paper-muted`}>Esc to go in</p>
+        <p className={`${tabHint} text-paper-muted`}>Esc to go on</p>
       </div>
     </div>
   )

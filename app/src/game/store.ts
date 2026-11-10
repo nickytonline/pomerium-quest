@@ -144,7 +144,7 @@ export interface QuestState {
   readonly owlStage: OwlStage
   /** The perch the player is sending the owl from, while its panel is open. Pauses the game. */
   readonly perch: PerchView | null
-  /** The Throne Room let the player in: chapter two, and the quest, are complete. */
+  /** The player found their friend in the Throne Room: chapter two, and the quest, are complete. */
   readonly chapterTwoDone: boolean
 }
 
