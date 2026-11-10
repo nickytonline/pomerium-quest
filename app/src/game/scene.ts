@@ -167,6 +167,26 @@ const PERCH_BAR = { y: 1 }
  */
 const OWL_FLIGHT = { hopMs: 320, homeMs: 700, lift: 10, drift: 48, swoop: 46, leash: 2 }
 
+/**
+ * The point `t` of the way from one point to another, in whole pixels. The longer direction counts the
+ * steps and the shorter one keeps to its line, so the two never step on different frames.
+ */
+function stepAlong(
+  from: { readonly x: number; readonly y: number },
+  to: { readonly x: number; readonly y: number },
+  t: number,
+) {
+  const dx = Math.round(to.x) - from.x
+  const dy = Math.round(to.y) - from.y
+  const reach = Math.max(Math.abs(dx), Math.abs(dy))
+
+  if (reach === 0) return from
+
+  const steps = Math.round(reach * t)
+
+  return { x: from.x + Math.round((dx * steps) / reach), y: from.y + Math.round((dy * steps) / reach) }
+}
+
 /** How long each beat of the owl's wings lasts while it flies. */
 const WINGBEAT_MS = 90
 
@@ -416,11 +436,11 @@ export class KingdomScene extends Phaser.Scene {
   /** The latest flight each bird was sent on, so an older one still under way gives up. */
   private flights = new Map<Phaser.GameObjects.Image, number>()
   /**
-   * What the view follows while it watches a bird fly: the bird's path without the bob of its wingbeats,
-   * which would otherwise shake the whole map a pixel up and down.
+   * What the view follows on its way to the cage and back. It isn't the bird, whose swoop and wingbeats
+   * would shake the whole map: it is a point on the straight line there, see `pan`.
    */
   private readonly lens = { x: 0, y: 0 }
-  private watched: Phaser.GameObjects.Image | undefined
+  private panning: Phaser.Tweens.Tween | undefined
   /** The owl is off the dog's shoulder: flying an errand, or on a perch until the dog walks away. */
   private owlAloft = false
   private mochisOwl: Phaser.GameObjects.Image | undefined
@@ -740,7 +760,7 @@ export class KingdomScene extends Phaser.Scene {
       falconersOwl.setPosition(glove.x, glove.y).setVisible(true)
 
       // The game follows the owl to the cage, to see the keeper answer it.
-      if (moving) this.follow(falconersOwl)
+      if (moving) this.pan(() => this.cageRoof(), CAGE_FLIGHT_MS.out)
 
       this.glide(falconersOwl, () => this.cageRoof(), CAGE_FLIGHT_MS.out, curve)
     } else if (phase === 'opening') {
@@ -750,6 +770,9 @@ export class KingdomScene extends Phaser.Scene {
       // With motion off nothing waits between the owls setting off and landing, so a phase can go unseen.
       cage.setFrame(ITEM.cageOpen)
       this.mochisOwlAloft = true
+
+      if (moving) this.pan(() => player, CAGE_FLIGHT_MS.back)
+
       this.glide(falconersOwl, () => glove, CAGE_FLIGHT_MS.back, curve, land)
       this.glide(
         mochisOwl,
@@ -762,6 +785,8 @@ export class KingdomScene extends Phaser.Scene {
       )
     } else if (phase === null && (before === 'out' || before === 'opening')) {
       // The errand came to nothing, so the owl comes back to the glove alone.
+      if (moving) this.pan(() => player, OWL_FLIGHT.homeMs)
+
       this.glide(falconersOwl, () => glove, OWL_FLIGHT.homeMs, curve, land)
     }
   }
@@ -824,12 +849,10 @@ export class KingdomScene extends Phaser.Scene {
         const bend = 2 * (1 - t) * t
         const beat = Math.floor((this.time.now - started) / WINGBEAT_MS)
 
-        const x = from.x + (end.x - from.x) * t + bend * sway
-        const y = from.y + (end.y - from.y) * t - bend * lift * 2
-
-        bird.setPosition(x, y + (beat % 2 === 0 ? 0 : 1))
-
-        if (bird === this.watched) Object.assign(this.lens, { x, y })
+        bird.setPosition(
+          from.x + (end.x - from.x) * t + bend * sway,
+          from.y + (end.y - from.y) * t - bend * lift * 2 + (beat % 2 === 0 ? 0 : 1),
+        )
 
         bird.setFrame(beat % 2 === 0 ? frames.up : frames.down)
       },
@@ -912,18 +935,13 @@ export class KingdomScene extends Phaser.Scene {
     const curve = { lift: OWL_FLIGHT.lift, sway: OWL_FLIGHT.swoop }
 
     if (phase === 'out') {
-      this.follow(owl)
+      this.pan(() => this.cageRoof(), CAGE_FLIGHT_MS.out)
       this.glide(owl, () => this.cageRoof(), CAGE_FLIGHT_MS.out, { ...curve, sway: -curve.sway })
     } else if (phase === 'turned') {
       this.keeperAnswers(false)
     } else if (phase === 'back') {
-      this.glide(
-        owl,
-        () => bar,
-        CAGE_FLIGHT_MS.back,
-        curve,
-        () => this.follow(),
-      )
+      this.pan(() => this.player ?? bar, CAGE_FLIGHT_MS.back)
+      this.glide(owl, () => bar, CAGE_FLIGHT_MS.back, curve)
     }
   }
 
@@ -934,15 +952,42 @@ export class KingdomScene extends Phaser.Scene {
     return { x: center(at.x) + CAGE_ROOF.x, y: center(at.y) + CAGE_ROOF.y }
   }
 
-  /** Points the game's view at a bird in flight, or, with none, back at the dog. */
-  private follow(bird?: Phaser.GameObjects.Image) {
-    this.watched = bird
+  /** Points the game's view back at the dog, whatever it was watching. */
+  private follow() {
+    this.panning?.stop()
+    this.panning = undefined
 
-    if (bird) Object.assign(this.lens, { x: bird.x, y: bird.y })
+    if (this.player) this.cameras.main.startFollow(this.player, true)
+  }
 
-    const target = bird ? this.lens : this.player
+  /**
+   * Slides the game's view from where it is to a point in the game's pixels, and to the dog again once it
+   * gets there if that is where it was going. The view moves in a straight line and in whole pixels, with
+   * both directions stepping on the same frame: following a bird's swoop, or rounding each direction on
+   * its own, shakes the whole map.
+   */
+  private pan(to: () => { readonly x: number; readonly y: number }, ms: number) {
+    this.panning?.stop()
 
-    if (target) this.cameras.main.startFollow(target, true)
+    const view = this.cameras.main
+    const from = { x: Math.round(view.midPoint.x), y: Math.round(view.midPoint.y) }
+    const along = { t: 0 }
+
+    Object.assign(this.lens, from)
+    view.startFollow(this.lens, true)
+
+    const pan = this.tweens.add({
+      targets: along,
+      t: 1,
+      duration: ms,
+      ease: 'Sine.easeInOut',
+      onUpdate: () => Object.assign(this.lens, stepAlong(from, to(), along.t)),
+      onComplete: () => {
+        if (this.panning === pan && to() === this.player) this.follow()
+      },
+    })
+
+    this.panning = pan
   }
 
   /**
