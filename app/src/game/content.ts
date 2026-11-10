@@ -148,7 +148,7 @@ export const SIGN_TEXT: Partial<Record<SignId, string>> = {
     "The scriptorium, where the Royal Ledger is written. Its path is inside the library's, but it's a route of its own with its own policy. Pomerium picks the route whose path matches most closely, so the library's rule doesn't apply here: only scribes may enter.",
   keep: 'The Royal Keep. One rule, three checks: a citizen who is both a knight and a scholar. In an and rule, every check must pass.',
   aviary:
-    "The Aviary is an MCP server: it offers tools for an agent to call, and your owl is the agent. It's a route like any gate, so Pomerium checks every call against the policy below, as you. Its deny rule names one tool. Any citizen's owl may call the others, but no owl may call open_vault here.",
+    "The Aviary is an MCP server: it offers tools for an agent to call, and your owl is the agent. It's a route like any gate, so Pomerium checks every call against the policy below, as you. The allow rule is the Royal Keep's, since only those the keep admits come this far. The deny rule names one tool: no owl may call open_vault here, whoever it flies for.",
   rookery:
     "The Rookery is the same MCP server behind a second route, with a policy of its own. Only a falconer's owl gets in, and no tool is denied here.",
   mews: 'The Mews, where falconers keep their birds. Only falconers may enter, and only the owl can make you one: the letter it carries asks the Oracle to add you to the falconers group.',

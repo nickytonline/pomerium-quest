@@ -21,27 +21,35 @@ const nobody: Identity = { authenticated: false, email: '', groups: [] }
 const allowed = (zone: ZoneId, who: Identity, method: 'GET' | 'POST' = 'GET') =>
   decide(zoneById(zone), who, { method, path: zoneById(zone).prefix }).allow
 
-const falconer = person('falconer@example.org', [GROUPS.citizens, GROUPS.falconers])
+const KEEP_GROUPS = [GROUPS.citizens, GROUPS.knights, GROUPS.scholars]
+const falconer = person('falconer@example.org', [...KEEP_GROUPS, GROUPS.falconers])
 
 /** An MCP request to a roost: a tools/call for `tool`, or with none, a tools/list. */
 const owlAllowed = (zone: ZoneId, who: Identity, tool?: OwlTool) =>
   decide(zoneById(zone), who, { method: 'POST', path: zoneById(zone).prefix, tool }).allow
 
 describe('the owl is checked as the player, one tool call at a time', () => {
-  it('lets a citizen’s owl list the Aviary’s tools and call most of them', () => {
-    expect(owlAllowed('aviary', citizen)).toBe(true)
-    expect(owlAllowed('aviary', citizen, OWL_TOOLS.whoami)).toBe(true)
-    expect(owlAllowed('aviary', citizen, OWL_TOOLS.deliverLetter)).toBe(true)
+  it('lets the owl of anyone the keep admits list the Aviary’s tools and call most of them', () => {
+    expect(owlAllowed('aviary', knightAndScholar)).toBe(true)
+    expect(owlAllowed('aviary', knightAndScholar, OWL_TOOLS.whoami)).toBe(true)
+    expect(owlAllowed('aviary', knightAndScholar, OWL_TOOLS.deliverLetter)).toBe(true)
+  })
+
+  it('keeps the owl from anyone who hasn’t finished chapter one', () => {
+    expect(owlAllowed('aviary', citizen)).toBe(false)
+    expect(owlAllowed('aviary', knight, OWL_TOOLS.whoami)).toBe(false)
     expect(owlAllowed('aviary', traveler)).toBe(false)
+    expect(allowed('perch', citizen, 'POST')).toBe(false)
+    expect(allowed('perch', knightAndScholar, 'POST')).toBe(true)
   })
 
   it('refuses one tool at the Aviary by name, whoever the owl flies for', () => {
-    expect(owlAllowed('aviary', citizen, OWL_TOOLS.openVault)).toBe(false)
+    expect(owlAllowed('aviary', knightAndScholar, OWL_TOOLS.openVault)).toBe(false)
     expect(owlAllowed('aviary', falconer, OWL_TOOLS.openVault)).toBe(false)
   })
 
   it('opens the Rookery, and every tool there, to falconers only', () => {
-    expect(owlAllowed('rookery', citizen)).toBe(false)
+    expect(owlAllowed('rookery', knightAndScholar)).toBe(false)
     expect(owlAllowed('rookery', falconer)).toBe(true)
     expect(owlAllowed('rookery', falconer, OWL_TOOLS.openVault)).toBe(true)
   })

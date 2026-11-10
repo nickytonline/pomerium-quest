@@ -92,6 +92,12 @@ become_citizen() {
   check "town opens once the session carries the citizens group" 200 "$town"
 }
 
+# The perch is the game as an MCP client: Pomerium hands the game server a token for the player, and the
+# server calls the MCP server's routes with it. Each call's outcome is Pomerium's answer.
+perch() { curl -s -b "$1" -H "$JSON" -H 'content-type: application/json' -X POST "${GAME}/zones/perch/$2" -d "$3"; }
+tools='{"method":"tools/list"}'
+call() { printf '{"method":"tools/call","tool":"%s"}' "$1"; }
+
 echo "Anonymous"
 anon="${JAR_DIR}/anon"
 check "game shell is public" 200 "$(curl -s -o /dev/null -w '%{http_code}' "${GAME}/")"
@@ -110,6 +116,8 @@ check "the Builders' Yard refuses a newcomer" 403 "$(status "$citizen" /zones/bu
 echo "Citizen"
 become_citizen "$citizen" "$email"
 check "armory without knights" 403 "$(status "$citizen" /zones/armory/enter)"
+check "the owl's perch refuses a citizen who hasn't finished chapter one" 403 \
+  "$(curl -s -o /dev/null -w '%{http_code}' -b "$citizen" -H "$JSON" -H 'content-type: application/json' -X POST "${GAME}/zones/perch/aviary" -d "$tools")"
 check "library read (GET)" 200 "$(status "$citizen" /zones/library/books/0)"
 check "library refuses a write (POST)" 403 "$(status "$citizen" /zones/library/books/0 POST)"
 # The library's rule would allow this GET; a 403 means Pomerium matched the scriptorium's own route.
@@ -140,11 +148,6 @@ done
 check "keep opens for a citizen who is a knight and a scholar" 200 "$keep"
 
 echo "The Aviary (MCP)"
-# The perch is the game as an MCP client: Pomerium hands the game server a token for the player, and the
-# server calls the MCP server's routes with it. Each call's outcome is Pomerium's answer.
-perch() { curl -s -b "$1" -H "$JSON" -H 'content-type: application/json' -X POST "${GAME}/zones/perch/$2" -d "$3"; }
-tools='{"method":"tools/list"}'
-call() { printf '{"method":"tools/call","tool":"%s"}' "$1"; }
 # Asks a roost until Pomerium's answer is the one wanted, since new claims take a moment to reach it.
 perch_until() {
   local got=""
@@ -165,21 +168,18 @@ gate_until() {
   echo "$got"
 }
 
-owl="${JAR_DIR}/owl"
-falconer="owl-${RUN}@${PLAYERS}"
-sign_up "$owl" "$falconer" >/dev/null
-check "the perch refuses a newcomer" 403 \
-  "$(curl -s -o /dev/null -w '%{http_code}' -b "$owl" -H "$JSON" -H 'content-type: application/json' -X POST "${GAME}/zones/perch/aviary" -d "$tools")"
-become_citizen "$owl" "$falconer"
+# The player the keep just admitted: chapter two's routes ask what the keep asks.
+owl="$citizen"
+falconer="$email"
 check "an MCP server route takes a token, not a browser session" 401 \
   "$(curl -s -o /dev/null -w '%{http_code}' -b "$owl" -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' -X POST "${AVIARY}/mcp" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')"
-check "the Aviary lists its tools for a citizen's owl" tools "$(perch "$owl" aviary "$tools" | field outcome.kind)"
+check "the Aviary lists its tools for the owl of a player the keep admits" tools "$(perch "$owl" aviary "$tools" | field outcome.kind)"
 check "whoami: the owl flies as the player" yes \
   "$(perch "$owl" aviary "$(call whoami)" | field outcome.text | grep -q "$falconer" && echo yes || echo no)"
 check "ring_bell is allowed at the Aviary" result "$(perch "$owl" aviary "$(call ring_bell)" | field outcome.kind)"
 check "the Aviary refuses open_vault (deny: mcp_tool)" refused "$(perch "$owl" aviary "$(call open_vault)" | field outcome.kind)"
 check "the Rookery refuses an owl whose player is no falconer" refused "$(perch "$owl" rookery "$tools" | field outcome.kind)"
-check "the Mews refuses a citizen who is no falconer" 403 "$(status "$owl" /zones/mews/enter)"
+check "the Mews refuses a player who is no falconer" 403 "$(status "$owl" /zones/mews/enter)"
 check "deliver_letter has the Oracle add falconers" yes \
   "$(perch "$owl" aviary "$(call deliver_letter)" | field outcome.text | grep -q "\"granted\": \"$GROUP_FALCONERS\"" && echo yes || echo no)"
 check "the Mews still refuses (session holds old claims)" 403 "$(status "$owl" /zones/mews/enter)"

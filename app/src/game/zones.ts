@@ -76,6 +76,12 @@ const inGroup = (value: string): Criterion => ({ kind: 'claim', claim: 'groups',
 /** A citizen is whoever the Oracle has put in the citizens group, whatever their email domain. */
 const citizen = inGroup(GROUPS.citizens)
 
+/**
+ * What the Royal Keep asks, and so what finishing chapter one means: a citizen who is a knight and a scholar.
+ * Chapter two's owl is for them alone, so its routes ask the same.
+ */
+const keepsRule = all(citizen, inGroup(GROUPS.knights), inGroup(GROUPS.scholars))
+
 export const ZONES: readonly Zone[] = [
   { id: 'oracle', name: "Oracle's Temple", prefix: '/zones/oracle', policy: [all(signedIn)] },
   { id: 'fields', name: 'Fields Gate', prefix: '/zones/fields', policy: [all(signedIn)] },
@@ -105,19 +111,20 @@ export const ZONES: readonly Zone[] = [
     id: 'keep',
     name: 'Royal Keep',
     prefix: '/zones/keep',
-    policy: [all(citizen, inGroup(GROUPS.knights), inGroup(GROUPS.scholars))],
+    policy: [keepsRule],
   },
-  // Chapter two, beyond the keep. The perch is the game acting as an MCP client: Pomerium hands the game
-  // server a token for the signed-in player, and the server sends the owl's tool calls with it.
-  { id: 'perch', name: "The Owl's Perch", prefix: '/zones/perch', policy: [all(citizen)], mcp: 'client' },
-  // The Aviary and the Rookery are the same MCP server behind two routes. Any citizen's owl may use the
-  // Aviary, except for one tool: a deny rule beats the allow, for that tool's calls only.
+  // Chapter two, beyond the keep, so its routes ask what the keep asks. The perch is the game acting as an
+  // MCP client: Pomerium hands the game server a token for the signed-in player, and the server sends the
+  // owl's tool calls with it.
+  { id: 'perch', name: "The Owl's Perch", prefix: '/zones/perch', policy: [keepsRule], mcp: 'client' },
+  // The Aviary and the Rookery are the same MCP server behind two routes. The owl of anyone the keep
+  // admits may use the Aviary, except for one tool: a deny rule beats the allow, for that tool's calls only.
   {
     id: 'aviary',
     name: 'The Aviary',
     host: 'aviary',
     prefix: MCP_PATH,
-    policy: [all(citizen), denyAny({ kind: 'mcp_tool', is: OWL_TOOLS.openVault })],
+    policy: [keepsRule, denyAny({ kind: 'mcp_tool', is: OWL_TOOLS.openVault })],
     mcp: 'server',
   },
   // Only a falconer's owl reaches the Rookery at all, and there every tool is allowed.

@@ -135,7 +135,7 @@ function refusedView(roost: Roost, call: OwlCall, id: Identity, requestId: strin
           title: 'Not that errand',
           text: 'The owl is turned back at the Aviary\'s window. "Any errand but that one," says the keeper. "My orders name the vault, and they say no, whoever the owl flies for."',
         },
-        hint: `The allow rule matched: you are a citizen. But the deny rule names this tool, mcp_tool: ${tool}, and a deny always beats an allow. Pomerium read the tool's name from the tools/call request itself. It answers a refused MCP request with a JSON-RPC error rather than a 403 page, so an MCP client can read the refusal: that is the 200 above.`,
+        hint: `The allow rule matched: you are everything the keep asks for. But the deny rule names this tool, mcp_tool: ${tool}, and a deny always beats an allow. Pomerium read the tool's name from the tools/call request itself. It answers a refused MCP request with a JSON-RPC error rather than a 403 page, so an MCP client can read the refusal: that is the 200 above.`,
         links: [link('mcpTool'), link('denyWins')],
       }
     }
