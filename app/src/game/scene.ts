@@ -123,14 +123,15 @@ const FALCON_SEAT = { x: -5, y: -8 }
 /** The owl hops away when the player comes within this many tiles of it, and how long and high a hop is. */
 const OWL_SHY = { tiles: 2, ms: 520, lift: 18 }
 
-/** The owl's feet meet a perch's crossbar this far above the tile's center. */
-const PERCH_BAR = { y: -2 }
+/** The owl's feet meet a perch's crossbar this far below the tile's center. */
+const PERCH_BAR = { y: 1 }
 
 /**
- * The owl's errand: how long it takes to hop onto a perch, to land there again and to come back to the
- * dog's shoulder, how high it arcs, and how far from the perch it has flown by the time it fades from view.
+ * The owl's flights around a perch: how long it takes to hop on and to fly back to the dog's shoulder, how
+ * high it arcs, how far sideways it drifts on its way off the screen, and how many tiles the dog walks
+ * from the perch before the owl follows.
  */
-const OWL_FLIGHT = { hopMs: 260, landMs: 380, homeMs: 420, lift: 8, afar: { x: 52, y: -64 } }
+const OWL_FLIGHT = { hopMs: 260, homeMs: 650, lift: 12, drift: 40, leash: 2 }
 
 /** Rows of the dog's frame left above the waterline while swimming: head and collar. */
 const SWIM_DEPTH = 11
@@ -371,6 +372,8 @@ export class KingdomScene extends Phaser.Scene {
   private owlPerch: Perch | undefined
   /** The perch the player last walked into, until they let go of the key or step away. */
   private bumpedPerch: Perch | undefined
+  /** The latest flight each bird was sent on, so an older one still under way gives up. */
+  private flights = new Map<Phaser.GameObjects.Image, number>()
   /** The owl is off the dog's shoulder: flying an errand, or on a perch until the dog walks away. */
   private owlAloft = false
   private falcon: Phaser.GameObjects.Image | undefined
@@ -617,41 +620,55 @@ export class KingdomScene extends Phaser.Scene {
   }
 
   /**
-   * Moves a bird to a point in the game's pixels, in an arc `lift` pixels high. Motion is opt-in: without
-   * it the bird is simply there.
+   * Moves a bird to a point in the game's pixels, in an arc `lift` pixels high. The point is asked for on
+   * every frame, so a bird can fly to the dog while the dog walks. Motion is opt-in: without it the bird is
+   * simply there.
    */
   private glide(
     bird: Phaser.GameObjects.Image,
-    to: { readonly x: number; readonly y: number },
+    to: () => { readonly x: number; readonly y: number },
     ms: number,
     lift: number,
     onDone?: () => void,
   ) {
-    this.tweens.killTweensOf(bird)
+    // A newer flight takes over from one still under way, whose callbacks then do nothing.
+    const flight = (this.flights.get(bird) ?? 0) + 1
+    this.flights.set(bird, flight)
+
+    const current = () => this.flights.get(bird) === flight
+
+    const land = () => {
+      if (!current()) return
+      const end = to()
+
+      bird.setPosition(end.x, end.y)
+      onDone?.()
+    }
 
     if (!matchMedia('(prefers-reduced-motion: no-preference)').matches) {
-      bird.setPosition(to.x, to.y)
-      onDone?.()
+      land()
 
       return
     }
 
     const from = { x: bird.x, y: bird.y }
+    const along = { t: 0 }
 
     this.tweens.add({
-      targets: bird,
-      x: to.x,
+      targets: along,
+      t: 1,
       duration: ms,
       ease: 'Sine.easeInOut',
-      onUpdate: (tween) => {
-        const t = tween.progress
+      onUpdate: () => {
+        if (!current()) return
+        const end = to()
 
-        bird.y = from.y + (to.y - from.y) * t - Math.sin(Math.PI * t) * lift
+        bird.setPosition(
+          from.x + (end.x - from.x) * along.t,
+          from.y + (end.y - from.y) * along.t - Math.sin(Math.PI * along.t) * lift,
+        )
       },
-      onComplete: () => {
-        bird.setPosition(to.x, to.y)
-        onDone?.()
-      },
+      onComplete: land,
     })
   }
 
@@ -668,7 +685,7 @@ export class KingdomScene extends Phaser.Scene {
 
     this.owlAt += 1
     sfx('flutter')
-    this.glide(this.owl, { x: center(next.x), y: center(next.y) }, OWL_SHY.ms, OWL_SHY.lift)
+    this.glide(this.owl, () => ({ x: center(next.x), y: center(next.y) }), OWL_SHY.ms, OWL_SHY.lift)
 
     quest.toast(
       this.owlTired()
@@ -684,9 +701,8 @@ export class KingdomScene extends Phaser.Scene {
   }
 
   /**
-   * Moves the owl as an errand at a perch goes: onto the perch while the player is asked, away with the
-   * request, then back. It stays on the perch until the player walks away. The flight is motion, so it is
-   * opt-in: without it the owl is simply at each place.
+   * Moves the owl as an errand at a perch goes: off the screen with the request, away while it is
+   * answered, then back to the perch. The flight is motion, so it is opt-in: without it the owl stays put.
    */
   private syncFlight() {
     const perch = quest.get().perch
@@ -695,41 +711,27 @@ export class KingdomScene extends Phaser.Scene {
     if (phase === this.owlPhase) return
     this.owlPhase = phase
 
-    const { owl, player } = this
-    const spot = this.world.perches.find((candidate) => candidate.tool === perch?.tool) ?? this.owlPerch
+    const owl = this.owl
+    const spot = this.world.perches.find((candidate) => candidate.tool === perch?.tool)
 
-    if (!owl || !player || !spot) return
-    this.owlPerch = spot
+    if (!owl || !spot || !matchMedia('(prefers-reduced-motion: no-preference)').matches) return
 
-    const motion = matchMedia('(prefers-reduced-motion: no-preference)').matches
-    const bar = { x: center(spot.x), y: center(spot.y) + PERCH_BAR.y }
-    const afar = { x: bar.x + OWL_FLIGHT.afar.x, y: bar.y + OWL_FLIGHT.afar.y }
+    const bar = this.barOf(spot)
 
-    const fade = (alpha: number, ms: number) =>
-      motion ? this.tweens.add({ targets: owl, alpha, duration: ms }) : owl.setAlpha(alpha)
+    if (phase === 'out') {
+      // Up and away, past the top of what the player can see.
+      const top = this.cameras.main.worldView.y - T
+      const away = { x: bar.x + OWL_FLIGHT.drift, y: Math.min(top, bar.y - T) }
 
-    if (phase === 'asking') {
-      this.owlAloft = true
-      this.glide(owl, bar, OWL_FLIGHT.hopMs, OWL_FLIGHT.lift)
-    } else if (phase === 'out') {
-      this.owlAloft = true
-      this.glide(owl, afar, FLIGHT_MS.out, OWL_FLIGHT.lift)
-      fade(0, FLIGHT_MS.out)
-    } else if (phase === 'landed') {
-      // Pomerium allowed the call: the owl lands on the perch with its answer, and waits there.
-      this.glide(owl, bar, OWL_FLIGHT.landMs, 0)
-      fade(1, OWL_FLIGHT.landMs / 2)
-    } else if (phase === 'turned') {
-      // Pomerium refused: the owl comes straight back to the player, with nothing.
-      this.owlPerch = undefined
-      this.glide(owl, { x: player.x + OWL_SEAT.x, y: player.y + OWL_SEAT.y }, FLIGHT_MS.turned, 0, () => {
-        this.owlAloft = false
-      })
-      fade(1, FLIGHT_MS.turned / 2)
-    } else {
-      // Done, or left unsent: the owl stays where it is. If that's the perch, it waits to be walked away from.
-      owl.setAlpha(1)
+      this.glide(owl, () => away, FLIGHT_MS.out, 0)
+    } else if (phase === 'back') {
+      this.glide(owl, () => bar, FLIGHT_MS.back, OWL_FLIGHT.lift)
     }
+  }
+
+  /** Where the owl's feet meet a perch's crossbar, in the game's pixels. */
+  private barOf(perch: Point) {
+    return { x: center(perch.x), y: center(perch.y) + PERCH_BAR.y }
   }
 
   /** The perch the player is standing right beside, if any. */
@@ -747,24 +749,26 @@ export class KingdomScene extends Phaser.Scene {
 
     this.owlAloft = true
     this.owlPerch = perch
-    this.glide(
-      this.owl,
-      { x: center(perch.x), y: center(perch.y) + PERCH_BAR.y },
-      OWL_FLIGHT.hopMs,
-      OWL_FLIGHT.lift,
-    )
+    this.glide(this.owl, () => this.barOf(perch), OWL_FLIGHT.hopMs, OWL_FLIGHT.lift)
   }
 
-  /** The owl leaves its perch for the dog's shoulder when the dog walks off to `target`, away from the perch. */
-  private callOwl(target: Point) {
-    const owl = this.owl
+  /**
+   * The owl waits on its perch until the dog is a couple of tiles away, then flies after it and lands on
+   * its shoulder, wherever the dog has got to by then.
+   */
+  private callOwl() {
+    const { owl, player, owlPerch } = this
 
-    if (!owl || !this.owlAloft || quest.get().perch || this.perchBeside(target) === this.owlPerch) return
+    if (!owl || !player || !owlPerch || quest.get().perch) return
+
+    const away = Math.max(Math.abs(owlPerch.x - this.pos.x), Math.abs(owlPerch.y - this.pos.y))
+
+    if (away < OWL_FLIGHT.leash) return
 
     this.owlPerch = undefined
     this.glide(
       owl,
-      { x: center(target.x) + OWL_SEAT.x, y: center(target.y) + OWL_SEAT.y },
+      () => ({ x: player.x + OWL_SEAT.x, y: player.y + OWL_SEAT.y }),
       OWL_FLIGHT.homeMs,
       OWL_FLIGHT.lift,
       () => {
@@ -1025,7 +1029,6 @@ export class KingdomScene extends Phaser.Scene {
     this.mode.send({ type: 'WALK' })
     this.walkingTo = target
     this.bumpedPerch = undefined
-    this.callOwl(target)
 
     if (this.tileAt(target) === TILE.water) sfx(this.tileAt(this.pos) === TILE.water ? 'paddle' : 'splash')
     this.swim(this.tileAt(target) === TILE.water)
@@ -1060,6 +1063,7 @@ export class KingdomScene extends Phaser.Scene {
     quest.progress({ x: target.x, y: target.y, dir: this.dir })
     quest.setRegion(regionAt(target))
     this.startleOwl()
+    this.callOwl()
     this.perchOwl()
 
     if (cameIn) void this.cameHome()

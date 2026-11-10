@@ -196,8 +196,8 @@ export function visitPerch(tool: OwlTool) {
   quest.openPerch(tool)
   quest.say([
     {
-      who: `Perch · ${tool}`,
-      text: `Your owl looks back at you from the perch. ${title}: ${lowerFirst(description)} Send the owl?`,
+      who: `Perch · ${title}`,
+      text: `Your owl looks back at you from the perch. This errand is ${tool}. ${description} Send the owl?`,
       choices: [
         { label: 'Send the owl', pick: () => void flyOwl(tool) },
         { label: 'Not now', pick: leavePerch },
@@ -205,8 +205,6 @@ export function visitPerch(tool: OwlTool) {
     },
   ])
 }
-
-const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1)
 
 /** A perch's sign names its one tool, above the Aviary's route: the only thing that decides who may land. */
 export function readPerchSign(tool: OwlTool) {
@@ -347,7 +345,7 @@ function refusedView(tool: OwlTool, id: Identity, flight: OwlFlight, requestId: 
       return {
         story: {
           title: "Falconers' owls only",
-          text: 'The owl is back almost at once, turned away at the Aviary. "Whose owl is this?" its keeper had called, reading the papers on its leg. "Nothing in here says falconer. I don\'t care which perch it flew from."',
+          text: 'The owl is back with nothing, turned away at the Aviary. "Whose owl is this?" its keeper had called, reading the papers on its leg. "Nothing in here says falconer. I don\'t care which perch it flew from."',
         },
         hint: `The Aviary's allow rule needs claim/groups: ${GROUPS.falconers}. The owl flies on your behalf, so Pomerium checked your session, and its groups claim doesn't include ${GROUPS.falconers}. No allow rule matched, so Pomerium refused the request before the MCP server saw it, whichever tool it named. ${readable}`,
         links: [link('mcpServer'), link('authz')],
@@ -453,7 +451,8 @@ export async function flyOwl(tool: OwlTool) {
   const id = identity()
   sfx('hoot')
   quest.perchPhase('out')
-  const [sent] = await Promise.all([sendOwl({ method: 'tools/call', tool }), watch(FLIGHT_MS.out)])
+  const away = watch(FLIGHT_MS.out + FLIGHT_MS.away)
+  const [sent] = await Promise.all([sendOwl({ method: 'tools/call', tool }), away])
 
   if (!sent.ok) {
     leavePerch()
@@ -464,10 +463,9 @@ export async function flyOwl(tool: OwlTool) {
 
   const flight = sent.value
   const { outcome } = flight
-  const landed = outcome.kind === 'result'
 
-  quest.perchPhase(landed ? 'landed' : 'turned')
-  await watch(landed ? FLIGHT_MS.landed : FLIGHT_MS.turned)
+  quest.perchPhase('back')
+  await watch(FLIGHT_MS.back)
   logFlight(flight, `tools/call ${tool}`, id)
 
   switch (outcome.kind) {
