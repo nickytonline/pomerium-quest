@@ -4,6 +4,9 @@ import { useSyncExternalStore } from 'react'
 import type { Choice, DocLink, LessonId, Page } from './content.ts'
 import type { HouseRule, HouseState } from './house.ts'
 import { houseActor, persistHouse, resetHouse, type HouseEvent, type HouseStage } from './house-machine.ts'
+import { owlActor, persistOwl, resetOwl, type OwlEvent, type OwlStage } from './owl-machine.ts'
+import type { Roost } from './owl.ts'
+import type { OwlFlight, ToolInfo } from './perch.ts'
 import type { EvalLine, Identity } from './ppl.ts'
 import {
   persist,
@@ -42,7 +45,8 @@ export interface Progress {
 }
 
 export interface DenyView {
-  readonly status: 401 | 403
+  /** 200 is a refused MCP request: Pomerium answers those with a JSON-RPC error an MCP client can read. */
+  readonly status: 401 | 403 | 200
   readonly title: string
   /** The refusal as the kingdom tells it, shown first; the rest is how Pomerium decided. */
   readonly story: { readonly title: string; readonly text: string }
@@ -61,6 +65,17 @@ export interface DenyView {
    * what they were (the page was reloaded since signing in again).
    */
   readonly cachedClaims?: { readonly session: readonly string[]; readonly cached: readonly string[] | null }
+}
+
+/** The owl's perch, as its panel shows it. */
+export interface PerchView {
+  readonly roost: Roost
+  /** The tools the roost listed, once Pomerium has let the owl ask; null until then. */
+  readonly tools: readonly ToolInfo[] | null
+  /** The owl's last flight from this perch: the MCP request and Pomerium's answer. */
+  readonly flight: OwlFlight | null
+  /** The owl is out on an errand. */
+  readonly busy: boolean
 }
 
 export interface LogEntry {
@@ -125,6 +140,12 @@ export interface QuestState {
   readonly house: HouseState | null
   /** The door rules editor is open at the desk. Pauses the game. */
   readonly houseEditor: boolean
+  /** Mirrors the owl machine so React can render it. */
+  readonly owlStage: OwlStage
+  /** The perch the player is sending the owl from, while its panel is open. Pauses the game. */
+  readonly perch: PerchView | null
+  /** The vault is open: chapter two is complete. */
+  readonly chapterTwoDone: boolean
 }
 
 /** Health is counted in half hearts: 10 is five full hearts. */
@@ -203,6 +224,9 @@ let state: QuestState = {
   letterRead: houseActor.getSnapshot().context.letterRead,
   house: null,
   houseEditor: false,
+  owlStage: owlActor.getSnapshot().value,
+  perch: null,
+  chapterTwoDone: false,
 }
 
 const listeners = new Set<() => void>()
@@ -235,6 +259,8 @@ export const paused = (s: QuestState) =>
   s.menuOpen ||
   s.journalOpen ||
   s.houseEditor ||
+  s.perch !== null ||
+  s.chapterTwoDone ||
   !s.started
 
 export const quest = {
@@ -278,6 +304,8 @@ export const quest = {
       oracleBeside: false,
       finale: false,
       celebrating: false,
+      perch: null,
+      chapterTwoDone: false,
     })
   },
   setMode: (mode: Mode, identity: Identity) => update({ mode, identity }),
@@ -301,6 +329,7 @@ export const quest = {
   /** Tells the quest someone signed in. A session holding the deed owns a house, whichever browser it's in. */
   signedIn: (identity: Identity) => {
     quest.send({ type: 'SIGNED_IN', groups: identity.groups })
+    quest.sendOwl({ type: 'SIGNED_IN', groups: identity.groups })
 
     if (identity.deed) quest.sendHouse({ type: 'DEED_GIVEN' })
   },
@@ -310,6 +339,26 @@ export const quest = {
     const snapshot = houseActor.getSnapshot()
     update(noted({ houseStage: snapshot.value, letterRead: snapshot.context.letterRead }))
   },
+  sendOwl: (event: OwlEvent) => {
+    owlActor.send(event)
+    persistOwl()
+    update(noted({ owlStage: owlActor.getSnapshot().value }))
+  },
+  openPerch: (roost: Roost) =>
+    update({ perch: { roost, tools: null, flight: null, busy: false }, menuOpen: false, journalOpen: false }),
+  perchBusy: (busy: boolean) => {
+    if (state.perch) update({ perch: { ...state.perch, busy } })
+  },
+  /** The owl is back: the panel shows the flight, and the tools if the roost listed them. */
+  perchFlew: (flight: OwlFlight) => {
+    if (!state.perch) return
+    const tools = flight.outcome.kind === 'tools' ? flight.outcome.tools : state.perch.tools
+
+    update({ perch: { ...state.perch, flight, tools, busy: false } })
+  },
+  closePerch: () => update({ perch: null, inputResumesAt: performance.now() + 200 }),
+  openChapterTwoEnd: () => update({ chapterTwoDone: true, menuOpen: false, journalOpen: false }),
+  closeChapterTwoEnd: () => update({ chapterTwoDone: false, inputResumesAt: performance.now() + 200 }),
   setHouse: (house: HouseState | null) => update({ house }),
   openHouseEditor: () => update({ houseEditor: true, menuOpen: false, journalOpen: false }),
   closeHouseEditor: () => update({ houseEditor: false, inputResumesAt: performance.now() + 200 }),
@@ -324,8 +373,10 @@ export const quest = {
     saveProgress(progress)
     resetQuest()
     resetHouse()
+    resetOwl()
     update({
       progress,
+      owlStage: owlActor.getSnapshot().value,
       houseStage: houseActor.getSnapshot().value,
       letterRead: false,
       house: null,
