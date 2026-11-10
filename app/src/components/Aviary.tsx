@@ -98,7 +98,7 @@ function PerchPanel({ perch, flight }: { readonly perch: PerchView; readonly fli
   }
 
   const actions = (focus: boolean) => (
-    <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+    <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-1">
       <button className={smallButton} type="button" autoFocus={focus} onClick={leavePerch}>
         Leave the perch
       </button>
@@ -176,7 +176,7 @@ function PerchPanel({ perch, flight }: { readonly perch: PerchView; readonly fli
         showing={tool}
         overlay={overlay}
         role="dialog"
-        sized="each"
+        sized="kingdom"
         kingdom={kingdom}
         pomerium={pomerium}
       />

@@ -527,10 +527,13 @@ export async function flyOwl(tool: OwlTool) {
       return
     case 'refused':
       leavePerch()
-      sfx('denied')
+      // The owl lands quietly: the refusal is only heard once the player reads it.
       tellReturn(
         tool,
-        () => quest.showDeny(refusedView(tool, id, flight, outcome.requestId), () => afterRefusal(tool, id)),
+        () => {
+          sfx('denied')
+          quest.showDeny(refusedView(tool, id, flight, outcome.requestId), () => afterRefusal(tool, id))
+        },
         turnedBack,
       )
 

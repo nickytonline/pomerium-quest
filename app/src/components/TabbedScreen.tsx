@@ -14,11 +14,19 @@ export const TAB_EVENT = 'quest:switch-tab'
 
 export const switchTab = () => window.dispatchEvent(new Event(TAB_EVENT))
 
+/** How the panel of a tab that isn't showing is kept, and how the one that is showing is laid out. */
+const PANEL = {
+  // Both panels share one grid cell, so the screen is as tall as the taller of the two.
+  tallest: 'grid grid-cols-[minmax(0,1fr)] [grid-area:1/1]',
+  // The Pomerium panel is laid over the kingdom's and scrolls inside it, so it adds no height of its own.
+  over: 'absolute inset-0 overflow-y-auto overscroll-contain',
+} as const
+
 /**
  * A moment told twice: first as the game tells it, then as Pomerium decided it. Both tabs share
- * one grid cell, so the screen keeps the taller one's size when switching. A screen whose tabs differ a
- * lot in length asks for each tab to keep its own size instead: sized to the longer one, the shorter tab
- * would be mostly empty, with whatever is at its foot scrolled far out of view.
+ * one grid cell, so the screen keeps the taller one's size when switching. A screen whose Pomerium tab is
+ * much the longer asks for the kingdom tab to set the size instead: the Pomerium tab then scrolls inside
+ * that space, between a least and a greatest height, so neither tab is mostly empty.
  */
 export function TabbedScreen({
   name,
@@ -37,18 +45,20 @@ export function TabbedScreen({
   readonly overlay: string
   /** A refusal or a result is an alert; a screen the player works in is a plain dialog. */
   readonly role?: 'alertdialog' | 'dialog'
-  /** Whether both tabs take the taller one's size, or each keeps its own. */
-  readonly sized?: 'tallest' | 'each'
+  /** Whether both tabs take the taller one's size, or the kingdom tab sets it for both. */
+  readonly sized?: 'tallest' | 'kingdom'
   readonly kingdom: ReactNode
   readonly pomerium: ReactNode
 }) {
   const [tab, setTab] = useState<Tab>('kingdom')
   const panels = useRef<HTMLDivElement>(null)
-  const away = sized === 'each' ? 'hidden' : 'invisible'
+  const byKingdom = sized === 'kingdom'
 
-  // A tab opens at its top, not wherever the other one was scrolled to.
+  // A tab opens at its top, not wherever it or the other one was last scrolled to.
   useEffect(() => {
     panels.current?.scrollTo({ top: 0 })
+
+    for (const panel of panels.current?.children ?? []) panel.scrollTo({ top: 0 })
   }, [tab, showing])
 
   useEffect(() => {
@@ -84,13 +94,13 @@ export function TabbedScreen({
         {/* One column that may shrink, so a long line scrolls inside its block instead of widening the screen. */}
         <div
           ref={panels}
-          className="grid min-h-0 grid-cols-[minmax(0,1fr)] overflow-y-auto overscroll-contain"
+          className={`relative grid min-h-0 grid-cols-[minmax(0,1fr)] overflow-y-auto overscroll-contain ${byKingdom ? 'max-h-[75dvh] min-h-[min(24rem,60dvh)]' : ''}`}
         >
           {TABS.map(({ id }) => (
             <div
               key={id}
               id={`${name}-panel-${id}`}
-              className={`grid grid-cols-[minmax(0,1fr)] [grid-area:1/1] ${tab === id ? '' : away}`}
+              className={`${byKingdom && id === 'pomerium' ? PANEL.over : PANEL.tallest} ${tab === id ? '' : 'invisible'}`}
               role="tabpanel"
               aria-labelledby={`${name}-tab-${id}`}
               aria-hidden={tab !== id}
