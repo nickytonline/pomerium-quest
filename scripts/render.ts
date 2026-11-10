@@ -10,10 +10,11 @@ import { generateKeyPairSync, randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { parseAllDocuments, stringify } from 'yaml'
-import { BASE_GROUP, GROUPS } from '../app/src/game/groups.ts'
+import { BASE_GROUP, GRANTED_GROUPS } from '../app/src/game/groups.ts'
 import { VISITORS, VISITOR_IDS, visitorPassword } from '../app/src/game/house.ts'
+import { ROOSTS } from '../app/src/game/owl.ts'
 import { policyDocument } from '../app/src/game/ppl.ts'
-import { ZONES } from '../app/src/game/zones.ts'
+import { ZONES, type Zone } from '../app/src/game/zones.ts'
 
 type Yaml = string | number | boolean | readonly Yaml[] | { readonly [key: string]: Yaml }
 
@@ -38,6 +39,9 @@ const POMERIUM_NAMESPACE = 'pomerium'
 const CONTROLLER = join(ROOT, 'deploy/pomerium/ingress-controller.yaml')
 const APP_IMAGE = 'pomerium-quest/app:dev'
 const APP_DEV_IMAGE = 'pomerium-quest/app-dev:dev'
+
+/** The owl's MCP server (mcp/), which Pomerium serves at the Aviary's and the Rookery's addresses. */
+const MCP_IMAGE = 'pomerium-quest/mcp:dev'
 
 /** Where `./quest up` mounts this repo inside the k3d node. */
 const NODE_SOURCE = '/quest-src'
@@ -174,10 +178,30 @@ function pomeriumSettings(): Yaml {
   }
 }
 
+/** The annotation that makes a route an MCP server or an MCP client. */
+const MCP_ANNOTATION = { server: 'mcp_server', client: 'mcp_client' } as const
+
 function routes(): Yaml[] {
   const game = publicUrl('game')
   const gameHost = new URL(game).hostname
   const app = { service: 'quest', port: 3000 }
+  const mcp = { service: 'mcp', port: 3000 }
+
+  // An MCP server zone has a host of its own, all of it, and the MCP server behind it; every other zone is
+  // a path on the game's host.
+  const zoneRoute = (zone: Zone) => {
+    const options = {
+      pass_identity_headers: 'true',
+      policy: stringify(policyDocument(zone.policy), { lineWidth: 0 }).trimEnd(),
+    }
+
+    return ingress(
+      `zone-${zone.id}`,
+      zone.host ? new URL(publicUrl(zone.host)).hostname : gameHost,
+      [zone.host ? { path: '/', ...mcp } : { path: zone.prefix, ...app }],
+      zone.mcp ? { ...options, [MCP_ANNOTATION[zone.mcp]]: 'true' } : options,
+    )
+  }
 
   return [
     // Only the game's realm and Keycloak's static files are public. The admin console and the master
@@ -197,12 +221,7 @@ function routes(): Yaml[] {
       },
     ),
     // One route per zone: same host, its own path prefix, its own policy.
-    ...ZONES.map((zone) =>
-      ingress(`zone-${zone.id}`, gameHost, [{ path: zone.prefix, ...app }], {
-        pass_identity_headers: 'true',
-        policy: stringify(policyDocument(zone.policy), { lineWidth: 0 }).trimEnd(),
-      }),
-    ),
+    ...ZONES.map(zoneRoute),
     // Everything else (the game shell and its assets) is public. In dev it also carries Vite's
     // hot-reload websocket.
     ingress('game', gameHost, [{ path: '/', ...app }], {
@@ -382,7 +401,7 @@ function realm(secrets: Secrets): Yaml {
     resetPasswordAllowed: false,
     rememberMe: false,
     sslRequired: 'external',
-    groups: [BASE_GROUP, GROUPS.citizens, GROUPS.knights, GROUPS.scholars].map((name) => ({ name })),
+    groups: [BASE_GROUP, ...GRANTED_GROUPS].map((name) => ({ name })),
     clients: [
       {
         clientId: 'pomerium',
@@ -564,6 +583,30 @@ function manifests(secrets: Secrets): Yaml[] {
       },
     ),
     service('quest', 3000, 3000),
+    // The owl's MCP server. It verifies Pomerium's JWT like the game does, and writes to the Oracle with
+    // the game's own client, since its tools grant groups the way the Captain and the Librarian do.
+    deployment(
+      'mcp',
+      MCP_IMAGE,
+      3000,
+      {
+        env: [
+          ...ROOSTS.map((roost) => ({
+            name: `QUEST_${roost.toUpperCase()}_ORIGIN`,
+            value: publicUrl(roost),
+          })),
+          { name: 'KEYCLOAK_URL', value: svc('keycloak', 8080) },
+          { name: 'KEYCLOAK_REALM', value: REALM },
+          { name: 'KEYCLOAK_CLIENT_ID', value: 'quest-admin' },
+          secretEnv('KEYCLOAK_CLIENT_SECRET', 'quest-client-secret'),
+          { name: 'NODE_EXTRA_CA_CERTS', value: '/certs/ca.crt' },
+        ],
+        volumeMounts: [{ name: 'certs', mountPath: '/certs', readOnly: true }],
+        readinessProbe: { httpGet: { path: '/health', port: 3000 }, periodSeconds: 3 },
+      },
+      { volumes: [caVolume] },
+    ),
+    service('mcp', 3000, 3000),
     ...houses(),
     {
       apiVersion: 'v1',
@@ -629,17 +672,17 @@ function manifests(secrets: Secrets): Yaml[] {
       metadata: { name: 'keycloak-data', namespace: NAMESPACE },
       spec: { accessModes: ['ReadWriteOnce'], resources: { requests: { storage: '256Mi' } } },
     },
-    // Only Pomerium may reach the game; only Pomerium and the game may reach the Oracle.
-    {
+    // Only Pomerium may reach the game or the MCP server; only Pomerium and those two may reach the Oracle.
+    ...['quest', 'mcp'].map((name) => ({
       apiVersion: 'networking.k8s.io/v1',
       kind: 'NetworkPolicy',
-      metadata: { name: 'quest-only-via-pomerium', namespace: NAMESPACE },
+      metadata: { name: `${name}-only-via-pomerium`, namespace: NAMESPACE },
       spec: {
-        podSelector: { matchLabels: labels('quest') },
+        podSelector: { matchLabels: labels(name) },
         policyTypes: ['Ingress'],
         ingress: [{ from: [fromPomerium] }],
       },
-    },
+    })),
     {
       apiVersion: 'networking.k8s.io/v1',
       kind: 'NetworkPolicy',
@@ -649,7 +692,10 @@ function manifests(secrets: Secrets): Yaml[] {
         policyTypes: ['Ingress'],
         ingress: [
           {
-            from: [fromPomerium, { podSelector: { matchLabels: labels('quest') } }],
+            from: [
+              fromPomerium,
+              ...['quest', 'mcp'].map((name) => ({ podSelector: { matchLabels: labels(name) } })),
+            ],
           },
         ],
       },

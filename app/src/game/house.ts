@@ -43,7 +43,7 @@ export function turnsAwayOwner(rules: readonly HouseRule[], owner: Identity) {
 }
 
 /** The checks the editor offers. All of them work in open-source Pomerium. */
-export type HouseCriterion = Exclude<Criterion, { readonly kind: 'claim' }> | HouseClaimCriterion
+export type HouseCriterion = Exclude<Criterion, { readonly kind: 'claim' | 'mcp_tool' }> | HouseClaimCriterion
 
 /** The deed claim is the house's own door; the editor offers the groups claim only, as the server allows. */
 type HouseClaimCriterion = Extract<Criterion, { readonly kind: 'claim' }> & { readonly claim: 'groups' }

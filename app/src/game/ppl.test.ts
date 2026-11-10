@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { parse } from 'yaml'
 import { GROUPS } from './groups.ts'
+import { OWL_TOOLS, type OwlTool } from './owl.ts'
 import { decide, policyDocument, policyYaml, type Identity } from './ppl.ts'
 import { ZONES, zoneById, type PolicyRule, type ZoneId } from './zones.ts'
 
@@ -19,6 +20,39 @@ const nobody: Identity = { authenticated: false, email: '', groups: [] }
 
 const allowed = (zone: ZoneId, who: Identity, method: 'GET' | 'POST' = 'GET') =>
   decide(zoneById(zone), who, { method, path: zoneById(zone).prefix }).allow
+
+const falconer = person('falconer@example.org', [GROUPS.citizens, GROUPS.falconers])
+
+/** An MCP request to a roost: a tools/call for `tool`, or with none, a tools/list. */
+const owlAllowed = (zone: ZoneId, who: Identity, tool?: OwlTool) =>
+  decide(zoneById(zone), who, { method: 'POST', path: zoneById(zone).prefix, tool }).allow
+
+describe('the owl is checked as the player, one tool call at a time', () => {
+  it('lets a citizen’s owl list the Aviary’s tools and call most of them', () => {
+    expect(owlAllowed('aviary', citizen)).toBe(true)
+    expect(owlAllowed('aviary', citizen, OWL_TOOLS.whoami)).toBe(true)
+    expect(owlAllowed('aviary', citizen, OWL_TOOLS.deliverLetter)).toBe(true)
+    expect(owlAllowed('aviary', traveler)).toBe(false)
+  })
+
+  it('refuses one tool at the Aviary by name, whoever the owl flies for', () => {
+    expect(owlAllowed('aviary', citizen, OWL_TOOLS.openVault)).toBe(false)
+    expect(owlAllowed('aviary', falconer, OWL_TOOLS.openVault)).toBe(false)
+  })
+
+  it('opens the Rookery, and every tool there, to falconers only', () => {
+    expect(owlAllowed('rookery', citizen)).toBe(false)
+    expect(owlAllowed('rookery', falconer)).toBe(true)
+    expect(owlAllowed('rookery', falconer, OWL_TOOLS.openVault)).toBe(true)
+  })
+
+  it('opens the gates the errands earn', () => {
+    expect(allowed('mews', citizen)).toBe(false)
+    expect(allowed('mews', falconer)).toBe(true)
+    expect(allowed('vault', falconer)).toBe(false)
+    expect(allowed('vault', person('k@example.org', [GROUPS.keyholders]))).toBe(true)
+  })
+})
 
 describe('the game explains the same decision Pomerium makes for every zone', () => {
   it('lets only signed-in players through the open gates', () => {

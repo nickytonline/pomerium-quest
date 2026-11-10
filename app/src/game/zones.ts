@@ -3,6 +3,7 @@
 // shows the same policy on signs and denial screens.
 
 import { GROUPS } from './groups.ts'
+import { MCP_PATH, OWL_TOOLS, type OwlTool, type Roost } from './owl.ts'
 
 /**
  * One PPL criterion, e.g. { kind: 'claim', claim: 'groups', value: 'knights' } renders as
@@ -16,6 +17,8 @@ export type Criterion =
   | { readonly kind: 'email'; readonly is: string }
   | { readonly kind: 'http_method'; readonly is: 'GET' | 'POST' }
   | { readonly kind: 'claim'; readonly claim: ClaimName; readonly value: string }
+  /** Matches an MCP tools/call request for this tool, and nothing else: not even a tools/list. */
+  | { readonly kind: 'mcp_tool'; readonly is: OwlTool }
 
 /**
  * One rule: `allow: { and: [...] }`, `deny: { or: [...] }` and so on. PPL operators hold criteria, not
@@ -41,6 +44,11 @@ export type ZoneId =
   | 'library'
   | 'keep'
   | 'builder'
+  | 'perch'
+  | 'aviary'
+  | 'rookery'
+  | 'mews'
+  | 'vault'
 
 export interface Zone {
   readonly id: ZoneId
@@ -48,12 +56,20 @@ export interface Zone {
   /** Path prefix Pomerium matches, e.g. /zones/armory */
   readonly prefix: string
   readonly policy: readonly PolicyRule[]
+  /** A zone with a host of its own (aviary.<domain>) instead of a path on the game's. MCP servers need one. */
+  readonly host?: Roost
+  /**
+   * An MCP route. A `server` is where tools are called: Pomerium signs MCP clients in and can check each
+   * tool call. A `client` is an app that calls MCP servers for its user: Pomerium hands it a token to do so.
+   */
+  readonly mcp?: 'server' | 'client'
 }
 
 /** Posted to the game by the sign-in frame once Pomerium hands it back with a session. */
 export const SIGNED_IN_MESSAGE = 'pomerium-quest/signed-in'
 
 const all = (...criteria: Criterion[]): PolicyRule => ({ action: 'allow', match: 'and', criteria })
+const denyAny = (...criteria: Criterion[]): PolicyRule => ({ action: 'deny', match: 'or', criteria })
 const signedIn: Criterion = { kind: 'authenticated_user' }
 const inGroup = (value: string): Criterion => ({ kind: 'claim', claim: 'groups', value })
 
@@ -91,6 +107,31 @@ export const ZONES: readonly Zone[] = [
     prefix: '/zones/keep',
     policy: [all(citizen, inGroup(GROUPS.knights), inGroup(GROUPS.scholars))],
   },
+  // Chapter two, beyond the keep. The perch is the game acting as an MCP client: Pomerium hands the game
+  // server a token for the signed-in player, and the server sends the owl's tool calls with it.
+  { id: 'perch', name: "The Owl's Perch", prefix: '/zones/perch', policy: [all(citizen)], mcp: 'client' },
+  // The Aviary and the Rookery are the same MCP server behind two routes. Any citizen's owl may use the
+  // Aviary, except for one tool: a deny rule beats the allow, for that tool's calls only.
+  {
+    id: 'aviary',
+    name: 'The Aviary',
+    host: 'aviary',
+    prefix: MCP_PATH,
+    policy: [all(citizen), denyAny({ kind: 'mcp_tool', is: OWL_TOOLS.openVault })],
+    mcp: 'server',
+  },
+  // Only a falconer's owl reaches the Rookery at all, and there every tool is allowed.
+  {
+    id: 'rookery',
+    name: 'The Rookery',
+    host: 'rookery',
+    prefix: MCP_PATH,
+    policy: [all(inGroup(GROUPS.falconers))],
+    mcp: 'server',
+  },
+  // The gates the owl's errands open: each waits for a group only a tool call can earn.
+  { id: 'mews', name: 'The Mews', prefix: '/zones/mews', policy: [all(inGroup(GROUPS.falconers))] },
+  { id: 'vault', name: 'Royal Vault', prefix: '/zones/vault', policy: [all(inGroup(GROUPS.keyholders))] },
 ]
 
 export const zoneById = (id: ZoneId) => {

@@ -14,6 +14,8 @@ export interface Identity {
 export interface RequestInfo {
   readonly method: 'GET' | 'POST'
   readonly path: string
+  /** The tool an MCP tools/call request names. Any other request, a tools/list included, has none. */
+  readonly tool?: string | undefined
 }
 
 export interface EvalLine {
@@ -54,6 +56,7 @@ function criterionYaml(node: Criterion): readonly string[] {
     case 'domain':
     case 'email':
     case 'http_method':
+    case 'mcp_tool':
       return [`${node.kind}:`, `  is: ${node.is}`]
   }
 }
@@ -70,6 +73,7 @@ function criterionLabel(node: Criterion): string {
     case 'domain':
     case 'email':
     case 'http_method':
+    case 'mcp_tool':
       return `${node.kind}: { is: ${node.is} }`
   }
 }
@@ -111,6 +115,11 @@ function check(node: Criterion, id: Identity, req: RequestInfo, whose: Viewpoint
       return { ok: id.email === node.is, actual: `${whose} email: ${id.email || 'none'}` }
     case 'http_method':
       return { ok: req.method === node.is, actual: `this request: ${req.method}` }
+    case 'mcp_tool':
+      return {
+        ok: req.tool === node.is,
+        actual: req.tool ? `this call's tool: ${req.tool}` : 'this request calls no tool',
+      }
     case 'claim': {
       const values = CLAIM_VALUES[node.claim](id)
 
@@ -167,6 +176,7 @@ function criterionDocument(node: Criterion) {
     case 'domain':
     case 'email':
     case 'http_method':
+    case 'mcp_tool':
       return { [node.kind]: { is: node.is } }
   }
 }
@@ -179,8 +189,10 @@ export const policyDocument = (rules: readonly PolicyRule[]) =>
 export function routeYaml(zone: Zone, host: string, upstream: string): string {
   return [
     `- from: https://${host}`,
-    `  prefix: ${zone.prefix}`,
+    // An MCP server has its whole host, so there is no prefix to match.
+    ...(zone.host ? [] : [`  prefix: ${zone.prefix}`]),
     `  to: ${upstream}`,
+    ...(zone.mcp ? [`  mcp:`, `    ${zone.mcp}: {}`] : []),
     `  pass_identity_headers: true`,
     `  policy:`,
     ...policyYaml(zone.policy, 4),
