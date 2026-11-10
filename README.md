@@ -39,18 +39,18 @@ Chapter two, beyond the Royal Keep, is about agents. You catch an owl that runs 
 [MCP](https://www.pomerium.com/docs/capabilities/mcp) (the Model Context Protocol, the way AI agents call
 tools):
 
-| Beyond the keep                                                 | In Pomerium                                                                                                           |
-| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| The owl runs errands for you, and the Aviary offers them        | An MCP client calling the tools of an MCP server, which sits behind one route                                         |
-| Each perch in the grounds is one errand                         | Each perch is one of the server's tools; sending the owl there is a `tools/call`                                      |
-| The owl has no papers of its own; it carries yours              | The MCP client acts on your behalf: its token is tied to your session, and each request is checked against the policy |
-| No wall or gate stands around a perch                           | Policy alone decides whether a tool call is allowed                                                                   |
-| The Aviary turns back the owl of anyone who isn't a falconer    | The route's `allow` rule asks for `claim/groups: falconers`, before any tool is looked at                             |
-| The errand that opens the cage is refused to your owl           | One `deny` rule matches a call to an `open_` tool from anyone whose groups lack `distinguished-falconers`             |
-| The Falconer's owl opens the cage yours couldn't                | The same tool call, made on another user's behalf: the Falconer is a real account in that group, so no deny matches   |
-| The owl's letter makes you a keyholder, and the last gate opens | A tool call changes a claim at the IdP; you sign in again for your session to see it                                  |
-| Mochi's owl flies for Mochi, not for you                        | Another MCP client acts on another user's behalf, with that user's claims                                             |
-| The perch shows what the owl carried and what came back         | The JSON-RPC request, Pomerium's answer (a JSON-RPC error when it refuses), and how the policy was evaluated          |
+| Beyond the keep                                                 | In Pomerium                                                                                                         |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| The owl runs errands for you, and the Aviary offers them        | An agent (an MCP client) calling the tools of an MCP server, which sits behind one route                            |
+| Each perch in the grounds is one errand                         | Each perch is one of the server's tools; sending the owl there is a `tools/call`                                    |
+| The owl has no papers of its own; it carries yours              | The agent acts on your behalf: its token is tied to your session, and each request is checked against the policy    |
+| No wall or gate stands around a perch                           | Policy alone decides whether a tool call is allowed                                                                 |
+| The Aviary turns back the owl of anyone who isn't a falconer    | The route's `allow` rule asks for `claim/groups: falconers`, before any tool is looked at                           |
+| The errand that opens the cage is refused to your owl           | One `deny` rule matches a call to an `open_` tool from anyone whose groups lack `distinguished-falconers`           |
+| The Falconer's owl opens the cage yours couldn't                | The same tool call, made on another user's behalf: the Falconer is a real account in that group, so no deny matches |
+| The owl's letter makes you a keyholder, and the last gate opens | A tool call changes a claim at the IdP; you sign in again for your session to see it                                |
+| Mochi's owl flies for Mochi, not for you                        | Another agent acts on another user's behalf, with that user's claims                                                |
+| The perch shows what the owl carried and what came back         | The JSON-RPC request, Pomerium's answer (a JSON-RPC error when it refuses), and how the policy was evaluated        |
 
 ## How the game works
 
@@ -69,10 +69,10 @@ asks Pomerium whether to let you through, so what you can reach depends on who t
 | <img src="docs/images/legend/armorer.png" width="48" alt="">     | **The Armorer**     | Keeps the forge. The armory's guard, not the Armorer, decides who gets the steel sword                                                                 |
 | <img src="docs/images/legend/librarian.png" width="48" alt="">   | **The Librarian**   | Read every book in the library and they have the Oracle add you to `scholars`                                                                          |
 | <img src="docs/images/legend/falconer.png" width="48" alt="">    | **The Falconer**    | Waits beyond the Royal Keep. Catch your owl and they have the Oracle add you to `falconers`. A real account too: `falconer@game.localhost.pomerium.io` |
-| <img src="docs/images/legend/owl.png" width="48" alt="">         | **Your owl**        | An MCP client: it flies on your behalf and carries your papers. You have to catch it first                                                             |
+| <img src="docs/images/legend/owl.png" width="48" alt="">         | **Your owl**        | An agent: it flies on your behalf and carries your papers. You have to catch it first                                                                  |
 | <img src="docs/images/legend/perch.png" width="48" alt="">       | **A perch**         | One of the Aviary's tools. Send the owl to it, and it shows what Pomerium answered                                                                     |
 | <img src="docs/images/legend/mochi.png" width="48" alt="">       | **Mochi**           | Your friend, waiting behind the last gate. They lost their owl on the way                                                                              |
-| <img src="docs/images/legend/mochis-owl.png" width="48" alt="">  | **Mochi's owl**     | Another MCP client, shut in a cage in the Aviary's grounds. It flies on Mochi's behalf                                                                 |
+| <img src="docs/images/legend/mochis-owl.png" width="48" alt="">  | **Mochi's owl**     | Another agent, shut in a cage in the Aviary's grounds. It flies on Mochi's behalf                                                                      |
 | <img src="docs/images/legend/cage.png" width="48" alt="">        | **The cage**        | Where Mochi's owl is kept. The `open_cage` tool unlocks it, and the Aviary's policy refuses that tool to every owl but a distinguished falconer's      |
 | <img src="docs/images/legend/keeper.png" width="48" alt="">      | **The keeper**      | Holds the key to the cage, and opens it only for the owl of a distinguished falconer                                                                   |
 | <img src="docs/images/legend/baker.png" width="48" alt="">       | **The baker**       | `baker@game.localhost.pomerium.io`, in the citizens group, so the town gate lets them in                                                               |

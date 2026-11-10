@@ -230,14 +230,14 @@ const CAST: readonly {
     sheet: NPCS,
     frame: NPC_FRAME.falconer,
   },
-  { name: 'The Owl', role: 'your MCP client: an agent, acting on your behalf', sheet: ITEMS, frame: 7 },
+  { name: 'The Owl', role: 'your agent, acting on your behalf', sheet: ITEMS, frame: 7 },
   {
     name: 'Mochi',
     role: 'another user: the same route and policy, checked just the same',
     sheet: NPCS,
     frame: NPC_FRAME.friend,
   },
-  { name: "Mochi's owl", role: 'another MCP client, acting on Mochi’s behalf', sheet: ITEMS, frame: 9 },
+  { name: "Mochi's owl", role: 'another agent, acting on Mochi’s behalf', sheet: ITEMS, frame: 9 },
   {
     name: 'The Keeper',
     role: 'a tool that runs only for callers the policy allows',

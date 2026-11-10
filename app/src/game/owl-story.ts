@@ -40,7 +40,7 @@ const MEET: readonly Page[] = [
   },
   {
     who: 'Falconer',
-    text: 'In Pomerium terms an owl is an MCP client: a program, often an AI agent, that calls tools on your behalf. The Aviary is an MCP server: it offers the tools. Each perch out in the grounds is one of its tools.',
+    text: 'An owl is an agent: it calls tools on your behalf. Pomerium sees it as an MCP client. The Aviary is an MCP server: it offers the tools. Each perch out in the grounds is one of its tools.',
     links: [link('mcpServer')],
   },
   {
@@ -727,7 +727,7 @@ export async function flyFalconersOwl() {
     },
     {
       who: "Mochi's owl",
-      text: "Mochi's owl is an MCP client too, like yours and the Falconer's, but it flies on Mochi's behalf. Your papers are no use to it, and it runs no errands for you. It will ride with you until you find Mochi.",
+      text: "Mochi's owl is an agent too, like yours and the Falconer's, but it flies on Mochi's behalf. Your papers are no use to it, and it runs no errands for you. It will ride with you until you find Mochi.",
       links: [link('mcpIdentity')],
     },
     {

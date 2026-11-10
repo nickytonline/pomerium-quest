@@ -70,7 +70,7 @@ export const owlMachine = setup({
       on: { OWL_CAUGHT: 'fledged', SIGNED_IN: [toKeyholder, toFalconer] },
     },
     fledged: {
-      description: 'You caught your owl: an MCP client that flies on your behalf. Send it to a perch.',
+      description: 'You caught your owl: an agent that flies on your behalf. Send it to a perch.',
       on: {
         OWL_TURNED_BACK: 'turned',
         SIGNED_IN: [toKeyholder, toFalconer],

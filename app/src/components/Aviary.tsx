@@ -143,12 +143,12 @@ function PerchPanel({ perch, flight }: { readonly perch: PerchView; readonly fli
         Sending the owl is a tool call
       </h2>
       <p className="m-0 text-[0.9rem]">
-        MCP (the Model Context Protocol) is how an AI agent calls tools on a server. The owl is the MCP
-        client, without the AI: you pick the tool by picking the perch. The game sends it from an MCP client
-        route, so Pomerium hands the game a token for your session. The game sends the <code>tools/call</code>{' '}
-        request for <code>{tool}</code> to <code className="wrap-anywhere">{url}</code> with that token, and
-        Pomerium checks it against the route below. The owl acts on your behalf, so the claims Pomerium checks
-        are yours.
+        MCP (the Model Context Protocol) is how an AI agent calls tools on a server. The owl is the agent,
+        without the AI: you pick the tool by picking the perch. The game sends it from an MCP client route, so
+        Pomerium hands the game a token for your session. The game sends the <code>tools/call</code> request
+        for <code>{tool}</code> to <code className="wrap-anywhere">{url}</code> with that token, and Pomerium
+        checks it against the route below. The owl acts on your behalf, so the claims Pomerium checks are
+        yours.
       </p>
       <p className={paperLabel}>The route the owl flies to</p>
       <pre className={paperCode}>{zoneRouteYaml(zone)}</pre>
@@ -337,7 +337,7 @@ function FalconersErrandPanel({ flight }: { readonly flight: OwlFlight }) {
 const ERRANDS: readonly { readonly what: string; readonly how: string }[] = [
   {
     what: 'You caught your owl',
-    how: 'an MCP client that flies on your behalf, carrying your claims',
+    how: 'an agent (an MCP client) that flies on your behalf, carrying your claims',
   },
   {
     what: 'The Aviary turned it back',
@@ -361,7 +361,7 @@ const ERRANDS: readonly { readonly what: string; readonly how: string }[] = [
   },
   {
     what: 'You brought Mochi their owl',
-    how: 'another MCP client, flying on Mochi’s behalf, not yours',
+    how: 'another agent, flying on Mochi’s behalf, not yours',
   },
 ]
 
