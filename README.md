@@ -152,7 +152,8 @@ request through Pomerium, so you need no AI agent to play. The Aviary refuses on
 has the Oracle make you a falconer, which opens the Mews, where a second perch reaches the Rookery: the
 same errands behind a different route, and the one the Aviary refused is allowed there. It earns the key
 to the Royal Vault. One gate is left after that: the Throne Room, down the lane between the Mews and the
-vault. Its guard asks for every group in the quest, and letting you in ends the game, with fireworks.
+vault. Its guard asks for every group in the quest. Your friend Mochi, who went ahead of you, is waiting
+inside, and finding them ends the game, with fireworks.
 
 ### Bring your own agent
 
