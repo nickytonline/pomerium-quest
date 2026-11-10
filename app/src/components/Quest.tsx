@@ -156,13 +156,18 @@ function useDialogKeys() {
       const { celebrating, deny, dialog, finale, houseEditor, journalOpen, menuOpen, phished, signIn } =
         quest.get()
 
-      const { chapterTwoDone, perch } = quest.get()
+      const { chapterTwoDone, falconersErrand, perch } = quest.get()
 
       // The celebration and phished screens, the house's desk, and chapter two's ending handle their own keys.
       // So does the owl's perch, unless a dialog, a refusal or a sign-in is in front of it.
       if (celebrating || phished || houseEditor || (chapterTwoDone && !dialog)) return
 
       if (perch && !dialog && !deny && !signIn) return
+
+      // So does the Falconer's errand panel once it's open, so Escape leaves it without also opening the menu.
+      if (falconersErrand?.explained && falconersErrand.phase === 'done' && !dialog && !deny && !signIn)
+        return
+
       const journalKey = event.key === 'i' || event.key === 'I'
       const confirm = event.key === 'Enter' || event.key === ' ' || event.key === 'e' || event.key === 'E'
 
