@@ -91,10 +91,10 @@ export function TabbedScreen({
             </button>
           ))}
         </div>
-        {/* One column that may shrink, so a long line scrolls inside its block instead of widening the screen. */}
+        {/* One column that may shrink, and code that wraps: a long line never widens the screen or scrolls sideways. */}
         <div
           ref={panels}
-          className={`relative grid min-h-0 grid-cols-[minmax(0,1fr)] overflow-y-auto overscroll-contain ${byKingdom ? 'max-h-[75dvh] min-h-[min(24rem,60dvh)]' : ''}`}
+          className={`relative grid min-h-0 grid-cols-[minmax(0,1fr)] overflow-y-auto overscroll-contain [&_pre]:overflow-x-hidden [&_pre]:wrap-anywhere [&_pre]:whitespace-pre-wrap ${byKingdom ? 'max-h-[75dvh] min-h-[min(24rem,60dvh)]' : ''}`}
         >
           {TABS.map(({ id }) => (
             <div
