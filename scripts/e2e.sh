@@ -187,11 +187,13 @@ sign_in_again "$owl" "$falconer" >/dev/null
 check "the Mews opens once the session carries falconers" 200 "$(gate_until "$owl" /zones/mews/enter)"
 check "the Rookery lists its tools for a falconer's owl" tools "$(perch_until "$owl" rookery "$tools" tools)"
 check "the vault refuses a falconer who holds no key" 403 "$(status "$owl" /zones/vault/enter)"
+check "the Throne Room refuses one too (and: all five groups)" 403 "$(status "$owl" /zones/throne/enter)"
 check "the Rookery allows open_vault, and the Oracle adds keyholders" yes \
   "$(perch "$owl" rookery "$(call open_vault)" | field outcome.text | grep -q "\"granted\": \"$GROUP_KEYHOLDERS\"" && echo yes || echo no)"
 check "the Aviary still refuses open_vault, even for a falconer" refused "$(perch "$owl" aviary "$(call open_vault)" | field outcome.kind)"
 sign_in_again "$owl" "$falconer" >/dev/null
 check "the vault opens once the session carries keyholders" 200 "$(gate_until "$owl" /zones/vault/enter)"
+check "the Throne Room opens to all five groups, ending chapter two" 200 "$(gate_until "$owl" /zones/throne/enter)"
 check "a restart takes falconers and keyholders back too" 200 "$(status "$owl" /zones/oracle/reset POST)"
 
 echo "Taking the claims back"

@@ -27,6 +27,7 @@ describe('citizens', () => {
       'keep',
       'perch',
       'aviary',
+      'throne',
     ])
   })
 

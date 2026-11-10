@@ -60,6 +60,23 @@ describe('the owl is checked as the player, one tool call at a time', () => {
     expect(allowed('vault', falconer)).toBe(false)
     expect(allowed('vault', person('k@example.org', [GROUPS.keyholders]))).toBe(true)
   })
+
+  it('opens the Throne Room only to someone who holds every group both chapters earn', () => {
+    const everything = [GROUPS.citizens, GROUPS.knights, GROUPS.scholars, GROUPS.falconers, GROUPS.keyholders]
+
+    expect(allowed('throne', person('k@example.org', everything))).toBe(true)
+
+    for (const missing of everything)
+      expect(
+        allowed(
+          'throne',
+          person(
+            'k@example.org',
+            everything.filter((group) => group !== missing),
+          ),
+        ),
+      ).toBe(false)
+  })
 })
 
 describe('the game explains the same decision Pomerium makes for every zone', () => {

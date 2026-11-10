@@ -256,6 +256,10 @@ const ERRANDS: readonly { readonly what: string; readonly how: string }[] = [
     what: 'The same tool worked elsewhere',
     how: 'the Rookery is another route to the same server, with its own policy',
   },
+  {
+    what: 'The Throne Room let you in',
+    how: 'one rule, five checks: three groups you earned, and two your owl earned for you',
+  },
 ]
 
 const closeEnd = () => quest.closeChapterTwoEnd()
@@ -263,7 +267,7 @@ const closeEnd = () => quest.closeChapterTwoEnd()
 const endButton =
   'motion-safe:animate-blink rounded border-3 border-night-deep bg-lime px-[18px] py-2.5 font-display text-[1.05rem] text-night-deep shadow-[4px_4px_0_var(--color-night-deep)]'
 
-/** The vault is open: chapter two is done. */
+/** The Throne Room's doors open: chapter two is done, and so is the quest. */
 export function ChapterTwoEnd() {
   const open = useQuest((s) => s.chapterTwoDone)
   const dialog = useQuest((s) => s.dialog)
@@ -290,7 +294,10 @@ export function ChapterTwoEnd() {
       <h2 id="chapter-two-title-kingdom" className="sunset-text m-0 font-display text-[2rem] leading-tight">
         Chapter two complete
       </h2>
-      <p className="m-0">The Royal Vault is open, and you never touched its lock. Your owl did the work:</p>
+      <p className="m-0">
+        The Throne Room opens its doors, the last gate in the kingdom. You walked in yourself, but your owl
+        did the work that got you here:
+      </p>
       <ul className="m-0 grid list-none gap-1.5 p-0">
         {ERRANDS.map(({ what, how }) => (
           <li key={what} className="flex items-baseline gap-2">
@@ -311,9 +318,9 @@ export function ChapterTwoEnd() {
       </p>
       <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-1">
         <button className={endButton} type="button" onClick={closeEnd} autoFocus>
-          Back to the kingdom ▸
+          Enter the Throne Room ▸
         </button>
-        <p className={`${tabHint} text-muted`}>Esc to close</p>
+        <p className={`${tabHint} text-muted`}>Esc to go in</p>
       </div>
     </div>
   )
@@ -355,9 +362,9 @@ export function ChapterTwoEnd() {
       </p>
       <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-3">
         <button className={endButton} type="button" onClick={closeEnd}>
-          Back to the kingdom ▸
+          Enter the Throne Room ▸
         </button>
-        <p className={`${tabHint} text-paper-muted`}>Esc to close</p>
+        <p className={`${tabHint} text-paper-muted`}>Esc to go in</p>
       </div>
     </div>
   )
@@ -365,7 +372,7 @@ export function ChapterTwoEnd() {
   return (
     <TabbedScreen
       name="chapter-two"
-      label="How the owl opened the vault"
+      label="How the owl got you here"
       showing={open}
       overlay="fixed inset-0 z-50 grid place-items-center bg-[rgb(10_7_22/0.88)] p-4"
       kingdom={kingdom}

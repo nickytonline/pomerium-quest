@@ -154,6 +154,8 @@ export const SIGN_TEXT: Partial<Record<SignId, string>> = {
   mews: 'The Mews, where falconers keep their birds. Only falconers may enter, and only the owl can make you one: the letter it carries asks the Oracle to add you to the falconers group.',
   vault:
     'The Royal Vault. Only keyholders may enter. No one in the kingdom hands out that key: a tool the owl calls at the Rookery asks the Oracle for it.',
+  throne:
+    'The Throne Room, the last gate in the kingdom. One rule, five checks: everything the Royal Keep asks for, and a falconer, and a keyholder. You earned the first three yourself. Your owl earned the last two for you.',
 }
 
 /** Where Pomerium documents the session and user records, and the cache in front of them. */
@@ -181,6 +183,7 @@ export const SIGN_DOCS: Partial<Record<SignId, readonly DocLink[]>> = {
   rookery: [link('mcpServer'), link('onroute')],
   mews: [link('claims'), link('refresh')],
   vault: [link('claims'), link('refresh')],
+  throne: [link('allOf'), link('claims')],
 }
 
 export const BOOKS: Page[] = [

@@ -49,6 +49,7 @@ export type ZoneId =
   | 'rookery'
   | 'mews'
   | 'vault'
+  | 'throne'
 
 export interface Zone {
   readonly id: ZoneId
@@ -106,7 +107,7 @@ export const ZONES: readonly Zone[] = [
   // Where players save their own house's door rules (docs/prd/your-house.md). The game server only ever
   // writes the house of the player Pomerium signed in.
   { id: 'builder', name: "Builders' Yard", prefix: '/zones/builder', policy: [all(citizen)] },
-  // The end of the quest: one rule, and every check in it must pass.
+  // The end of chapter one: one rule, and every check in it must pass.
   {
     id: 'keep',
     name: 'Royal Keep',
@@ -139,6 +140,13 @@ export const ZONES: readonly Zone[] = [
   // The gates the owl's errands open: each waits for a group only a tool call can earn.
   { id: 'mews', name: 'The Mews', prefix: '/zones/mews', policy: [all(inGroup(GROUPS.falconers))] },
   { id: 'vault', name: 'Royal Vault', prefix: '/zones/vault', policy: [all(inGroup(GROUPS.keyholders))] },
+  // The end of chapter two, as the keep ends chapter one: one rule, asking for everything both chapters earn.
+  {
+    id: 'throne',
+    name: 'Throne Room',
+    prefix: '/zones/throne',
+    policy: [all(...keepsRule.criteria, inGroup(GROUPS.falconers), inGroup(GROUPS.keyholders))],
+  },
 ]
 
 export const zoneById = (id: ZoneId) => {

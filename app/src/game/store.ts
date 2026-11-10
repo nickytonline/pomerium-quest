@@ -121,9 +121,9 @@ export interface QuestState {
   readonly signIn: { readonly url: string } | null
   /** The Oracle has appeared beside the player to sign them in again with new claims. */
   readonly oracleBeside: boolean
-  /** The Royal Keep let the player in: the quest is complete. */
+  /** The Royal Keep let the player in: chapter one is complete. */
   readonly finale: boolean
-  /** After Quest complete: fireworks, a happy Pomeranian and the cast. */
+  /** After chapter two's ending: fireworks, a happy Pomeranian and the cast. */
   readonly celebrating: boolean
   /** The player signed in with a phish: the game is lost and can only start over. */
   readonly phished: boolean
@@ -144,7 +144,7 @@ export interface QuestState {
   readonly owlStage: OwlStage
   /** The perch the player is sending the owl from, while its panel is open. Pauses the game. */
   readonly perch: PerchView | null
-  /** The vault is open: chapter two is complete. */
+  /** The Throne Room let the player in: chapter two, and the quest, are complete. */
   readonly chapterTwoDone: boolean
 }
 
@@ -358,7 +358,8 @@ export const quest = {
   },
   closePerch: () => update({ perch: null, inputResumesAt: performance.now() + 200 }),
   openChapterTwoEnd: () => update({ chapterTwoDone: true, menuOpen: false, journalOpen: false }),
-  closeChapterTwoEnd: () => update({ chapterTwoDone: false, inputResumesAt: performance.now() + 200 }),
+  /** Chapter two's ending is the quest's: it leads straight on to the celebration. */
+  closeChapterTwoEnd: () => update({ chapterTwoDone: false, celebrating: true }),
   setHouse: (house: HouseState | null) => update({ house }),
   openHouseEditor: () => update({ houseEditor: true, menuOpen: false, journalOpen: false }),
   closeHouseEditor: () => update({ houseEditor: false, inputResumesAt: performance.now() + 200 }),
@@ -459,8 +460,8 @@ export const quest = {
   summonOracle: () => update({ oracleBeside: true }),
   dismissOracle: () => update({ oracleBeside: false }),
   openFinale: () => update({ finale: true, menuOpen: false, journalOpen: false }),
-  /** Quest complete leads straight on to the celebration. */
-  closeFinale: () => update({ finale: false, celebrating: true }),
+  /** Chapter one's ending closes onto the Aviary's grounds: chapter two starts on the keep's far side. */
+  closeFinale: () => update({ finale: false, inputResumesAt: performance.now() + 200 }),
   endCelebration: () => update({ celebrating: false, inputResumesAt: performance.now() + 200 }),
   fallForPhish: () => update({ phished: true, menuOpen: false, journalOpen: false }),
 

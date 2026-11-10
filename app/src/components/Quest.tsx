@@ -50,6 +50,7 @@ const OWL_LABEL: Record<OwlStage, string> = {
   entrusted: 'Keyholder (stale claims)',
   keyholder: 'Keyholder',
   crowned: 'Keeper of the Royal Seal',
+  triumphant: 'Hero of the kingdom',
 }
 
 const TOAST_TONE: Record<'allow' | 'deny' | 'info', string> = {
@@ -1021,6 +1022,9 @@ function FinaleStory({ email }: { readonly email: string }) {
           </li>
         ))}
       </ul>
+      <p className="m-0">
+        Chapter two waits on the keep's far side. Walk on through, and talk to the Falconer.
+      </p>
       <p className="m-0 text-[0.85rem] text-muted">
         Every gate in the kingdom is a Pomerium route, and its guard's orders are the route's policy. See how
         Pomerium let you in on the{' '}

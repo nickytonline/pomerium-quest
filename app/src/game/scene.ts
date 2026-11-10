@@ -6,8 +6,8 @@ import { SHEETS } from './sheets.ts'
 import { sfx } from './sound.ts'
 import { KNIGHT_QUOTA, defeated, hasSteel, type MonsterKind } from './quest-machine.ts'
 import { houseStage, type HouseStage } from './house-machine.ts'
-import { owlAtLeast, owlStage } from './owl-machine.ts'
-import { openVaultChest, visitPerch } from './owl-story.ts'
+import { owlAtLeast } from './owl-machine.ts'
+import { openVaultChest, readThrone, visitPerch } from './owl-story.ts'
 import {
   currentLetter,
   enterHouse,
@@ -409,7 +409,7 @@ export class KingdomScene extends Phaser.Scene {
 
     if (hasSteel()) this.setTile(this.world.chest, TILE.chestOpen, false)
 
-    if (owlStage() === 'crowned') this.setTile(this.world.vaultChest, TILE.chestOpen, false)
+    if (owlAtLeast('crowned')) this.setTile(this.world.vaultChest, TILE.chestOpen, false)
 
     const map = this.make.tilemap({ data: this.world.tiles, tileWidth: T, tileHeight: T })
     const tileset = map.addTilesetImage('tiles')
@@ -991,6 +991,8 @@ export class KingdomScene extends Phaser.Scene {
     if (isFountain(tile)) drinkFromFountain()
 
     if (tile === TILE.anvil) readAnvil()
+
+    if (tile === TILE.throne) readThrone()
 
     if (tile === TILE.workbench) readWorkbench()
 

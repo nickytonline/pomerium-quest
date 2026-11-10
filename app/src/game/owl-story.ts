@@ -43,8 +43,10 @@ const ADVICE: Record<Exclude<OwlStage, 'afar' | 'arrived' | 'vouched' | 'entrust
   falconer:
     "You're a falconer now. The Mews will open for you, east along the road. Inside is the Rookery's perch: the same owl and the same tools, but a different route with different orders. The errand the Aviary refused is allowed there.",
   keyholder:
-    'Your papers say keyholder. The Royal Vault is at the end of the road, east of the Mews. Go and see what the kingdom keeps there.',
+    'Your papers say keyholder. The Royal Vault is at the end of the road, east of the Mews. Go and see what the kingdom keeps there. Then take the lane south between the two, to the Throne Room.',
   crowned:
+    "You hold the Royal Seal. One gate is left: the Throne Room, south down the lane between the Mews and the vault. Its guard asks for everything you've earned, in both chapters.",
+  triumphant:
     "Same owl, same tools, all along. What changed was which route it flew to, and what your papers said when it got there. That's all Pomerium ever checks.",
 }
 
@@ -295,25 +297,37 @@ export async function flyOwl(roost: Roost, call: OwlCall) {
   }
 }
 
-/** The chest in the Royal Vault, at the end of chapter two. Only a keyholder gets this far. */
+/** The chest in the Royal Vault. Only a keyholder gets this far. */
 export function openVaultChest(): boolean {
   if (owlStage() !== 'keyholder') return false
   quest.sendOwl({ type: 'TREASURE_TAKEN' })
-  sfx('victory')
-  quest.say(
-    [
-      {
-        who: 'Royal Vault',
-        text: "Inside the chest lies the Royal Seal: the kingdom's own signing key. The owl lands on the rim and hoots, rather pleased with itself.",
-      },
-      {
-        who: 'Royal Vault',
-        text: 'You never touched the lock. An owl asked for the key, as you, and Pomerium checked every errand it ran: who it flew for, which route it flew to, and which tool it called.',
-        links: [link('mcpTool')],
-      },
-    ],
-    () => quest.openChapterTwoEnd(),
-  )
+  sfx('itemGet')
+  quest.say([
+    {
+      who: 'Royal Vault',
+      text: "Inside the chest lies the Royal Seal: the kingdom's own signing key. The owl lands on the rim and hoots, rather pleased with itself.",
+    },
+    {
+      who: 'Royal Vault',
+      text: 'You never touched the lock. An owl asked for the key, as you, and Pomerium checked every errand it ran: who it flew for, which route it flew to, and which tool it called.',
+      links: [link('mcpTool')],
+    },
+    {
+      who: 'Royal Vault',
+      text: 'One gate is left. Carry the seal to the Throne Room: the lane runs south between the Mews and the vault.',
+    },
+  ])
 
   return true
+}
+
+/** The throne, behind the quest's last gate. Nobody sits on it. */
+export function readThrone() {
+  quest.say([
+    {
+      who: 'Throne',
+      text: "The throne is empty, and has been for years. Nobody needs to sit here and decide who comes and goes. Every gate in the kingdom asks Pomerium, every time, and Pomerium reads the gate's orders.",
+      links: [link('every')],
+    },
+  ])
 }

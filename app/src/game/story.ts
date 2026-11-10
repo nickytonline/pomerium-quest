@@ -95,6 +95,37 @@ function keepRefusal(id: Identity): Refusal {
   }
 }
 
+/** The Throne Room asks for every group in the quest. The keep already checked three; the owl earns the rest. */
+function throneRefusal(id: Identity): Refusal {
+  const missing: string[] = []
+
+  if (!id.groups.includes(GROUPS.falconers))
+    missing.push(
+      owlAtLeast('vouched')
+        ? "carrying your falconer's papers (sign in with the Oracle again)"
+        : "a falconer (the Falconer's owl can carry a letter to the Oracle for you)",
+    )
+
+  if (!id.groups.includes(GROUPS.keyholders))
+    missing.push(
+      owlAtLeast('entrusted')
+        ? 'carrying your key (sign in with the Oracle again)'
+        : 'a keyholder (the owl can ask for that key at the Rookery, inside the Mews)',
+    )
+
+  // Only someone the keep admits gets this far on foot, so a session that fails here on the keep's three
+  // groups was changed behind the game's back.
+  if (missing.length === 0) missing.push('everything the Royal Keep asks for')
+
+  return {
+    story: {
+      title: 'Not yet, friend',
+      text: `The Throne Room's guard reads your papers from top to bottom. "My orders are the longest in the kingdom: everything the keep asks, and a falconer, and a keyholder. You still need to be ${missing.join(', and ')}."`,
+    },
+    hint: `The Throne Room's one rule has five checks under and: claim/groups: ${GROUPS.citizens}, ${GROUPS.knights}, ${GROUPS.scholars}, ${GROUPS.falconers} and ${GROUPS.keyholders}. Every check must pass; the ✗ lines are the ones your session fails.`,
+  }
+}
+
 /**
  * Why a guard refused, told twice: as the kingdom sees it, and as Pomerium decided it. In the kingdom the
  * policy is the guard's orders and the session is the papers the player carries.
@@ -148,6 +179,8 @@ function refusal(zone: Zone, id: Identity): Refusal {
         },
         hint: `The vault's only rule needs claim/groups: ${GROUPS.keyholders}, and the groups claim in your session doesn't include ${GROUPS.keyholders}. Only the owl's open_vault tool asks the Oracle to add it, and only the Rookery's route allows that tool.`,
       }
+    case 'throne':
+      return throneRefusal(id)
     case 'library':
       return citizensOnly('The library')
     case 'scriptorium':
@@ -174,6 +207,10 @@ const STALE_STORY: Partial<Record<ZoneId, DenyView['story']>> = {
   armory: {
     title: 'Easy there, Sir Eager',
     text: 'The guard squints at your papers. "Knighted this very minute, were you? The ink\'s still wet. Go polish your sword for a bit, then come back."',
+  },
+  throne: {
+    title: 'The wax is still warm',
+    text: 'The guard holds your papers up to the light. "A keyholder, since just now? The wax on that is still warm. Let it set a minute, then come back."',
   },
   keep: {
     title: 'The ink is still wet',
@@ -302,6 +339,14 @@ export async function enterGate(
   learn('route')
 
   if (zone.id === 'armory' || zone.id === 'library') learn('jwt')
+
+  // The Throne Room is the quest's last gate: the first time through plays the ending.
+  if (zone.id === 'throne' && owlStage() !== 'triumphant') {
+    learn('allOf')
+    sfx('victory')
+    quest.sendOwl({ type: 'THRONE_ENTERED' })
+    quest.openChapterTwoEnd()
+  }
 
   // The keep's doors open with a fanfare once; after that it's the way through to chapter two.
   if (zone.id === 'keep' && owlStage() === 'afar') {

@@ -1,10 +1,11 @@
 // Chapter two's progression as a statechart: the owl, an MCP client, runs errands for the player.
 //
-//   afar → arrived → fledged → vouched → falconer → entrusted → keyholder → crowned
+//   afar → arrived → fledged → vouched → falconer → entrusted → keyholder → crowned → triumphant
 //
 // `vouched` and `entrusted` are stale sessions, like chapter one's `knighted`: a tool call had the Oracle
 // add a group, but the player's Pomerium session still holds the claims from sign-in. A sign-in that
-// already carries a group (a second browser, say) moves straight to the stage that group earns.
+// already carries a group (a second browser, say) moves straight to the stage that group earns. The vault's
+// chest is on the way to the Throne Room, not a lock on it: a keyholder may walk past it to the end.
 import { createActor, setup, type SnapshotFrom } from 'xstate'
 import { GROUPS } from './groups.ts'
 
@@ -15,6 +16,7 @@ export type OwlEvent =
   | { readonly type: 'VAULT_OPENED' }
   | { readonly type: 'SIGNED_IN'; readonly groups: readonly string[] }
   | { readonly type: 'TREASURE_TAKEN' }
+  | { readonly type: 'THRONE_ENTERED' }
 
 const toKeyholder = { guard: 'hasKeyholdersClaim', target: 'keyholder' } as const
 const toFalconer = { guard: 'hasFalconersClaim', target: 'falconer' } as const
@@ -58,10 +60,14 @@ export const owlMachine = setup({
     },
     keyholder: {
       description: `The session carries '${GROUPS.keyholders}'; the vault's policy matches.`,
-      on: { TREASURE_TAKEN: 'crowned' },
+      on: { TREASURE_TAKEN: 'crowned', THRONE_ENTERED: 'triumphant' },
     },
     crowned: {
-      description: 'The vault is open. Chapter two is complete.',
+      description: 'The Royal Seal is yours. The Throne Room is the last gate.',
+      on: { THRONE_ENTERED: 'triumphant' },
+    },
+    triumphant: {
+      description: 'The Throne Room let you in. Chapter two, and the quest, are complete.',
     },
   },
 })
@@ -123,6 +129,7 @@ const ORDER: readonly OwlStage[] = [
   'entrusted',
   'keyholder',
   'crowned',
+  'triumphant',
 ]
 
 /** Whether the owl's story has reached `target`. */

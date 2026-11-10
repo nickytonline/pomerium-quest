@@ -2,7 +2,7 @@ import type { SignId } from './content.ts'
 import type { Roost } from './owl.ts'
 import type { ZoneId } from './zones.ts'
 
-// The kingdom map: a 40x42 tile grid built from a few drawing helpers, plus where every
+// The kingdom map: a 40x49 tile grid built from a few drawing helpers, plus where every
 // gate, sign, NPC, monster and prop sits. Tile ids match the order in art/tiles.mjs.
 
 export const TILE = {
@@ -42,6 +42,7 @@ export const TILE = {
   signIndoors: 41,
   perch: 42,
   perchIndoors: 43,
+  throne: 44,
 } as const
 
 export type TileId = (typeof TILE)[keyof typeof TILE]
@@ -66,7 +67,7 @@ export const WALKABLE: ReadonlySet<number> = new Set([
 export const PLAYER_TERRAIN: ReadonlySet<number> = new Set([...WALKABLE, TILE.water, TILE.door])
 
 export const MAP_WIDTH = 40
-export const MAP_HEIGHT = 42
+export const MAP_HEIGHT = 49
 
 /** The Royal Keep's wall: chapter one's kingdom lies above this row, and the Aviary below it. */
 const KEEP_WALL = 29
@@ -184,8 +185,10 @@ export interface World {
   readonly chest: Point
   /** The owl's perches: the Aviary's by the Falconer, the Rookery's inside the Mews. */
   readonly perches: readonly Perch[]
-  /** The chest in the Royal Vault, at the end of chapter two. */
+  /** The chest in the Royal Vault, which holds the Royal Seal. */
   readonly vaultChest: Point
+  /** The empty throne, in the room behind chapter two's last gate. */
+  readonly throne: Point
   /** Top-left tile of the 2x2 fountain. */
   readonly fountain: Point
   readonly spawn: Point
@@ -337,7 +340,7 @@ export function buildWorld(): World {
   // Library Quarter.
   fill(27, 18, 28, 19, TILE.cobble)
   fill(20, 19, 33, 19, TILE.cobble)
-  // The road south to the Royal Keep, the quest's last gate.
+  // The road south to the Royal Keep, chapter one's last gate.
   fill(21, 19, 21, 28, TILE.cobble)
   // The library: a reading room, and the scriptorium walled off at its west end behind a door of its own.
   room(24, 20, 37, 27)
@@ -361,13 +364,18 @@ export function buildWorld(): World {
   fill(17, KEEP_WALL, MAP_WIDTH - 2, KEEP_WALL, TILE.wall)
   fill(1, KEEP_WALL + 1, 15, MAP_HEIGHT - 2, TILE.tree)
 
-  // The Aviary: a road from the keep past the Falconer, then east to the Mews and the Royal Vault.
+  // The Aviary: a road from the keep past the Falconer, then east to the Mews and the Royal Vault. A lane
+  // runs south between those two to the Throne Room, the quest's last gate.
   fill(21, 30, 21, 33, TILE.cobble)
   fill(21, 33, 35, 33, TILE.cobble)
   set(27, 34, TILE.cobble)
   set(35, 34, TILE.cobble)
   room(24, 35, 30, 40)
   room(32, 35, 38, 40)
+  fill(31, 34, 31, 41, TILE.cobble)
+  room(25, 42, 37, 47)
+  // A carpet of cobble from the door to the throne.
+  fill(31, 43, 31, 45, TILE.cobble)
   each(
     [
       [18, 31],
@@ -376,11 +384,20 @@ export function buildWorld(): World {
       [31, 31],
       [37, 31],
       [18, 39],
+      [19, 43],
+      [22, 45],
+      [18, 46],
+      [23, 42],
+      [38, 43],
+      [38, 46],
     ],
     TILE.tree,
   )
   each(
     [
+      [20, 44],
+      [24, 41],
+      [36, 41],
       [19, 33],
       [29, 31],
       [34, 32],
@@ -412,6 +429,7 @@ export function buildWorld(): World {
     { x: 21, y: KEEP_WALL, zoneId: 'keep', signId: 'keep', ...enter, exitZoneId: 'town' },
     { x: 27, y: 35, zoneId: 'mews', signId: 'mews', ...enter, exitZoneId: 'keep' },
     { x: 35, y: 35, zoneId: 'vault', signId: 'vault', ...enter, exitZoneId: 'keep' },
+    { x: 31, y: 42, zoneId: 'throne', signId: 'throne', ...enter, exitZoneId: 'keep' },
   ]
 
   for (const gate of gates) set(gate.x, gate.y, TILE.gateClosed)
@@ -426,6 +444,7 @@ export function buildWorld(): World {
     { x: 22, y: 28, signId: 'keep' },
     { x: 28, y: 34, signId: 'mews' },
     { x: 36, y: 34, signId: 'vault' },
+    { x: 32, y: 41, signId: 'throne' },
     // The perches' signs show the MCP server's two routes; no gate stands beside them.
     { x: 26, y: 32, signId: 'aviary' },
     { x: 28, y: 38, signId: 'rookery' },
@@ -452,6 +471,9 @@ export function buildWorld(): World {
   const vaultChest = { x: 35, y: 38 }
   set(vaultChest.x, vaultChest.y, TILE.chest)
 
+  const throne = { x: 31, y: 46 }
+  set(throne.x, throne.y, TILE.throne)
+
   return {
     tiles,
     gates,
@@ -460,6 +482,7 @@ export function buildWorld(): World {
     chest,
     perches,
     vaultChest,
+    throne,
     fountain,
     npcs: [
       { x: 12, y: 25, npcId: 'sage' },
