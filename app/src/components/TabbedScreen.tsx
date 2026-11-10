@@ -17,10 +17,43 @@ export const switchTab = () => window.dispatchEvent(new Event(TAB_EVENT))
 /** How the panel of a tab that isn't showing is kept, and how the one that is showing is laid out. */
 const PANEL = {
   // Both panels share one grid cell, so the screen is as tall as the taller of the two.
-  tallest: 'grid grid-cols-[minmax(0,1fr)] [grid-area:1/1]',
-  // The Pomerium panel is laid over the kingdom's and scrolls inside it, so it adds no height of its own.
-  over: 'absolute inset-0 overflow-y-auto overscroll-contain',
+  tallest: 'grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] [grid-area:1/1]',
+  // The Pomerium panel is laid over the kingdom's, so it adds no height of its own.
+  over: 'absolute inset-0 grid grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)]',
 } as const
+
+/**
+ * One tab's content. Its text scrolls when the screen is too short for it; its buttons stay put below the
+ * text, still inside the pane, so they are always in reach and focusing one never scrolls the text away.
+ */
+export function TabPane({
+  className,
+  body = '',
+  actions,
+  children,
+}: {
+  /** The pane's own look: its border, background and text colour. */
+  readonly className: string
+  /** How the text is spaced, such as the gap between its parts. */
+  readonly body?: string
+  /** The buttons at the pane's foot. */
+  readonly actions: ReactNode
+  readonly children: ReactNode
+}) {
+  return (
+    <div className={`flex min-h-0 flex-col ${className}`}>
+      <div
+        className={`flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-5 pt-[18px] pb-2 [&>*]:shrink-0 ${body}`}
+        data-tab-text
+        // Focusable, so the keyboard can scroll the text while the buttons below it stay where they are.
+        tabIndex={0}
+      >
+        {children}
+      </div>
+      <div className="px-5 pb-[18px]">{actions}</div>
+    </div>
+  )
+}
 
 /**
  * A moment told twice: first as the game tells it, then as Pomerium decided it. Both tabs share
@@ -54,11 +87,9 @@ export function TabbedScreen({
   const panels = useRef<HTMLDivElement>(null)
   const byKingdom = sized === 'kingdom'
 
-  // A tab opens at its top, not wherever it or the other one was last scrolled to.
+  // A tab opens at the top of its text, not wherever it was last scrolled to.
   useEffect(() => {
-    panels.current?.scrollTo({ top: 0 })
-
-    for (const panel of panels.current?.children ?? []) panel.scrollTo({ top: 0 })
+    for (const text of panels.current?.querySelectorAll('[data-tab-text]') ?? []) text.scrollTo({ top: 0 })
   }, [tab, showing])
 
   useEffect(() => {
@@ -91,11 +122,17 @@ export function TabbedScreen({
             </button>
           ))}
         </div>
-        {/* One column that may shrink, and code that wraps: a long line never widens the screen or scrolls sideways. */}
+        {/* One column and one row that may shrink, and code that wraps: a long line never widens the screen or
+            scrolls sideways, and a tall pane scrolls its own text. */}
         <div
           ref={panels}
-          className={`relative grid min-h-0 grid-cols-[minmax(0,1fr)] overflow-y-auto overscroll-contain [&_pre]:overflow-x-hidden [&_pre]:wrap-anywhere [&_pre]:whitespace-pre-wrap ${byKingdom ? 'max-h-[75dvh] min-h-[min(24rem,60dvh)]' : ''}`}
+          className={`relative grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] [&_pre]:overflow-x-hidden [&_pre]:wrap-anywhere [&_pre]:whitespace-pre-wrap ${byKingdom ? 'max-h-[75dvh] overflow-hidden' : ''}`}
         >
+          {/* A short kingdom tab still leaves room to read the Pomerium one: this sets the least height. It is
+              only a wish, so a screen with less room than that shrinks past it instead of spilling out. */}
+          {byKingdom && (
+            <div className="pointer-events-none invisible h-[min(24rem,60dvh)] [grid-area:1/1]" />
+          )}
           {TABS.map(({ id }) => (
             <div
               key={id}

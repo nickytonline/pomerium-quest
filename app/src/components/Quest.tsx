@@ -15,7 +15,7 @@ import { Celebration } from './Celebration.tsx'
 import { HouseEditor } from './House.tsx'
 import { Phished } from './Phished.tsx'
 import { PolicyLines } from './PolicyLines.tsx'
-import { TAB_EVENT, TabbedScreen, switchTab, tabHint } from './TabbedScreen.tsx'
+import { TAB_EVENT, TabbedScreen, switchTab, tabHint, TabPane } from './TabbedScreen.tsx'
 import { CHAPTER_ONE_LESSONS, INTRO, LESSONS, LESSON_ORDER, type Choice } from '../game/content.ts'
 import { owlMachine, type OwlStage } from '../game/owl-machine.ts'
 import { KNIGHT_QUOTA, questMachine, type QuestStage } from '../game/quest-machine.ts'
@@ -989,7 +989,7 @@ function Finale() {
       name="finale"
       label="How you got in"
       showing={open}
-      overlay="fixed inset-0 z-50 grid place-items-center bg-[rgb(10_7_22/0.88)] p-4"
+      overlay="fixed inset-0 z-50 flex items-center justify-center bg-[rgb(10_7_22/0.88)] p-4"
       kingdom={<FinaleStory email={identity.email} />}
       pomerium={<FinalePomerium identity={identity} />}
     />
@@ -1004,7 +1004,18 @@ const VOUCHED_BY: readonly { readonly role: string; readonly by: string }[] = [
 
 function FinaleStory({ email }: { readonly email: string }) {
   return (
-    <div className="flex flex-col gap-3 rounded-tr-lg rounded-b-lg border-3 border-sun bg-night-deep px-5 py-[18px]">
+    <TabPane
+      className="rounded-tr-lg rounded-b-lg border-3 border-sun bg-night-deep"
+      body="gap-3"
+      actions={
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+          <button className={enterKeep} type="button" onClick={() => quest.closeFinale()} autoFocus>
+            Enter the Keep ▸
+          </button>
+          <p className={`${tabHint} text-muted`}>← → switch tabs · Enter to go in</p>
+        </div>
+      }
+    >
       <h2 id="finale-title-kingdom" className="sunset-text m-0 font-display text-[2rem] leading-tight">
         Chapter one complete
       </h2>
@@ -1034,13 +1045,7 @@ function FinaleStory({ email }: { readonly email: string }) {
         </button>{' '}
         tab.
       </p>
-      <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-1">
-        <button className={enterKeep} type="button" onClick={() => quest.closeFinale()} autoFocus>
-          Enter the Keep ▸
-        </button>
-        <p className={`${tabHint} text-muted`}>← → switch tabs · Enter to go in</p>
-      </div>
-    </div>
+    </TabPane>
   )
 }
 
@@ -1051,7 +1056,17 @@ function FinalePomerium({ identity }: { readonly identity: Identity }) {
   const lines = decide(keep, identity, { method: 'GET', path }).lines
 
   return (
-    <div className="flex flex-col rounded-tr-lg rounded-b-lg border-t-6 border-allow bg-paper px-5 py-[18px] text-paper-ink [&_a]:text-paper-link [&_:focus-visible]:outline-paper-focus">
+    <TabPane
+      className="rounded-tr-lg rounded-b-lg border-t-6 border-allow bg-paper text-paper-ink [&_a]:text-paper-link [&_:focus-visible]:outline-paper-focus"
+      actions={
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-3.5">
+          <button className={enterKeep} type="button" onClick={() => quest.closeFinale()}>
+            Enter the Keep ▸
+          </button>
+          <p className={`${tabHint} text-paper-muted`}>← → switch tabs · Enter to go in</p>
+        </div>
+      }
+    >
       <p className="m-0 font-mono text-[2.2rem] leading-none font-bold text-[#15803d]">200</p>
       <h2 className="mt-0.5 mb-2 text-[1.25rem] font-bold" id="finale-title-pomerium">
         Access allowed
@@ -1087,13 +1102,7 @@ function FinalePomerium({ identity }: { readonly identity: Identity }) {
           ),
         )}
       </ol>
-      <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-3.5">
-        <button className={enterKeep} type="button" onClick={() => quest.closeFinale()}>
-          Enter the Keep ▸
-        </button>
-        <p className={`${tabHint} text-paper-muted`}>← → switch tabs · Enter to go in</p>
-      </div>
-    </div>
+    </TabPane>
   )
 }
 
@@ -1112,7 +1121,7 @@ function DenyScreen() {
       name="deny"
       label="Why the guard refused"
       showing={deny}
-      overlay="absolute inset-0 grid items-start justify-items-center overflow-auto bg-[rgb(10_7_22/0.88)] p-3.5"
+      overlay="absolute inset-0 flex items-center justify-center bg-[rgb(10_7_22/0.88)] p-3.5"
       kingdom={<DenyStory deny={deny} />}
       pomerium={<DenyPomerium deny={deny} />}
     />
@@ -1121,7 +1130,21 @@ function DenyScreen() {
 
 function DenyStory({ deny }: { readonly deny: DenyView }) {
   return (
-    <div className="flex flex-col rounded-tr-lg rounded-b-lg border-3 border-ink bg-night-deep px-5 py-[18px]">
+    <TabPane
+      className="rounded-tr-lg rounded-b-lg border-3 border-ink bg-night-deep"
+      actions={
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-3.5">
+          <button
+            className="rounded border-2 border-ink bg-panel px-3.5 py-2 font-display text-ink hover:border-sun"
+            type="button"
+            onClick={() => quest.closeDeny()}
+          >
+            Back to the kingdom
+          </button>
+          <p className={`${tabHint} text-muted`}>← → switch tabs · Enter to close</p>
+        </div>
+      }
+    >
       <h2 className="m-0 font-display text-[1.6rem] leading-tight text-deny" id="deny-title-kingdom">
         {deny.story.title}
       </h2>
@@ -1134,17 +1157,7 @@ function DenyStory({ deny }: { readonly deny: DenyView }) {
         </button>{' '}
         tab.
       </p>
-      <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-3.5">
-        <button
-          className="rounded border-2 border-ink bg-panel px-3.5 py-2 font-display text-ink hover:border-sun"
-          type="button"
-          onClick={() => quest.closeDeny()}
-        >
-          Back to the kingdom
-        </button>
-        <p className={`${tabHint} text-muted`}>← → switch tabs · Enter to close</p>
-      </div>
-    </div>
+    </TabPane>
   )
 }
 
@@ -1153,7 +1166,21 @@ const rpcCode = 'mt-0 mb-2 overflow-x-auto rounded bg-paper-tint px-3 py-2.5 tex
 
 function DenyPomerium({ deny }: { readonly deny: DenyView }) {
   return (
-    <div className="flex flex-col rounded-tr-lg rounded-b-lg border-t-6 border-deny bg-paper px-5 py-[18px] text-paper-ink [&_a]:text-paper-link [&_:focus-visible]:outline-paper-focus">
+    <TabPane
+      className="rounded-tr-lg rounded-b-lg border-t-6 border-deny bg-paper text-paper-ink [&_a]:text-paper-link [&_:focus-visible]:outline-paper-focus"
+      actions={
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-3.5">
+          <button
+            className="rounded bg-paper-ink px-3.5 py-2 text-paper"
+            type="button"
+            onClick={() => quest.closeDeny()}
+          >
+            Back to the kingdom
+          </button>
+          <p className={`${tabHint} text-paper-muted`}>← → switch tabs · Enter to close</p>
+        </div>
+      }
+    >
       {deny.onBehalfOf && (
         <p className="mb-2 rounded bg-paper-tint px-2.5 py-1.5 text-[0.8rem] text-paper-muted">
           Not your request: this is what {deny.onBehalfOf} was told by the guard.
@@ -1192,17 +1219,7 @@ function DenyPomerium({ deny }: { readonly deny: DenyView }) {
           </li>
         ))}
       </ul>
-      <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-3.5">
-        <button
-          className="rounded bg-paper-ink px-3.5 py-2 text-paper"
-          type="button"
-          onClick={() => quest.closeDeny()}
-        >
-          Back to the kingdom
-        </button>
-        <p className={`${tabHint} text-paper-muted`}>← → switch tabs · Enter to close</p>
-      </div>
-    </div>
+    </TabPane>
   )
 }
 

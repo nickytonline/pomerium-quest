@@ -10,13 +10,12 @@ import { quest, useQuest, type PerchView } from '../game/store.ts'
 import { zoneRouteYaml } from '../game/story.ts'
 import { zoneById } from '../game/zones.ts'
 import { PolicyLines } from './PolicyLines.tsx'
-import { TabbedScreen, switchTab, tabHint } from './TabbedScreen.tsx'
+import { TabPane, TabbedScreen, switchTab, tabHint } from './TabbedScreen.tsx'
 
 const smallButton =
   'rounded border-2 border-panel-edge bg-panel px-2.5 py-1 font-display text-[0.85rem] text-ink hover:border-sun disabled:opacity-50'
 
-const overlay =
-  'absolute inset-0 grid items-start justify-items-center overflow-auto bg-[rgb(10_7_22/0.9)] p-3.5'
+const overlay = 'absolute inset-0 flex items-center justify-center bg-[rgb(10_7_22/0.9)] p-3.5'
 
 const paperCode = 'm-0 overflow-x-auto rounded bg-paper-tint px-3 py-2.5 text-[0.8rem] leading-[1.45]'
 const paperLabel = 'm-0 text-[0.72rem] tracking-[0.08em] text-paper-muted uppercase'
@@ -98,7 +97,7 @@ function PerchPanel({ perch, flight }: { readonly perch: PerchView; readonly fli
   }
 
   const actions = (focus: boolean) => (
-    <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-1">
+    <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
       <button className={smallButton} type="button" autoFocus={focus} onClick={leavePerch}>
         Leave the perch
       </button>
@@ -109,7 +108,11 @@ function PerchPanel({ perch, flight }: { readonly perch: PerchView; readonly fli
   )
 
   const kingdom = (
-    <div className="flex flex-col gap-3 rounded-tr-lg rounded-b-lg border-3 border-ink bg-night-deep px-4 py-3.5">
+    <TabPane
+      className="rounded-tr-lg rounded-b-lg border-3 border-ink bg-night-deep"
+      body="gap-3"
+      actions={actions(true)}
+    >
       <h2 className="m-0 font-display text-[1.4rem] text-sun" id="perch-title-kingdom">
         {title} <code className="text-[0.85rem] text-lens">{tool}</code>
       </h2>
@@ -126,12 +129,15 @@ function PerchPanel({ perch, flight }: { readonly perch: PerchView; readonly fli
         </button>{' '}
         tab.
       </p>
-      {actions(true)}
-    </div>
+    </TabPane>
   )
 
   const pomerium = (
-    <div className="flex flex-col gap-2.5 rounded-tr-lg rounded-b-lg border-t-6 border-lens bg-paper px-5 py-[18px] text-paper-ink [&_a]:text-paper-link [&_:focus-visible]:outline-paper-focus">
+    <TabPane
+      className="rounded-tr-lg rounded-b-lg border-t-6 border-lens bg-paper text-paper-ink [&_a]:text-paper-link [&_:focus-visible]:outline-paper-focus"
+      body="gap-2.5"
+      actions={actions(false)}
+    >
       <h2 className="m-0 text-[1.25rem] font-bold" id="perch-title-pomerium">
         Sending the owl is a tool call
       </h2>
@@ -164,8 +170,7 @@ function PerchPanel({ perch, flight }: { readonly perch: PerchView; readonly fli
           </li>
         ))}
       </ul>
-      {actions(false)}
-    </div>
+    </TabPane>
   )
 
   return (
@@ -239,7 +244,18 @@ export function ChapterTwoEnd() {
   if (!open || dialog) return null
 
   const kingdom = (
-    <div className="flex flex-col gap-3 rounded-tr-lg rounded-b-lg border-3 border-sun bg-night-deep px-5 py-[18px]">
+    <TabPane
+      className="rounded-tr-lg rounded-b-lg border-3 border-sun bg-night-deep"
+      body="gap-3"
+      actions={
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+          <button className={endButton} type="button" onClick={closeEnd} autoFocus>
+            On to the celebration ▸
+          </button>
+          <p className={`${tabHint} text-muted`}>Esc to go on</p>
+        </div>
+      }
+    >
       <h2 id="chapter-two-title-kingdom" className="sunset-text m-0 font-display text-[2rem] leading-tight">
         Chapter two complete
       </h2>
@@ -265,17 +281,22 @@ export function ChapterTwoEnd() {
         </button>{' '}
         tab.
       </p>
-      <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-1">
-        <button className={endButton} type="button" onClick={closeEnd} autoFocus>
-          On to the celebration ▸
-        </button>
-        <p className={`${tabHint} text-muted`}>Esc to go on</p>
-      </div>
-    </div>
+    </TabPane>
   )
 
   const pomerium = (
-    <div className="flex flex-col gap-2.5 rounded-tr-lg rounded-b-lg border-t-6 border-allow bg-paper px-5 py-[18px] text-paper-ink [&_a]:text-paper-link [&_:focus-visible]:outline-paper-focus">
+    <TabPane
+      className="rounded-tr-lg rounded-b-lg border-t-6 border-allow bg-paper text-paper-ink [&_a]:text-paper-link [&_:focus-visible]:outline-paper-focus"
+      body="gap-2.5"
+      actions={
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-3">
+          <button className={endButton} type="button" onClick={closeEnd}>
+            On to the celebration ▸
+          </button>
+          <p className={`${tabHint} text-paper-muted`}>Esc to go on</p>
+        </div>
+      }
+    >
       <h2 className="m-0 text-[1.25rem] font-bold" id="chapter-two-title-pomerium">
         Agents get the same checks you do
       </h2>
@@ -309,13 +330,7 @@ export function ChapterTwoEnd() {
         at the Aviary's address, sign in with the Oracle when it asks, and it gets the same tools and the same
         refusals.
       </p>
-      <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-3">
-        <button className={endButton} type="button" onClick={closeEnd}>
-          On to the celebration ▸
-        </button>
-        <p className={`${tabHint} text-paper-muted`}>Esc to go on</p>
-      </div>
-    </div>
+    </TabPane>
   )
 
   return (
@@ -323,7 +338,7 @@ export function ChapterTwoEnd() {
       name="chapter-two"
       label="How the owl got you here"
       showing={open}
-      overlay="fixed inset-0 z-50 grid place-items-center bg-[rgb(10_7_22/0.88)] p-4"
+      overlay="fixed inset-0 z-50 flex items-center justify-center bg-[rgb(10_7_22/0.88)] p-4"
       kingdom={kingdom}
       pomerium={pomerium}
     />
