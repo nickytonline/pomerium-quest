@@ -53,10 +53,11 @@ function criterionYaml(node: Criterion): readonly string[] {
       return ['authenticated_user: true']
     case 'claim':
       return [`claim/${node.claim}: ${claimValue(node.claim, node.value)}`]
+    case 'mcp_tool':
+      return ['mcp_tool:', `  starts_with: ${node.startsWith}`]
     case 'domain':
     case 'email':
     case 'http_method':
-    case 'mcp_tool':
       return [`${node.kind}:`, `  is: ${node.is}`]
   }
 }
@@ -70,10 +71,11 @@ function criterionLabel(node: Criterion): string {
       return 'authenticated_user: true'
     case 'claim':
       return `claim/${node.claim}: ${claimValue(node.claim, node.value)}`
+    case 'mcp_tool':
+      return `mcp_tool: { starts_with: ${node.startsWith} }`
     case 'domain':
     case 'email':
     case 'http_method':
-    case 'mcp_tool':
       return `${node.kind}: { is: ${node.is} }`
   }
 }
@@ -117,7 +119,7 @@ function check(node: Criterion, id: Identity, req: RequestInfo, whose: Viewpoint
       return { ok: req.method === node.is, actual: `this request: ${req.method}` }
     case 'mcp_tool':
       return {
-        ok: req.tool === node.is,
+        ok: req.tool?.startsWith(node.startsWith) ?? false,
         actual: req.tool ? `this call's tool: ${req.tool}` : 'this request calls no tool',
       }
     case 'claim': {
@@ -173,10 +175,11 @@ function criterionDocument(node: Criterion) {
       return { authenticated_user: true }
     case 'claim':
       return { [`claim/${node.claim}`]: node.value }
+    case 'mcp_tool':
+      return { mcp_tool: { starts_with: node.startsWith } }
     case 'domain':
     case 'email':
     case 'http_method':
-    case 'mcp_tool':
       return { [node.kind]: { is: node.is } }
   }
 }

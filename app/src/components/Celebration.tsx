@@ -189,7 +189,7 @@ export const NPCS = SHEETS.npcs
 const ITEMS = SHEETS.items
 const DOG = SHEETS.dog
 
-/** Who played whom. The slime's, owl's and dog's frames match the item and dog sheets. */
+/** Who played whom. The slime's, owl's, falcon's and dog's frames match the item and dog sheets. */
 const CAST: readonly {
   readonly name: string
   readonly role: string
@@ -226,7 +226,7 @@ const CAST: readonly {
   },
   {
     name: 'The Falconer',
-    role: 'the admin who hands you an MCP client',
+    role: 'the admin who adds you to the falconers group',
     sheet: NPCS,
     frame: NPC_FRAME.falconer,
   },
@@ -237,6 +237,7 @@ const CAST: readonly {
     sheet: NPCS,
     frame: NPC_FRAME.friend,
   },
+  { name: "Mochi's falcon", role: 'another MCP client, acting on Mochi’s behalf', sheet: ITEMS, frame: 9 },
   { name: 'Bot slimes', role: 'automated bots hammering every gate', sheet: ITEMS, frame: 3 },
   { name: 'Phish', role: 'phishing: a fake Oracle after your sign-in', sheet: NPCS, frame: PHISH_FRAME },
 ]
@@ -314,7 +315,7 @@ function CelebrationScreen({ stats }: { readonly stats: string }) {
           </h2>
           <p className="m-0 max-w-[48ch] text-muted">
             Every guard checked you, every time, and checked your owl on every errand it ran. You made it all
-            the way to the Throne Room, and to Mochi.
+            the way to the Eyrie, and brought Mochi their falcon.
           </p>
           <p className="m-0 font-display text-[0.9rem] text-lime">{stats}</p>
         </div>

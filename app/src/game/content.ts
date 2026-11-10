@@ -102,7 +102,7 @@ export const LESSONS = {
     link: { label: 'MCP support', href: `${DOCS}/capabilities/mcp` },
   },
   mcpTool: {
-    title: 'A policy can refuse a single tool',
+    title: 'A policy can refuse tools by name',
     link: { label: 'Limit MCP tools', href: `${DOCS}/capabilities/mcp/limit-mcp-tools` },
   },
 } as const
@@ -148,14 +148,9 @@ export const SIGN_TEXT: Partial<Record<SignId, string>> = {
     "The scriptorium, where the Royal Ledger is written. Its path is inside the library's, but it's a route of its own with its own policy. Pomerium picks the route whose path matches most closely, so the library's rule doesn't apply here: only scribes may enter.",
   keep: 'The Royal Keep. One rule, three checks: a citizen who is both a knight and a scholar. In an and rule, every check must pass.',
   aviary:
-    "The Aviary is an MCP server: it offers tools for an agent to call, and your owl is the agent. It's a route like any gate, so Pomerium checks every call against the policy below. The owl flies on your behalf, so the groups it checks are yours. The allow rule is the Royal Keep's, since only those the keep admits come this far. The deny rule names one tool: no owl may call open_vault here, whoever it flies for.",
-  rookery:
-    "The Rookery is the same MCP server behind a second route, with a policy of its own. Only a falconer's owl gets in, and no tool is denied here.",
-  mews: 'The Mews, where falconers keep their birds. Only falconers may enter, and only the owl can make you one: the letter it carries asks the Oracle to add you to the falconers group.',
-  vault:
-    'The Royal Vault. Only keyholders may enter. No one in the kingdom hands out that key: a tool the owl calls at the Rookery asks the Oracle for it.',
-  throne:
-    'The Throne Room, the last gate in the kingdom. One rule, five checks: everything the Royal Keep asks for, and a falconer, and a keyholder. You earned the first three yourself. Your owl earned the last two for you. Mochi went through with papers of their own.',
+    "The Aviary is an MCP server: it offers tools for an agent to call, and an owl is the agent. It's a route like any gate, so Pomerium checks every call against the policy below. An owl flies on someone's behalf, so the groups Pomerium checks are that person's. The allow rule lets in a falconer's owl and no other. The deny rule forbids a whole class of tools to every owl: any tool whose name starts with open_. Each tool has a perch of its own out in the grounds.",
+  eyrie:
+    'The Eyrie, behind the last gate in the kingdom. One rule, five checks: everything the Royal Keep asks for, and a falconer, and a keyholder. You earn the first three yourself, the Falconer vouches for the fourth, and your owl earns the fifth for you. Mochi went through with papers of their own.',
 }
 
 /** Where Pomerium documents the session and user records, and the cache in front of them. */
@@ -180,10 +175,7 @@ export const SIGN_DOCS: Partial<Record<SignId, readonly DocLink[]>> = {
   ],
   keep: [link('allOf'), link('claims')],
   aviary: [link('mcpServer'), link('mcpTool')],
-  rookery: [link('mcpServer'), link('onroute')],
-  mews: [link('claims'), link('refresh')],
-  vault: [link('claims'), link('refresh')],
-  throne: [link('allOf'), link('claims')],
+  eyrie: [link('allOf'), link('claims')],
 }
 
 export const BOOKS: Page[] = [

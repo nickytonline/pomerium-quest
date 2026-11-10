@@ -1,7 +1,6 @@
 // How the game asks for access: every gate is a real HTTP request through Pomerium, and the
 // status code is the answer.
 import type { HouseRule, HouseState, Knock, Knocker, OpenedHouse } from './house.ts'
-import type { Roost } from './owl.ts'
 import type { OwlCall, OwlFlight } from './perch.ts'
 import { type Identity } from './ppl.ts'
 import { ANONYMOUS, type Mode } from './store.ts'
@@ -231,12 +230,12 @@ export async function knockYourself(house: HouseState, method: 'GET' | 'POST'): 
 }
 
 /**
- * Sends the owl from its perch: the game server makes the MCP request to `roost` with the token Pomerium
+ * Sends the owl from a perch: the game server makes the MCP request to the Aviary with the token Pomerium
  * gave it for the player. The perch is a Pomerium route too, so it can refuse before the owl ever flies.
  */
-export async function sendOwl(roost: Roost, call: OwlCall): Promise<Built<OwlFlight>> {
+export async function sendOwl(call: OwlCall): Promise<Built<OwlFlight>> {
   try {
-    const response = await fetch(`/zones/perch/${roost}`, {
+    const response = await fetch('/zones/perch/aviary', {
       method: 'POST',
       redirect: 'manual',
       headers: { accept: 'application/json', 'content-type': 'application/json' },

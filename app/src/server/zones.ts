@@ -1,7 +1,7 @@
 import { Effect, Schema } from 'effect'
 import { GROUPS } from '../game/groups.ts'
 import { turnsAwayOwner, type HouseRule } from '../game/house.ts'
-import { OWL_TOOLS, ROOSTS } from '../game/owl.ts'
+import { OWL_TOOLS } from '../game/owl.ts'
 import { SIGNED_IN_MESSAGE, ZONES } from '../game/zones.ts'
 import { QuestConfig } from './config.ts'
 import { InvalidRules } from './errors.ts'
@@ -55,7 +55,7 @@ const readBody =
       ),
     )
 
-/** What the perch sends: list the roost's tools, or call one of them. */
+/** What the perch sends: list the Aviary's tools, or call one of them. */
 const OwlRequest = Schema.Union([
   Schema.Struct({ method: Schema.Literal('tools/list') }),
   Schema.Struct({ method: Schema.Literal('tools/call'), tool: Schema.Literals(Object.values(OWL_TOOLS)) }),
@@ -201,13 +201,18 @@ export const handleZone = (request: Request, splat: string) =>
         return json(200, yield* visitors.knock(house.path, knocker, method, house.version))
       }
 
-      // The owl flies to the roost the path names. Pomerium decides what it may do there.
-      case 'POST perch/aviary':
-      case 'POST perch/rookery': {
-        const roost = ROOSTS.find((candidate) => candidate === action) ?? 'aviary'
+      // The Falconer writes to the Oracle, like the Captain, once the player has caught their owl. Only
+      // those the keep admits reach the Falconer, so the keep's route carries the letter.
+      case 'POST keep/falconer': {
+        const oracle = yield* OracleAdmin
+        yield* oracle.grant(player.email, GROUPS.falconers)
 
-        return json(200, yield* fly(request, roost, yield* readOwl(request)))
+        return json(200, { granted: GROUPS.falconers, refreshRequired: true, verifiedBy })
       }
+
+      // The owl flies to the Aviary. Pomerium decides there whether it gets in, and what it may do.
+      case 'POST perch/aviary':
+        return json(200, yield* fly(request, yield* readOwl(request)))
 
       default:
         return json(200, {

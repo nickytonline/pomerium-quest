@@ -6,8 +6,9 @@ import { SHEETS } from './sheets.ts'
 import { sfx } from './sound.ts'
 import { KNIGHT_QUOTA, defeated, hasSteel, type MonsterKind } from './quest-machine.ts'
 import { houseStage, type HouseStage } from './house-machine.ts'
-import { owlAtLeast } from './owl-machine.ts'
-import { openVaultChest, readThrone, visitPerch } from './owl-story.ts'
+import { falconFound, owlAtLeast, owlStage } from './owl-machine.ts'
+import { catchOwl, findFalcon, readAviarySign, readPerchSign, visitPerch } from './owl-story.ts'
+import { FLIGHT_MS, type OwlAway } from './perch.ts'
 import {
   currentLetter,
   enterHouse,
@@ -107,19 +108,25 @@ const SWING = { from: 100, to: -50, ms: 160 }
 /** What a player hears when the game has lost their session somewhere they could only be with one. */
 const LOST_SESSION = 'Something went wrong and your session was lost, so you start again in Hearth Village.'
 
-const ITEM = { swordWood: 0, swordSteel: 1, owl: 7, owlBlink: 8 }
+const ITEM = { swordWood: 0, swordSteel: 1, owl: 7, owlBlink: 8, falcon: 9 }
 
-/** A perch's tile with its owl's eyes shut. */
-const PERCH_BLINK: ReadonlyMap<number, number> = new Map([
-  [TILE.perch, TILE.perchBlink],
-  [TILE.perchIndoors, TILE.perchIndoorsBlink],
-])
-
-/** How long an owl's eyes stay shut, and the shortest and longest it waits between blinks. */
+/** How long the owl's eyes stay shut, and the shortest and longest it waits between blinks. */
 const OWL_BLINK = { shut: 140, every: [2200, 6000] } as const
 
 /** Where the owl sits on the dog, from the dog's center, and how high above that its hop starts. */
 const OWL_SEAT = { x: 5, y: -8, hop: 14 }
+
+/** Mochi's falcon rides on the dog's other side. */
+const FALCON_SEAT = { x: -5, y: -8 }
+
+/** The owl hops away when the player comes within this many tiles of it, and how long and high a hop is. */
+const OWL_SHY = { tiles: 2, ms: 520, lift: 18 }
+
+/** The owl's feet meet a perch's crossbar this far above the tile's center, and it hovers this far above that. */
+const PERCH_BAR = { y: -2, hover: 9 }
+
+/** How long the owl takes to drop onto a perch, and to fly back to the dog's shoulder. */
+const OWL_FLIGHT = { landMs: 180, homeMs: 420, lift: 8 }
 
 /** Rows of the dog's frame left above the waterline while swimming: head and collar. */
 const SWIM_DEPTH = 11
@@ -352,6 +359,13 @@ export class KingdomScene extends Phaser.Scene {
   private owl: Phaser.GameObjects.Image | undefined
   /** How far above its seat the owl is, while it hops onto the dog's shoulder. */
   private owlHop = 0
+  /** Which of the world's owl spots the owl waits at, until it's caught. */
+  private owlAt = 0
+  /** The part of an errand's flight the owl has been sent on, so each part starts once. */
+  private owlAway: OwlAway | null = null
+  /** The owl is off the dog's shoulder, flying an errand. */
+  private owlAloft = false
+  private falcon: Phaser.GameObjects.Image | undefined
   private monsters: Monster[] = []
   private fish: Fish[] = []
   private phish: Phish[] = []
@@ -418,7 +432,12 @@ export class KingdomScene extends Phaser.Scene {
 
     if (hasSteel()) this.setTile(this.world.chest, TILE.chestOpen, false)
 
-    if (owlAtLeast('crowned')) this.setTile(this.world.vaultChest, TILE.chestOpen, false)
+    // A game saved where an older version of the Aviary's grounds had a room resumes just inside the keep.
+    if (regionAt(this.pos) === 'The Aviary' && !this.standable(this.pos)) {
+      this.pos = this.world.aviaryEntry
+      this.previous = this.pos
+      quest.progress({ x: this.pos.x, y: this.pos.y })
+    }
 
     const map = this.make.tilemap({ data: this.world.tiles, tileWidth: T, tileHeight: T })
     const tileset = map.addTilesetImage('tiles')
@@ -427,7 +446,7 @@ export class KingdomScene extends Phaser.Scene {
     map.createLayer(0, tileset, 0, 0)
     this.map = map
     this.animateFountain()
-    this.animateOwls()
+    this.animateOwl()
 
     this.npcs = this.world.npcs.map((npc) => ({
       ...npc,
@@ -514,7 +533,12 @@ export class KingdomScene extends Phaser.Scene {
       .setDepth(10)
     this.swim(this.tileAt(this.pos) === TILE.water)
     this.sword = this.add.image(0, 0, 'items', ITEM.swordWood).setVisible(false).setDepth(9)
-    this.owl = this.add.image(0, 0, 'items', ITEM.owl).setVisible(owlAtLeast('fledged')).setDepth(12)
+    // Until it's caught, the owl waits out in the open; after that it rides on the dog's shoulder.
+    const [roost = this.pos] = this.world.owlSpots
+    this.owl = this.add.image(center(roost.x), center(roost.y), 'items', ITEM.owl).setDepth(12)
+
+    const lost = this.world.falcon
+    this.falcon = this.add.image(center(lost.x), center(lost.y), 'items', ITEM.falcon).setDepth(12)
 
     this.cameras.main.setBounds(0, 0, MAP_WIDTH * T, MAP_HEIGHT * T)
     this.cameras.main.startFollow(this.player, true)
@@ -561,27 +585,148 @@ export class KingdomScene extends Phaser.Scene {
     })
   }
 
-  /** The owl rides on the dog's shoulder from the moment the Falconer hands it over, and hops there first. */
-  private carryOwl() {
-    const { owl, player } = this
+  /** Once caught, the owl rides on the dog's shoulder, and Mochi's falcon, once found, on the other side. */
+  private carryBirds() {
+    const { owl, falcon, player } = this
 
-    if (!owl || !player || !owlAtLeast('fledged')) return
+    if (!player) return
 
-    if (!owl.visible) {
-      owl.setVisible(true)
+    if (owl && owlAtLeast('fledged') && !this.owlAloft)
+      owl.setPosition(player.x + OWL_SEAT.x, player.y + OWL_SEAT.y - this.owlHop)
 
-      // Motion is opt-in: without it the owl is simply there.
-      if (matchMedia('(prefers-reduced-motion: no-preference)').matches) {
-        this.owlHop = OWL_SEAT.hop
-        this.tweens.add({ targets: this, owlHop: 0, duration: 420, ease: 'Bounce.easeOut' })
-      }
+    if (falcon && falconFound()) falcon.setPosition(player.x + FALCON_SEAT.x, player.y + FALCON_SEAT.y)
+  }
+
+  /** Where the owl waits while it's still to be caught: a tile the player can't walk onto. */
+  private owlSpot(): Point | undefined {
+    return owlAtLeast('fledged') ? undefined : this.world.owlSpots[this.owlAt]
+  }
+
+  /** Where Mochi's falcon sits until the player finds it. */
+  private falconSpot(): Point | undefined {
+    return falconFound() ? undefined : this.world.falcon
+  }
+
+  /**
+   * Moves a bird to a point in the game's pixels, in an arc `lift` pixels high. Motion is opt-in: without
+   * it the bird is simply there.
+   */
+  private glide(
+    bird: Phaser.GameObjects.Image,
+    to: { readonly x: number; readonly y: number },
+    ms: number,
+    lift: number,
+    onDone?: () => void,
+  ) {
+    this.tweens.killTweensOf(bird)
+
+    if (!matchMedia('(prefers-reduced-motion: no-preference)').matches) {
+      bird.setPosition(to.x, to.y)
+      onDone?.()
+
+      return
     }
 
-    owl.setPosition(player.x + OWL_SEAT.x, player.y + OWL_SEAT.y - this.owlHop)
+    const from = { x: bird.x, y: bird.y }
+
+    this.tweens.add({
+      targets: bird,
+      x: to.x,
+      duration: ms,
+      ease: 'Sine.easeInOut',
+      onUpdate: (tween) => {
+        const t = tween.progress
+
+        bird.y = from.y + (to.y - from.y) * t - Math.sin(Math.PI * t) * lift
+      },
+      onComplete: () => {
+        bird.setPosition(to.x, to.y)
+        onDone?.()
+      },
+    })
+  }
+
+  /** The owl hops to its next spot when the player comes close, until it's too tired to. */
+  private startleOwl(poked = false) {
+    const spot = this.owlSpot()
+    const next = this.world.owlSpots[this.owlAt + 1]
+
+    if (owlStage() !== 'seeking' || !spot || !next || !this.owl) return
+
+    const far = Math.max(Math.abs(spot.x - this.pos.x), Math.abs(spot.y - this.pos.y)) > OWL_SHY.tiles
+
+    if (far && !poked) return
+
+    this.owlAt += 1
+    sfx('flutter')
+    this.glide(this.owl, { x: center(next.x), y: center(next.y) }, OWL_SHY.ms, OWL_SHY.lift)
+
+    quest.toast(
+      this.owlTired()
+        ? 'The owl lands, out of breath. It is too tired to hop again'
+        : 'The owl hops away before you can reach it',
+      'info',
+    )
+  }
+
+  /** The owl has hopped as far as it will: it waits at its last spot to be picked up. */
+  private owlTired() {
+    return this.owlAt >= this.world.owlSpots.length - 1
+  }
+
+  /** Flies the owl to the perch and back as an errand goes: out, then onto the perch or turned away. */
+  private syncFlight() {
+    const perch = quest.get().perch
+    const away = perch?.away ?? null
+
+    if (away === this.owlAway) return
+    this.owlAway = away
+
+    const { owl, player } = this
+    const spot = this.world.perches.find((candidate) => candidate.tool === perch?.tool)
+
+    // The owl's flight is motion, so it is opt-in: without it the owl stays on the dog's shoulder.
+    if (!owl || !player || !spot || !matchMedia('(prefers-reduced-motion: no-preference)').matches) {
+      this.owlAloft = false
+
+      return
+    }
+
+    const bar = { x: center(spot.x), y: center(spot.y) + PERCH_BAR.y }
+
+    const home = () =>
+      this.glide(
+        owl,
+        { x: player.x + OWL_SEAT.x, y: player.y + OWL_SEAT.y },
+        OWL_FLIGHT.homeMs,
+        OWL_FLIGHT.lift,
+        () => {
+          this.owlAloft = false
+        },
+      )
+
+    if (away === 'out') {
+      this.owlAloft = true
+      this.glide(owl, { x: bar.x, y: bar.y - PERCH_BAR.hover }, FLIGHT_MS.out, OWL_FLIGHT.lift)
+    } else if (away === 'landed') {
+      // Pomerium allowed the call: the owl lands, stays while the tool runs, then brings the answer back.
+      const stay = FLIGHT_MS.landed - OWL_FLIGHT.landMs - OWL_FLIGHT.homeMs
+
+      this.glide(owl, bar, OWL_FLIGHT.landMs, 0, () => this.time.delayedCall(stay, home))
+    } else if (away === 'turned') {
+      // Pomerium refused: the owl never touches the perch. It backs off, then comes home.
+      const backOff = FLIGHT_MS.turned - OWL_FLIGHT.homeMs
+
+      this.glide(owl, { x: bar.x, y: bar.y - PERCH_BAR.hover - 6 }, backOff, 0, home)
+    } else {
+      this.tweens.killTweensOf(owl)
+      this.owlAloft = false
+    }
   }
 
   override update(time: number) {
-    this.carryOwl()
+    this.syncFlight()
+    this.carryBirds()
     const { controls, inputResumesAt } = quest.get()
     const pending = this.pending
     this.pending = new Set()
@@ -667,42 +812,23 @@ export class KingdomScene extends Phaser.Scene {
     })
   }
 
-  /** Every owl blinks now and then, each in its own time, unless the player prefers less motion. */
-  private animateOwls() {
-    // Motion is opt-in: the owls stare, unblinking, for anyone who hasn't said they want it.
+  /** The owl blinks now and then, unless the player prefers less motion. */
+  private animateOwl() {
+    // Motion is opt-in: the owl stares, unblinking, for anyone who hasn't said they want it.
     if (!matchMedia('(prefers-reduced-motion: no-preference)').matches) return
 
-    const blinking = (shut: () => void, open: () => void) => {
-      const [soonest, latest] = OWL_BLINK.every
+    const [soonest, latest] = OWL_BLINK.every
 
-      const wait = () =>
-        this.time.delayedCall(soonest + Math.random() * (latest - soonest), () => {
-          shut()
-          this.time.delayedCall(OWL_BLINK.shut, () => {
-            open()
-            wait()
-          })
+    const wait = () =>
+      this.time.delayedCall(soonest + Math.random() * (latest - soonest), () => {
+        this.owl?.setFrame(ITEM.owlBlink)
+        this.time.delayedCall(OWL_BLINK.shut, () => {
+          this.owl?.setFrame(ITEM.owl)
+          wait()
         })
+      })
 
-      wait()
-    }
-
-    for (const perch of this.world.perches) {
-      const open = this.tileAt(perch)
-      const shut = PERCH_BLINK.get(open)
-
-      // Only the map's picture changes: the world still holds the perch itself.
-      if (shut !== undefined)
-        blinking(
-          () => this.map?.putTileAt(shut, perch.x, perch.y),
-          () => this.map?.putTileAt(open, perch.x, perch.y),
-        )
-    }
-
-    blinking(
-      () => this.owl?.setFrame(ITEM.owlBlink),
-      () => this.owl?.setFrame(ITEM.owl),
-    )
+    wait()
   }
 
   private setTile(p: Point, tile: number, draw = true) {
@@ -711,6 +837,11 @@ export class KingdomScene extends Phaser.Scene {
     if (row) row[p.x] = tile
 
     if (draw) this.map?.putTileAt(tile, p.x, p.y)
+  }
+
+  /** Whether the player can stand on a tile: open ground, or a gate they may be passing through. */
+  private standable(p: Point) {
+    return PLAYER_TERRAIN.has(this.tileAt(p)) || this.world.gates.some((gate) => same(gate, p))
   }
 
   private front(): Point {
@@ -726,8 +857,17 @@ export class KingdomScene extends Phaser.Scene {
       this.guards.some((guard) => same(guard.spot, p)) ||
       this.fish.some((fish) => same(fish, p)) ||
       this.phish.some((phish) => same(phish, p)) ||
+      this.birdAt(p) ||
       Boolean(this.houseGuard && same(this.houseGuard, p))
     )
+  }
+
+  /** Whether the owl, still to be caught, or Mochi's falcon, still to be found, sits on a tile. */
+  private birdAt(p: Point) {
+    const owl = this.owlSpot()
+    const falcon = this.falconSpot()
+
+    return Boolean((owl && same(owl, p)) || (falcon && same(falcon, p)))
   }
 
   private face(dir: Dir) {
@@ -743,7 +883,7 @@ export class KingdomScene extends Phaser.Scene {
     if (this.npcs.some((npc) => same(npc, target)) || (this.houseGuard && same(this.houseGuard, target)))
       return
 
-    if (this.phish.some((phish) => same(phish, target))) return
+    if (this.phish.some((phish) => same(phish, target)) || this.birdAt(target)) return
 
     const guard = this.guards.find((candidate) => same(candidate.spot, target))
 
@@ -851,6 +991,7 @@ export class KingdomScene extends Phaser.Scene {
     this.previous = target
     quest.progress({ x: target.x, y: target.y, dir: this.dir })
     quest.setRegion(regionAt(target))
+    this.startleOwl()
 
     if (cameIn) void this.cameHome()
   }
@@ -996,8 +1137,36 @@ export class KingdomScene extends Phaser.Scene {
       return
     }
 
-    // A sign beside a gate shows the route that gate asks; a perch's sign shows its MCP server's route.
+    const owl = this.owlSpot()
+
+    if (owl && same(owl, target)) {
+      // A poke sends an owl with hops left in it on its way; a tired one lets itself be picked up.
+      if (owlStage() === 'seeking' && !this.owlTired()) this.startleOwl(true)
+      else if (catchOwl() && matchMedia('(prefers-reduced-motion: no-preference)').matches) {
+        this.owlHop = OWL_SEAT.hop
+        this.tweens.add({ targets: this, owlHop: 0, duration: 420, ease: 'Bounce.easeOut' })
+      }
+
+      return
+    }
+
+    const falcon = this.falconSpot()
+
+    if (falcon && same(falcon, target)) {
+      findFalcon()
+
+      return
+    }
+
+    // A sign beside a gate shows the route that gate asks. The Aviary's shows the MCP server's route and
+    // its list of tools, and each perch's sign names the one tool that perch stands for.
     const sign = this.world.signs.find((candidate) => same(candidate, target))
+
+    if (sign?.signId === 'aviary') {
+      void readAviarySign()
+
+      return
+    }
 
     if (sign) {
       const signGate = this.world.gates.find((candidate) => candidate.signId === sign.signId)
@@ -1006,10 +1175,13 @@ export class KingdomScene extends Phaser.Scene {
       return
     }
 
-    const perch = this.world.perches.find((candidate) => same(candidate, target))
+    const perch = this.world.perches.find(
+      (candidate) => same(candidate, target) || same(candidate.sign, target),
+    )
 
     if (perch) {
-      visitPerch(perch.roost)
+      if (same(perch.sign, target)) readPerchSign(perch.tool)
+      else visitPerch(perch.tool)
 
       return
     }
@@ -1027,9 +1199,7 @@ export class KingdomScene extends Phaser.Scene {
 
     const tile = this.tileAt(target)
 
-    if (tile === TILE.chest && same(target, this.world.vaultChest)) {
-      if (openVaultChest()) this.setTile(target, TILE.chestOpen)
-    } else if (tile === TILE.chest && openChest()) {
+    if (tile === TILE.chest && openChest()) {
       this.setTile(target, TILE.chestOpen)
       this.raiseItem(target, ITEM.swordSteel)
     }
@@ -1039,8 +1209,6 @@ export class KingdomScene extends Phaser.Scene {
     if (isFountain(tile)) drinkFromFountain()
 
     if (tile === TILE.anvil) readAnvil()
-
-    if (tile === TILE.throne) readThrone()
 
     if (tile === TILE.workbench) readWorkbench()
 

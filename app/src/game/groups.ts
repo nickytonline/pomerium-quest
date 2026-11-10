@@ -2,7 +2,7 @@
  * The groups policies check, named as Pomerium reads them in `claim/groups`. They're plural, since each is a
  * set of players; the stages (citizen, knight) are singular, since they describe one player. The Oracle keeps
  * every group but scribes, which no one can hold, so the scriptorium stays shut. Falconers and keyholders
- * are chapter two's: the owl's errands at the Aviary earn them (see owl.ts).
+ * are chapter two's: the Falconer vouches for the first, and one of the owl's errands earns the second (see owl.ts).
  */
 export const GROUPS = {
   citizens: 'citizens',

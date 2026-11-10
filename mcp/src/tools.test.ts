@@ -8,7 +8,7 @@ import { registerTools } from './tools.ts'
 
 const PLAYER: Verified = {
   ok: true,
-  caller: { email: 'nick@example.org', groups: [GROUPS.citizens], roost: 'aviary' },
+  caller: { email: 'nick@example.org', groups: [GROUPS.citizens] },
 }
 
 const closers: (() => Promise<void>)[] = []
@@ -44,7 +44,7 @@ async function owlFor(verified: Verified) {
 }
 
 describe('the owl’s tools', () => {
-  it('are the four the game and the policies name', async () => {
+  it('are the six the game and the policy name', async () => {
     const { client } = await owlFor(PLAYER)
     const { tools } = await client.listTools()
 
@@ -56,21 +56,19 @@ describe('the owl’s tools', () => {
 
     expect(await call(OWL_TOOLS.whoami)).toEqual({
       failed: false,
-      data: { email: 'nick@example.org', groups: [GROUPS.citizens], roost: 'aviary' },
+      data: { email: 'nick@example.org', groups: [GROUPS.citizens] },
     })
   })
 
-  it('write to the Oracle for the groups the gates check', async () => {
+  it('write to the Oracle only for the letter, which earns the group the last gate checks', async () => {
     const { call, granted } = await owlFor(PLAYER)
 
-    expect((await call(OWL_TOOLS.deliverLetter)).data).toMatchObject({ granted: GROUPS.falconers })
-    expect((await call(OWL_TOOLS.openVault)).data).toMatchObject({ granted: GROUPS.keyholders })
-    expect(await call(OWL_TOOLS.ringBell)).toMatchObject({ failed: false })
+    expect((await call(OWL_TOOLS.deliverLetter)).data).toMatchObject({ granted: GROUPS.keyholders })
 
-    expect(granted).toEqual([
-      `nick@example.org -> ${GROUPS.falconers}`,
-      `nick@example.org -> ${GROUPS.keyholders}`,
-    ])
+    for (const tool of [OWL_TOOLS.ringBell, OWL_TOOLS.scoutGrounds, OWL_TOOLS.openVault, OWL_TOOLS.openCages])
+      expect(await call(tool), tool).toMatchObject({ failed: false })
+
+    expect(granted).toEqual([`nick@example.org -> ${GROUPS.keyholders}`])
   })
 
   it('refuse a call that didn’t come through Pomerium, and write nothing', async () => {

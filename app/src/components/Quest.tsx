@@ -44,12 +44,13 @@ const STAGE_LABEL: Record<QuestStage, string> = {
 const OWL_LABEL: Record<OwlStage, string> = {
   afar: '',
   arrived: 'Beyond the keep',
+  seeking: 'Owl catcher',
   fledged: 'Owl keeper',
+  turned: 'Owl keeper (owl turned back)',
   vouched: 'Falconer (stale claims)',
   falconer: 'Falconer',
   entrusted: 'Keyholder (stale claims)',
   keyholder: 'Keyholder',
-  crowned: 'Keeper of the Royal Seal',
   triumphant: 'Hero of the kingdom',
 }
 

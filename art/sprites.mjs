@@ -183,7 +183,7 @@ const BOT_SLIME = [
   ],
 ]
 
-// The Falconer's owl, small enough to ride on the dog's shoulder.
+// The owl the player catches, small enough to ride on the dog's shoulder.
 const OWL = {
   palette: { Q: '#9a6b3f', q: '#d9b98a', Y: '#ffd86b' },
   rows: [
@@ -199,6 +199,30 @@ const OWL = {
     '....KQqqqqQK....',
     '.....KqqqqK.....',
     '......KKKK......',
+    '................',
+    '................',
+    '................',
+    '................',
+  ],
+}
+
+// Mochi's falcon, lost in the Aviary's grounds: slimmer than the owl, with a dark hood, a barred chest and
+// a ribbon on one leg in the teal of Mochi's jacket.
+const FALCON = {
+  palette: { B: '#4a5a78', b: '#2f3a52', w: '#f1ead8', s: '#b9ad94', Y: '#ffd86b', H: '#3fc1b0' },
+  rows: [
+    '................',
+    '................',
+    '......KKKK......',
+    '.....KbbbbK.....',
+    '....KbbbbbbK....',
+    '....KbYwwYbK....',
+    '....KbwYYwbK....',
+    '....KBwwwwBK....',
+    '....KBwsswBK....',
+    '....KBswwsBK....',
+    '.....KBwwBK.....',
+    '......KYHK......',
     '................',
     '................',
     '................',
@@ -585,7 +609,7 @@ const NPCS = {
       '.............D..',
     ],
   },
-  // Keeps the Aviary beyond the Royal Keep: a green cap with a red feather, and the owl on a gloved fist.
+  // Keeps the Aviary beyond the Royal Keep: a green cap with a red feather, and an owl on a gloved fist.
   falconer: {
     palette: {
       G: '#3f8f5a',
@@ -619,7 +643,7 @@ const NPCS = {
       '................',
     ],
   },
-  // Mochi, the friend waiting in the Throne Room: the dog's own shape in white fur and a teal jacket,
+  // Mochi, the friend waiting in the Eyrie: the dog's own shape in white fur and a teal jacket,
   // with bright eyes where the player's sunglasses are.
   friend: {
     palette: {
@@ -697,6 +721,7 @@ const grids = {
   bot_slime: BOT_SLIME,
   fish: FISH.map((f) => f.rows),
   owl: [OWL.rows, OWL_BLINK.rows],
+  falcon: [FALCON.rows],
   sword_wood: [SWORD_WOOD],
   sword_steel: [SWORD_STEEL],
   shield_wood: [SHIELD_WOOD],
@@ -716,7 +741,7 @@ const dogCells = [dog.down, dog.up, dog.right, dog.left]
 sheet(join(assets, 'dog.png'), [dogCells.flat()])
 
 sheet(join(assets, 'items.png'), [
-  [SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, ...BOT_SLIME, ...FISH, OWL, OWL_BLINK],
+  [SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, ...BOT_SLIME, ...FISH, OWL, OWL_BLINK, FALCON],
 ])
 
 sheet(join(assets, 'npcs.png'), [npcs])
@@ -728,7 +753,7 @@ sheet(
   join(out, 'preview.png'),
   [
     ...dogCells.map((r) => [...r, null, null]),
-    [SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, ...BOT_SLIME, ...FISH, OWL, OWL_BLINK],
+    [SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, ...BOT_SLIME, ...FISH, OWL, OWL_BLINK, FALCON],
     npcs.slice(0, 5),
     [npcs[5], npcs[6], npcs[7], npcs[8], npcs[9], tiles[15], tiles[42]],
   ],

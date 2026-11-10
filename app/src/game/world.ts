@@ -1,5 +1,5 @@
 import type { SignId } from './content.ts'
-import type { Roost } from './owl.ts'
+import { OWL_TOOLS, type OwlTool } from './owl.ts'
 import type { ZoneId } from './zones.ts'
 
 // The kingdom map: a 40x49 tile grid built from a few drawing helpers, plus where every
@@ -41,10 +41,6 @@ export const TILE = {
   tableHeel: 40,
   signIndoors: 41,
   perch: 42,
-  perchIndoors: 43,
-  throne: 44,
-  perchBlink: 45,
-  perchIndoorsBlink: 46,
 } as const
 
 export type TileId = (typeof TILE)[keyof typeof TILE]
@@ -73,6 +69,9 @@ export const MAP_HEIGHT = 49
 
 /** The Royal Keep's wall: chapter one's kingdom lies above this row, and the Aviary below it. */
 const KEEP_WALL = 29
+
+/** The last wall: the Aviary's open ground lies above this row, and the Eyrie below it. */
+const EYRIE_WALL = 43
 
 /** A tile's size in game pixels. */
 export const TILE_PX = 16
@@ -135,9 +134,11 @@ export interface Sign extends Point {
   readonly signId: SignId
 }
 
-/** A perch the owl flies from, to one of the MCP server's two routes. */
+/** A perch stands for one of the Aviary's tools: sending the owl to it calls that tool. */
 export interface Perch extends Point {
-  readonly roost: Roost
+  readonly tool: OwlTool
+  /** The sign beside it, which names the tool. */
+  readonly sign: Point
 }
 
 export interface Npc extends Point {
@@ -187,12 +188,14 @@ export interface World {
   readonly phish: readonly Point[]
   readonly rocks: readonly Point[]
   readonly chest: Point
-  /** The owl's perches: the Aviary's by the Falconer, the Rookery's inside the Mews. */
+  /** One perch for each of the Aviary's tools, in open ground: no wall or gate stands around any of them. */
   readonly perches: readonly Perch[]
-  /** The chest in the Royal Vault, which holds the Royal Seal. */
-  readonly vaultChest: Point
-  /** The empty throne, in the room behind chapter two's last gate, where the player's friend waits. */
-  readonly throne: Point
+  /** Where the owl waits to be caught, in order: it hops to the next when the player gets close, and tires at the last. */
+  readonly owlSpots: readonly Point[]
+  /** Where Mochi's falcon is lost, until the player finds it. */
+  readonly falcon: Point
+  /** Where a game saved somewhere the Aviary's grounds no longer have resumes: just inside the keep. */
+  readonly aviaryEntry: Point
   /** Top-left tile of the 2x2 fountain. */
   readonly fountain: Point
   readonly spawn: Point
@@ -205,9 +208,12 @@ export type Region =
   | 'Kingdom Town'
   | 'Library Quarter'
   | 'The Aviary'
+  | 'The Eyrie'
 
 export function regionAt(point: Point): Region {
   if (inHouse(point) || same(point, HOUSE.door)) return 'Your House'
+
+  if (point.y > EYRIE_WALL) return 'The Eyrie'
 
   if (point.y > KEEP_WALL) return 'The Aviary'
 
@@ -368,55 +374,71 @@ export function buildWorld(): World {
   fill(17, KEEP_WALL, MAP_WIDTH - 2, KEEP_WALL, TILE.wall)
   fill(1, KEEP_WALL + 1, 15, MAP_HEIGHT - 2, TILE.tree)
 
-  // The Aviary: a road from the keep past the Falconer, then east to the Mews and the Royal Vault. A lane
-  // runs south between those two to the Throne Room, the quest's last gate.
+  // The Aviary's grounds: open ground from the keep down to the last wall. A road runs past the Falconer,
+  // east, then south to the Eyrie's gate. The perches stand in the open, so only policy keeps an owl off one.
   fill(21, 30, 21, 33, TILE.cobble)
   fill(21, 33, 35, 33, TILE.cobble)
-  set(27, 34, TILE.cobble)
-  set(35, 34, TILE.cobble)
-  room(24, 35, 30, 40)
-  room(32, 35, 38, 40)
-  fill(31, 34, 31, 41, TILE.cobble)
-  room(25, 42, 37, 47)
-  // A carpet of cobble from the door to the throne.
-  fill(31, 43, 31, 45, TILE.cobble)
+  fill(28, 34, 28, EYRIE_WALL - 1, TILE.cobble)
+  // The Royal Vault: a landmark with no door. Nothing opens it, and one perch beside it never does either.
+  fill(34, 35, 37, 37, TILE.wall)
+  // The Eyrie, behind the quest's last gate, where Mochi waits.
+  fill(17, EYRIE_WALL, MAP_WIDTH - 2, EYRIE_WALL, TILE.wall)
+  fill(28, EYRIE_WALL + 1, 28, EYRIE_WALL + 2, TILE.cobble)
   each(
     [
       [18, 31],
-      [19, 36],
-      [22, 39],
       [31, 31],
       [37, 31],
+      [38, 33],
+      [18, 35],
+      [26, 37],
+      [38, 36],
+      [22, 38],
       [18, 39],
-      [19, 43],
-      [22, 45],
-      [18, 46],
-      [23, 42],
-      [38, 43],
-      [38, 46],
+      // The falcon's corner: trees on three sides.
+      [36, 40],
+      [37, 40],
+      [38, 41],
+      [17, 42],
+      [19, 45],
+      [22, 46],
+      [36, 46],
+      [33, 44],
     ],
     TILE.tree,
   )
   each(
     [
-      [20, 44],
-      [24, 41],
-      [36, 41],
       [19, 33],
       [29, 31],
       [34, 32],
-      [20, 37],
+      [30, 36],
+      [23, 37],
+      [26, 42],
+      [33, 41],
+      [25, 45],
+      [31, 46],
+      [24, 47],
+      [30, 44],
+      [34, 46],
     ],
     TILE.flowers,
   )
 
   const perches: Perch[] = [
-    { x: 25, y: 32, roost: 'aviary' },
-    { x: 26, y: 38, roost: 'rookery' },
-  ]
+    { x: 24, y: 35, tool: OWL_TOOLS.whoami },
+    { x: 19, y: 37, tool: OWL_TOOLS.ringBell },
+    { x: 24, y: 40, tool: OWL_TOOLS.scoutGrounds },
+    { x: 31, y: 40, tool: OWL_TOOLS.deliverLetter },
+    // Beside the vault it would open, if any policy allowed it.
+    { x: 35, y: 38, tool: OWL_TOOLS.openVault },
+    { x: 19, y: 41, tool: OWL_TOOLS.openCages },
+  ].map((perch) => ({ ...perch, sign: { x: perch.x + 1, y: perch.y } }))
 
-  set(25, 32, TILE.perch)
-  set(26, 38, TILE.perchIndoors)
+  for (const perch of perches) {
+    set(perch.x, perch.y, TILE.perch)
+    set(perch.sign.x, perch.sign.y, TILE.sign)
+  }
 
   // Leaving through a gate puts the player back in the zone they passed to reach it, so its guard checks
   // that zone's rule again. The fields open onto Hearth Village, which no route guards.
@@ -431,9 +453,7 @@ export function buildWorld(): World {
     { x: 33, y: 20, zoneId: 'library', signId: 'library', ...enter, exitZoneId: 'town' },
     { x: 29, y: 24, zoneId: 'scriptorium', signId: 'scriptorium', ...enter, exitZoneId: 'library' },
     { x: 21, y: KEEP_WALL, zoneId: 'keep', signId: 'keep', ...enter, exitZoneId: 'town' },
-    { x: 27, y: 35, zoneId: 'mews', signId: 'mews', ...enter, exitZoneId: 'keep' },
-    { x: 35, y: 35, zoneId: 'vault', signId: 'vault', ...enter, exitZoneId: 'keep' },
-    { x: 31, y: 42, zoneId: 'throne', signId: 'throne', ...enter, exitZoneId: 'keep' },
+    { x: 28, y: EYRIE_WALL, zoneId: 'eyrie', signId: 'eyrie', ...enter, exitZoneId: 'keep' },
   ]
 
   for (const gate of gates) set(gate.x, gate.y, TILE.gateClosed)
@@ -446,12 +466,9 @@ export function buildWorld(): World {
     { x: 35, y: 19, signId: 'library' },
     { x: 30, y: 25, signId: 'scriptorium' },
     { x: 22, y: 28, signId: 'keep' },
-    { x: 28, y: 34, signId: 'mews' },
-    { x: 36, y: 34, signId: 'vault' },
-    { x: 32, y: 41, signId: 'throne' },
-    // The perches' signs show the MCP server's two routes; no gate stands beside them.
-    { x: 26, y: 32, signId: 'aviary' },
-    { x: 28, y: 38, signId: 'rookery' },
+    { x: 29, y: EYRIE_WALL - 1, signId: 'eyrie' },
+    // The Aviary's sign shows the MCP server's route and lists its tools; no gate stands beside it.
+    { x: 20, y: 31, signId: 'aviary' },
   ]
 
   // A sign takes on the ground it stands on, so one inside a building stands on its floor, not grass.
@@ -472,12 +489,6 @@ export function buildWorld(): World {
   // The Royal Ledger on its lectern. Getting past the scriptorium door is the write, so it's only scenery.
   set(26, 22, TILE.lectern)
 
-  const vaultChest = { x: 35, y: 38 }
-  set(vaultChest.x, vaultChest.y, TILE.chest)
-
-  const throne = { x: 31, y: 46 }
-  set(throne.x, throne.y, TILE.throne)
-
   return {
     tiles,
     gates,
@@ -485,8 +496,14 @@ export function buildWorld(): World {
     rocks,
     chest,
     perches,
-    vaultChest,
-    throne,
+    owlSpots: [
+      { x: 26, y: 31 },
+      { x: 32, y: 38 },
+      { x: 22, y: 41 },
+      { x: 31, y: 35 },
+    ],
+    falcon: { x: 37, y: 41 },
+    aviaryEntry: { x: 21, y: 31 },
     fountain,
     npcs: [
       { x: 12, y: 25, npcId: 'sage' },
@@ -497,8 +514,8 @@ export function buildWorld(): World {
       { x: 34, y: 25, npcId: 'librarian' },
       { x: 30, y: 13, npcId: 'baker' },
       { x: 23, y: 32, npcId: 'falconer' },
-      // Mochi waits on the carpet in front of the throne.
-      { x: 31, y: 45, npcId: 'friend' },
+      // Mochi waits in the Eyrie, at the end of the path from its gate.
+      { x: 28, y: 46, npcId: 'friend' },
     ],
     bots: [
       { x: 10, y: 2 },

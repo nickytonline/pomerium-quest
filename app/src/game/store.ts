@@ -5,8 +5,8 @@ import type { Choice, DocLink, LessonId, Page } from './content.ts'
 import type { HouseRule, HouseState } from './house.ts'
 import { houseActor, persistHouse, resetHouse, type HouseEvent, type HouseStage } from './house-machine.ts'
 import { owlActor, persistOwl, resetOwl, type OwlEvent, type OwlStage } from './owl-machine.ts'
-import type { Roost } from './owl.ts'
-import type { OwlFlight, ToolInfo } from './perch.ts'
+import type { OwlTool } from './owl.ts'
+import type { OwlAway, OwlFlight } from './perch.ts'
 import type { EvalLine, Identity } from './ppl.ts'
 import {
   persist,
@@ -67,15 +67,14 @@ export interface DenyView {
   readonly cachedClaims?: { readonly session: readonly string[]; readonly cached: readonly string[] | null }
 }
 
-/** The owl's perch, as its panel shows it. */
+/** The perch the player is at, as its panel shows it. */
 export interface PerchView {
-  readonly roost: Roost
-  /** The tools the roost listed, once Pomerium has let the owl ask; null until then. */
-  readonly tools: readonly ToolInfo[] | null
-  /** The owl's last flight from this perch: the MCP request and Pomerium's answer. */
+  /** The Aviary's tool this perch stands for. */
+  readonly tool: OwlTool
+  /** The owl's last flight to this perch: the MCP request and Pomerium's answer. */
   readonly flight: OwlFlight | null
-  /** The owl is out on an errand. */
-  readonly busy: boolean
+  /** Where the owl is while it's out on the errand; null while it's with the player. */
+  readonly away: OwlAway | null
 }
 
 export interface LogEntry {
@@ -142,9 +141,9 @@ export interface QuestState {
   readonly houseEditor: boolean
   /** Mirrors the owl machine so React can render it. */
   readonly owlStage: OwlStage
-  /** The perch the player is sending the owl from, while its panel is open. Pauses the game. */
+  /** The perch the player is sending the owl to, while its panel is open. Pauses the game. */
   readonly perch: PerchView | null
-  /** The player found their friend in the Throne Room: chapter two, and the quest, are complete. */
+  /** The player brought Mochi their falcon in the Eyrie: chapter two, and the quest, are complete. */
   readonly chapterTwoDone: boolean
 }
 
@@ -344,17 +343,15 @@ export const quest = {
     persistOwl()
     update(noted({ owlStage: owlActor.getSnapshot().value }))
   },
-  openPerch: (roost: Roost) =>
-    update({ perch: { roost, tools: null, flight: null, busy: false }, menuOpen: false, journalOpen: false }),
-  perchBusy: (busy: boolean) => {
-    if (state.perch) update({ perch: { ...state.perch, busy } })
+  openPerch: (tool: OwlTool) =>
+    update({ perch: { tool, flight: null, away: null }, menuOpen: false, journalOpen: false }),
+  /** The owl sets off, lands or is turned back; the scene flies it to match. */
+  perchAway: (away: OwlAway | null) => {
+    if (state.perch) update({ perch: { ...state.perch, away } })
   },
-  /** The owl is back: the panel shows the flight, and the tools if the roost listed them. */
+  /** The owl is back with the player: the panel shows the flight. */
   perchFlew: (flight: OwlFlight) => {
-    if (!state.perch) return
-    const tools = flight.outcome.kind === 'tools' ? flight.outcome.tools : state.perch.tools
-
-    update({ perch: { ...state.perch, flight, tools, busy: false } })
+    if (state.perch) update({ perch: { ...state.perch, flight, away: null } })
   },
   closePerch: () => update({ perch: null, inputResumesAt: performance.now() + 200 }),
   openChapterTwoEnd: () => update({ chapterTwoDone: true, menuOpen: false, journalOpen: false }),

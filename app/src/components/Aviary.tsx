@@ -1,13 +1,14 @@
-// Chapter two's screens: the owl's perch, where the player sends real MCP requests through Pomerium (an
-// MCP Inspector in the kingdom's clothes), and the chapter's ending. Nothing here decides access.
+// Chapter two's screens: a perch's panel, where the player sends their owl on a real MCP tool call through
+// Pomerium and reads how it went, and the chapter's ending. Nothing here decides access.
 import { useEffect, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { CHAPTER_TWO_LESSONS, LESSONS, link, type LessonId } from '../game/content.ts'
-import { flyOwl } from '../game/owl-story.ts'
-import { MCP_PATH, OWL_TOOLS, roostOrigin, type OwlTool, type Roost } from '../game/owl.ts'
-import type { ToolInfo } from '../game/perch.ts'
+import { flyOwl, leavePerch } from '../game/owl-story.ts'
+import { MCP_PATH, OWL_ERRANDS, OWL_TOOLS, aviaryOrigin, type OwlTool } from '../game/owl.ts'
+import { decide } from '../game/ppl.ts'
 import { quest, useQuest, type PerchView } from '../game/store.ts'
 import { zoneRouteYaml } from '../game/story.ts'
 import { zoneById } from '../game/zones.ts'
+import { PolicyLines } from './PolicyLines.tsx'
 import { TabbedScreen, switchTab, tabHint } from './TabbedScreen.tsx'
 
 const smallButton =
@@ -19,75 +20,37 @@ const overlay =
 const paperCode = 'm-0 overflow-x-auto rounded bg-paper-tint px-3 py-2.5 text-[0.8rem] leading-[1.45]'
 const paperLabel = 'm-0 text-[0.72rem] tracking-[0.08em] text-paper-muted uppercase'
 
-const ROOSTS: Record<Roost, { readonly title: string; readonly about: string }> = {
-  aviary: {
-    title: "The Aviary's perch",
-    about:
-      "The owl flies from here to the Aviary and asks for an errand by name. Pick one, and watch what comes back. The Aviary's keeper checks every errand against their orders, as if you had asked yourself.",
-  },
-  rookery: {
-    title: "The Rookery's perch",
-    about:
-      'From here the owl flies to the Rookery: the same errands as the Aviary, kept behind a different window with different orders. Only a falconer’s owl is let in.',
-  },
-}
-
 /** What the perch's Pomerium tab links to. */
 const PERCH_DOCS: readonly LessonId[] = ['mcpServer', 'mcpIdentity', 'mcpTool']
 
-const isOwlTool = (name: string): name is OwlTool => Object.values<string>(OWL_TOOLS).includes(name)
+/** How the kingdom tells what the owl brought back from each errand. */
+const BROUGHT: Partial<Record<OwlTool, string>> = {
+  [OWL_TOOLS.whoami]: 'The owl is back. This is who it flew for:',
+  [OWL_TOOLS.ringBell]: 'The owl is back, and the bell is still humming:',
+  [OWL_TOOLS.scoutGrounds]: 'The owl is back, with news from high above the grounds:',
+  [OWL_TOOLS.deliverLetter]: 'The owl is back, with a note from the Oracle tied to its leg:',
+}
 
-/** The owl's perch. It steps aside while a dialog, a refusal or a sign-in has the player's attention. */
+/**
+ * A perch's panel. It steps aside while a dialog, a refusal or a sign-in has the player's attention, and,
+ * for players who have motion on, while the owl is in the air, so they can watch it fly.
+ */
 export function Perch() {
   const perch = useQuest((s) => s.perch)
   const covered = useQuest((s) => s.dialog !== null || s.deny !== null || s.signIn !== null)
 
   if (!perch || covered) return null
 
+  if (perch.away && matchMedia('(prefers-reduced-motion: no-preference)').matches) return null
+
   return <PerchPanel perch={perch} />
 }
 
-function ToolButton({
-  tool,
-  perch,
-  first,
-}: {
-  readonly tool: ToolInfo
-  readonly perch: PerchView
-  /** The first errand takes focus when the list arrives, so the keyboard can reach it without Tab. */
-  readonly first: boolean
-}) {
-  const { name } = tool
-
-  return (
-    <li className="grid gap-1 rounded border-2 border-panel-edge px-3 py-2">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <span>
-          <span className="font-display text-sun">{tool.title ?? name}</span>{' '}
-          <code className="text-[0.8rem] text-lens">{name}</code>
-        </span>
-        <button
-          className={`${smallButton} border-lens`}
-          type="button"
-          disabled={perch.busy || !isOwlTool(name)}
-          autoFocus={first}
-          onClick={() => {
-            if (isOwlTool(name)) void flyOwl(perch.roost, { method: 'tools/call', tool: name })
-          }}
-        >
-          Send the owl
-        </button>
-      </div>
-      {tool.description && <p className="m-0 text-[0.85rem] text-muted">{tool.description}</p>}
-    </li>
-  )
-}
-
-/** What the owl brought back from its last errand, in the kingdom's words. */
+/** What the owl brought back from its last errand to this perch, in the kingdom's words. */
 function Returned({ perch }: { readonly perch: PerchView }) {
   const outcome = perch.flight?.outcome
 
-  if (perch.busy) return <p className="m-0 text-[0.9rem] text-muted">The owl is on its way…</p>
+  if (perch.away) return <p className="m-0 text-[0.9rem] text-muted">The owl is on its way…</p>
 
   if (!outcome || outcome.kind === 'tools') return null
 
@@ -95,7 +58,9 @@ function Returned({ perch }: { readonly perch: PerchView }) {
     return (
       <div className="grid gap-1">
         <p className="m-0 text-[0.9rem]">
-          {outcome.failed ? 'The owl came back with nothing:' : 'The owl is back, and it brought this:'}
+          {outcome.failed
+            ? 'The owl came back with nothing:'
+            : (BROUGHT[perch.tool] ?? 'The owl is back, and it brought this:')}
         </p>
         <pre className="m-0 overflow-x-auto rounded border border-panel-edge bg-code-bg px-3 py-2.5 text-[0.8rem] leading-[1.45] text-lens">
           {outcome.text}
@@ -107,23 +72,26 @@ function Returned({ perch }: { readonly perch: PerchView }) {
   return (
     <p className="m-0 text-[0.9rem] text-deny" role="alert">
       {outcome.kind === 'refused'
-        ? 'The owl was turned back. Its guard said no.'
+        ? 'The owl was turned back before it could land. Pomerium said no.'
         : 'The owl came back without an answer.'}
     </p>
   )
 }
 
 function PerchPanel({ perch }: { readonly perch: PerchView }) {
-  const { roost, tools, flight, busy } = perch
-  const zone = zoneById(roost)
-  const url = `${roostOrigin(location.origin, roost)}${MCP_PATH}`
+  const { tool, flight, away } = perch
+  const { title, description } = OWL_ERRANDS[tool]
+  const zone = zoneById('aviary')
+  const url = `${aviaryOrigin(location.origin)}${MCP_PATH}`
+  const identity = useQuest((s) => s.identity)
+  const flown = flight !== null
 
-  // Escape closes the perch wherever focus is.
+  // Escape leaves the perch wherever focus is.
   useEffect(() => {
     const onEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
       event.preventDefault()
-      quest.closePerch()
+      leavePerch()
     }
 
     window.addEventListener('keydown', onEscape)
@@ -136,18 +104,20 @@ function PerchPanel({ perch }: { readonly perch: PerchView }) {
     if (event.key !== 'Escape') event.stopPropagation()
   }
 
-  const actions = (
+  // The button that takes focus is the one the player most likely wants next: send first, then leave.
+  const actions = (focus: boolean) => (
     <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-1">
-      <button className={smallButton} type="button" onClick={() => quest.closePerch()}>
+      <button className={smallButton} type="button" autoFocus={focus && flown} onClick={leavePerch}>
         Leave the perch
       </button>
       <button
-        className={smallButton}
+        className={`${smallButton} border-lens`}
         type="button"
-        disabled={busy}
-        onClick={() => void flyOwl(roost, { method: 'tools/list' })}
+        disabled={away !== null}
+        autoFocus={focus && !flown}
+        onClick={() => void flyOwl(tool)}
       >
-        Ask what errands there are
+        {flown ? 'Send the owl again' : 'Send the owl'}
       </button>
     </div>
   )
@@ -155,43 +125,37 @@ function PerchPanel({ perch }: { readonly perch: PerchView }) {
   const kingdom = (
     <div className="flex flex-col gap-3 rounded-tr-lg rounded-b-lg border-3 border-ink bg-night-deep px-4 py-3.5">
       <h2 className="m-0 font-display text-[1.4rem] text-sun" id="perch-title-kingdom">
-        {ROOSTS[roost].title}
+        {title} <code className="text-[0.85rem] text-lens">{tool}</code>
       </h2>
-      <p className="m-0 text-[0.9rem]">{ROOSTS[roost].about}</p>
-      {tools ? (
-        <ul className="m-0 grid list-none gap-2 p-0" aria-label="Errands the owl can run">
-          {tools.map((tool, index) => (
-            <ToolButton key={tool.name} tool={tool} perch={perch} first={index === 0} />
-          ))}
-        </ul>
-      ) : (
-        <p className="m-0 text-[0.9rem] text-muted">
-          {busy ? 'The owl is asking what errands there are…' : 'The owl has no list of errands from here.'}
-        </p>
-      )}
+      <p className="m-0 text-[0.9rem]">{description}</p>
+      <p className="m-0 text-[0.9rem]">
+        This perch is one of the Aviary's errands. Send your owl and it flies there on your behalf, carrying
+        your papers. Nothing stands around the perch: the Aviary's orders alone decide whether it may land.
+      </p>
       <Returned perch={perch} />
       <p className="m-0 text-[0.85rem] text-muted">
-        Every errand is a real request to an MCP server, through Pomerium. See it on the{' '}
+        Sending the owl is a real request to an MCP server, through Pomerium. See it on the{' '}
         <button className="border-0 bg-transparent p-0 text-lens underline" type="button" onClick={switchTab}>
           In Pomerium
         </button>{' '}
         tab.
       </p>
-      {actions}
+      {actions(true)}
     </div>
   )
 
   const pomerium = (
     <div className="flex flex-col gap-2.5 rounded-tr-lg rounded-b-lg border-t-6 border-lens bg-paper px-5 py-[18px] text-paper-ink [&_a]:text-paper-link [&_:focus-visible]:outline-paper-focus">
       <h2 className="m-0 text-[1.25rem] font-bold" id="perch-title-pomerium">
-        The owl is an MCP client
+        Sending the owl is a tool call
       </h2>
       <p className="m-0 text-[0.9rem]">
-        MCP (the Model Context Protocol) is how an AI agent calls tools on a server. This perch is the agent's
-        side of it, without the AI: you pick the tool. The game's route for the perch is an MCP client route,
-        so Pomerium hands the game a token for your session. The game sends each request to{' '}
-        <code className="wrap-anywhere">{url}</code> with that token, and Pomerium checks it against the route
-        below. The owl acts on your behalf, so the claims Pomerium checks are yours.
+        MCP (the Model Context Protocol) is how an AI agent calls tools on a server. The owl is the MCP
+        client, without the AI: you pick the tool by picking the perch. The game sends it from an MCP client
+        route, so Pomerium hands the game a token for your session. The game sends the <code>tools/call</code>{' '}
+        request for <code>{tool}</code> to <code className="wrap-anywhere">{url}</code> with that token, and
+        Pomerium checks it against the route below. The owl acts on your behalf, so the claims Pomerium checks
+        are yours.
       </p>
       <p className={paperLabel}>The route the owl flies to</p>
       <pre className={paperCode}>{zoneRouteYaml(zone)}</pre>
@@ -203,12 +167,13 @@ function PerchPanel({ perch }: { readonly perch: PerchView }) {
             What came back{flight.status === null ? '' : ` · HTTP ${flight.status}`}
           </p>
           <pre className={paperCode}>{flight.response ?? 'Nothing came back.'}</pre>
-          {flight.outcome.kind === 'refused' && (
-            <p className="m-0 text-[0.9rem]">
-              Pomerium refused this request before it reached the MCP server. It answers a refused MCP request
-              with a JSON-RPC error, so an MCP client can read why.
-            </p>
-          )}
+          <p className={paperLabel}>How Pomerium decided</p>
+          <PolicyLines lines={decide(zone, identity, { method: 'POST', path: MCP_PATH, tool }).lines} />
+          <p className="m-0 text-[0.9rem]">
+            {flight.outcome.kind === 'refused'
+              ? 'Pomerium refused this request before it reached the MCP server. It answers a refused MCP request with a JSON-RPC error, so an MCP client can read why. The lines above are the route’s policy, checked against the claims in your session.'
+              : 'An allow rule matched and no deny rule did, so Pomerium passed the request on to the MCP server, with a signed JWT saying who the owl flies for.'}
+          </p>
         </>
       )}
       <ul className="m-0 flex list-none flex-wrap gap-x-3.5 gap-y-1.5 p-0 text-[0.85rem]">
@@ -220,7 +185,7 @@ function PerchPanel({ perch }: { readonly perch: PerchView }) {
           </li>
         ))}
       </ul>
-      {actions}
+      {actions(false)}
     </div>
   )
 
@@ -228,8 +193,8 @@ function PerchPanel({ perch }: { readonly perch: PerchView }) {
     <div className="contents" onKeyDown={onKeyDown}>
       <TabbedScreen
         name="perch"
-        label={ROOSTS[roost].title}
-        showing={roost}
+        label={`${title} perch`}
+        showing={tool}
         overlay={overlay}
         role="dialog"
         kingdom={kingdom}
@@ -241,24 +206,28 @@ function PerchPanel({ perch }: { readonly perch: PerchView }) {
 
 const ERRANDS: readonly { readonly what: string; readonly how: string }[] = [
   {
-    what: 'The owl flew on your behalf',
-    how: 'Pomerium tied its token to your session, and whoami read your claims back',
+    what: 'You caught your owl',
+    how: 'an MCP client that flies on your behalf, carrying your claims',
   },
   {
-    what: 'One errand was refused',
-    how: 'the Aviary’s deny rule named open_vault, and a deny beats an allow',
+    what: 'The Aviary turned it back',
+    how: 'its one route asks for falconers, and the check came before any tool was looked at',
   },
   {
-    what: 'A letter made you a falconer',
-    how: 'a tool call asked the Oracle for a group, and the Mews opened',
+    what: 'The Falconer vouched for you',
+    how: 'your claims changed; the owl, the perches and the policy did not',
   },
   {
-    what: 'The same tool worked elsewhere',
-    how: 'the Rookery is another route to the same server, with its own policy',
+    what: 'Two perches never opened',
+    how: 'one deny rule matches every tool that starts with open_, and a deny beats an allow',
   },
   {
-    what: 'The Throne Room let you in',
-    how: 'one rule, five checks: three groups you earned, and two your owl earned for you',
+    what: 'A letter made you a keyholder',
+    how: 'a tool call asked the Oracle for a group, and the Eyrie’s gate was waiting for it',
+  },
+  {
+    what: 'You brought Mochi their falcon',
+    how: 'another MCP client, flying on Mochi’s behalf, not yours',
   },
 ]
 
@@ -267,7 +236,7 @@ const closeEnd = () => quest.closeChapterTwoEnd()
 const endButton =
   'motion-safe:animate-blink rounded border-3 border-night-deep bg-lime px-[18px] py-2.5 font-display text-[1.05rem] text-night-deep shadow-[4px_4px_0_var(--color-night-deep)]'
 
-/** The player found Mochi in the Throne Room: chapter two is done, and so is the quest. */
+/** The player brought Mochi their falcon in the Eyrie: chapter two is done, and so is the quest. */
 export function ChapterTwoEnd() {
   const open = useQuest((s) => s.chapterTwoDone)
   const dialog = useQuest((s) => s.dialog)
@@ -295,8 +264,8 @@ export function ChapterTwoEnd() {
         Chapter two complete
       </h2>
       <p className="m-0">
-        You found Mochi in the Throne Room, behind the last gate in the kingdom. You walked in yourself, but
-        your owl did the work that got you here:
+        You found Mochi in the Eyrie, behind the last gate in the kingdom, and brought their falcon home. You
+        walked in yourself, but your owl did the work that got you here:
       </p>
       <ul className="m-0 grid list-none gap-1.5 p-0">
         {ERRANDS.map(({ what, how }) => (
@@ -332,7 +301,7 @@ export function ChapterTwoEnd() {
       </h2>
       <p className="m-0 text-[0.9rem]">
         An MCP server behind Pomerium is a route like any other. Pomerium signs the MCP client in as its user,
-        checks every request against the route's policy, and can allow or refuse a single tool by name with{' '}
+        checks every request against the route's policy, and can allow or refuse tools by name with{' '}
         <code>mcp_tool</code>. The server behind the route gets a signed JWT saying who the agent acts for,
         and should verify it, as this game's MCP server does.
       </p>

@@ -5,9 +5,8 @@ const configSchema = z.object({
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
   SERVER_NAME: z.string().default('pomerium-quest-aviary'),
   SERVER_VERSION: z.string().default('0.1.0'),
-  /** The public origins of the two routes Pomerium serves this server at, e.g. https://aviary.localhost.pomerium.io */
+  /** The public origin of the route Pomerium serves this server at. */
   QUEST_AVIARY_ORIGIN: z.url().default('https://aviary.localhost.pomerium.io'),
-  QUEST_ROOKERY_ORIGIN: z.url().default('https://rookery.localhost.pomerium.io'),
   /** In-cluster address of Keycloak (the Oracle), for its admin API. */
   KEYCLOAK_URL: z.url().default('http://localhost:8080'),
   KEYCLOAK_REALM: z.string().default('kingdom'),

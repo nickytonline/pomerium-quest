@@ -1,69 +1,133 @@
-// Chapter two's story: the Falconer, the owl's perches and the vault. The owl is an MCP client, and every
-// errand is a real MCP request through Pomerium (see perch.ts), so what the owl may do is Pomerium's call.
+// Chapter two's story: the Falconer, the owl to catch, the perches, and Mochi and their falcon. The owl is
+// an MCP client, and sending it to a perch is a real MCP tool call through Pomerium (see perch.ts), so
+// whether the owl may land is Pomerium's call.
 import { sendOwl } from './access.ts'
-import { STALE_DOCS, link, type Page } from './content.ts'
+import { SIGN_DOCS, SIGN_TEXT, STALE_DOCS, link, type Page } from './content.ts'
 import { GROUPS } from './groups.ts'
-import { owlAtLeast, owlStage, type OwlStage } from './owl-machine.ts'
-import { MCP_PATH, OWL_TOOLS, roostOrigin, type OwlTool, type Roost } from './owl.ts'
-import type { OwlCall, OwlOutcome } from './perch.ts'
+import { falconFound, owlAtLeast, owlStage, type OwlStage } from './owl-machine.ts'
+import { MCP_PATH, OWL_ERRANDS, OWL_TOOLS, aviaryOrigin, isForbidden, type OwlTool } from './owl.ts'
+import { FLIGHT_MS, type OwlFlight, type OwlOutcome } from './perch.ts'
 import { decide, type Identity } from './ppl.ts'
 import { sfx } from './sound.ts'
 import { quest, type DenyView } from './store.ts'
-import { groupsBefore, learn, oracleArrives, who } from './story.ts'
+import { attempt, groupsBefore, learn, oracleArrives, who, zoneRouteYaml } from './story.ts'
 import { zoneById } from './zones.ts'
 
 const identity = () => quest.get().identity
-
-const ROOST_NAME: Record<Roost, string> = { aviary: 'Aviary', rookery: 'Rookery' }
+const aviary = () => zoneById('aviary')
 
 const MEET: readonly Page[] = [
   {
     who: 'Falconer',
-    text: 'So you\'re the one the keep let through. I\'m the Falconer. Your friend Mochi came this way before you, and is waiting in the Throne Room at the far end of these grounds. "Send them after me," Mochi said.',
+    text: "So you're the one the keep let through. I'm the Falconer. Your friend Mochi came this way before you, and is waiting in the Eyrie, behind the gate at the far end of these grounds.",
   },
   {
     who: 'Falconer',
-    text: "You won't get there on four paws alone. There are things beyond these walls a dog can't do: climb the bell tower, or carry a letter to the Oracle. An owl can. Mochi had one too.",
+    text: 'Mochi lost their falcon on the way. It is somewhere out in the open ground. If you find it, Mochi will want it back.',
   },
   {
     who: 'Falconer',
-    text: 'Take this one. It will run errands for you. In Pomerium terms the owl is an MCP client: a program, often an AI agent, that calls tools on your behalf. The Aviary is an MCP server: it offers the tools.',
+    text: "You won't get to the Eyrie on four paws alone. There are things here a dog can't do: climb the bell tower, or carry a letter to the Oracle. An owl can.",
+  },
+  {
+    who: 'Falconer',
+    text: 'In Pomerium terms an owl is an MCP client: a program, often an AI agent, that calls tools on your behalf. The Aviary is an MCP server: it offers the tools. Each perch out in the grounds is one of its tools.',
     links: [link('mcpServer')],
   },
   {
     who: 'Falconer',
-    text: "The owl has no papers of its own. It flies on your behalf, so it carries yours. Pomerium checks every tool it calls against the route's policy, by your papers, the same way a guard checks you at a gate.",
-    links: [link('mcpIdentity')],
-  },
-  {
-    who: 'Falconer',
-    text: 'Send it from the perch beside me. Start by asking it who it flies for.',
+    text: "I don't hand owls out. To become a falconer you must catch your own. Yours is sitting just east of here. It hops away when you get close, but it tires after a few hops. Once it stays put, walk up and pick it up.",
   },
 ]
 
-/** What the Falconer says once the player has the owl, by how far its errands have got. */
-const ADVICE: Record<Exclude<OwlStage, 'afar' | 'arrived' | 'vouched' | 'entrusted'>, string> = {
-  fledged: `Try every errand at the perch. One of them the Aviary will refuse, and that's worth seeing. When you're ready, have the owl deliver my letter: it asks the Oracle to add you to the ${GROUPS.falconers} group, and the Mews east of here opens only to falconers.`,
-  falconer:
-    "You're a falconer now. The Mews will open for you, east along the road. Inside is the Rookery's perch: the same owl and the same tools, but a different route with different orders. The errand the Aviary refused is allowed there.",
-  keyholder:
-    'Your papers say keyholder. The Royal Vault is at the end of the road, east of the Mews. Go and see what the kingdom keeps there. Then take the lane south between the two, to the Throne Room.',
-  crowned:
-    "You hold the Royal Seal. One gate is left: the Throne Room, south down the lane between the Mews and the vault. Its guard asks for everything you've earned, in both chapters. Mochi is inside.",
-  triumphant:
-    "Same owl, same tools, all along. What changed was which route it flew to, and what your papers said when it got there. That's all Pomerium ever checks.",
+const CAUGHT: readonly Page[] = [
+  {
+    who: 'Owl',
+    text: 'The owl is too tired to hop again. It blinks at you, then steps onto your shoulder. You caught your owl!',
+  },
+  {
+    who: 'Owl',
+    text: 'It has no papers of its own. It flies on your behalf, so it carries yours: Pomerium checks every errand it runs by your papers, the same way a guard checks you at a gate.',
+    links: [link('mcpIdentity')],
+  },
+  {
+    who: 'Owl',
+    text: 'Each perch in these grounds is one errand. Walk up to any of them and send the owl.',
+  },
+]
+
+/** The falcon the Falconer mentions for as long as it's lost. */
+const falconHint = () =>
+  falconFound()
+    ? ''
+    : " And keep an eye out for Mochi's falcon. Your owl can scout for it, from the perch to the south."
+
+/** What the Falconer says between the story's turns, by how far the owl's errands have got. */
+const ADVICE: Record<
+  Exclude<OwlStage, 'afar' | 'arrived' | 'turned' | 'vouched' | 'entrusted'>,
+  () => string
+> = {
+  seeking: () =>
+    'Your owl is still out there, east of here. It hops off when you come near, and it tires after a few hops. Once it stays put, walk up and pick it up.',
+  fledged: () =>
+    "You caught it! That's the hard part. Now send it to a perch, any perch, and see what the Aviary makes of it. Then come and tell me.",
+  falconer: () =>
+    `Your papers say falconer, so the Aviary lets your owl in. Try every perch. Two of them never open, for any owl, and that's worth seeing. One matters most: the owl carries my letter to the Oracle, who makes you a keyholder. The Eyrie's gate asks for that.${falconHint()}`,
+  keyholder: () =>
+    `Your papers say keyholder. The Eyrie's gate is at the south end of the road. Its guard asks for everything you've earned, in both chapters. Mochi is inside.${falconFound() ? '' : " Mochi will ask after their falcon, and it's still lost somewhere in these grounds."}`,
+  triumphant: () =>
+    "Same owl, same perches, all along. What changed was what your papers said when the owl got there. That's all Pomerium ever checks.",
 }
 
-/** The Falconer: gives the player the owl, then points them at the next errand. */
+/** The Falconer has seen the owl turned back, and writes to the Oracle: the player is a falconer. */
+async function vouch() {
+  const outcome = await attempt(zoneById('keep'), 'POST', 'falconer')
+
+  if (outcome.kind !== 'allow') return
+  quest.sendOwl({ type: 'FALCONER_VOUCHED' })
+
+  quest.say(
+    [
+      {
+        who: 'Falconer',
+        text: "Turned back, was it? Of course it was. The Aviary only lets in a falconer's owl, and nothing in your papers says falconer.",
+      },
+      {
+        who: 'Falconer',
+        text: `But you caught your owl, and that is all it takes. You're a falconer now. I've written to the Oracle: from now on you are in the ${GROUPS.falconers} group.`,
+      },
+      {
+        who: 'Falconer',
+        text: "Notice what didn't change: the owl, the perches and the Aviary's orders are the same as a minute ago. Your papers changed. The owl carries yours, so what you may do, it may do.",
+        links: [link('mcpIdentity')],
+      },
+      {
+        who: 'Falconer',
+        text: 'One catch, and you know it by now: your session still holds the claims from when you signed in. Ah, here comes the Oracle.',
+      },
+    ],
+    () => {
+      learn('claims')
+      oracleArrives(`The Falconer's letter arrived. I've added ${GROUPS.falconers} to your groups.`)
+    },
+  )
+}
+
+/** The Falconer: sends the player after their owl, vouches for them, then points them at the next errand. */
 export function falconer() {
   const stage = owlStage()
 
   if (stage === 'afar' || stage === 'arrived') {
     quest.say(MEET, () => {
-      quest.sendOwl({ type: 'OWL_GIVEN' })
-      sfx('itemGet')
-      quest.toast('The owl hops onto your shoulder', 'info')
+      quest.sendOwl({ type: 'OWL_SOUGHT' })
+      quest.toast('Catch your owl: it is just east of the Falconer', 'info')
     })
+
+    return
+  }
+
+  if (stage === 'turned') {
+    void vouch()
 
     return
   }
@@ -76,42 +140,165 @@ export function falconer() {
       [
         {
           who: 'Falconer',
-          text: `The Oracle has the owl's letter, but your session still holds the claims from when you signed in. Ah, here he comes.`,
+          text: 'The Oracle has the letter, but your session still holds the claims from when you signed in. Ah, here he comes.',
         },
       ],
-      () => oracleArrives(`The owl's letter arrived. I've added ${group} to your groups.`),
+      () => oracleArrives(`The letter arrived. I've added ${group} to your groups.`),
     )
 
     return
   }
 
-  quest.say([{ who: 'Falconer', text: ADVICE[stage] }])
+  quest.say([{ who: 'Falconer', text: ADVICE[stage]() }])
 }
 
-/** The player walks up to a perch: its panel opens and the owl asks the roost what tools it offers. */
-export function visitPerch(roost: Roost) {
+/**
+ * The player reaches for the owl, out in the open. Before the Falconer has sent them after it, it only
+ * watches; once it's too tired to hop away it's theirs. Returns whether they caught it.
+ */
+export function catchOwl() {
+  if (owlStage() !== 'seeking') {
+    quest.say([
+      {
+        who: 'Owl',
+        text: 'An owl watches you from the grass, head tilted. It is not yours yet. The Falconer can tell you about it.',
+      },
+    ])
+
+    return false
+  }
+
+  quest.sendOwl({ type: 'OWL_CAUGHT' })
+  sfx('itemGet')
+  quest.say(CAUGHT)
+
+  return true
+}
+
+/** The player walks up to a perch: its panel opens, ready to send the owl there. */
+export function visitPerch(tool: OwlTool) {
   if (!owlAtLeast('fledged')) {
     quest.say([
       {
         who: 'Perch',
-        text: 'An owl watches you from its perch, head tilted. It belongs to the Falconer. Talk to them first.',
+        text: 'An empty perch. Its sign names an errand, but you have no owl to send. The Falconer can tell you how to get one.',
       },
     ])
 
     return
   }
 
-  sfx('hoot')
-  quest.openPerch(roost)
-  void flyOwl(roost, { method: 'tools/list' })
+  quest.openPerch(tool)
 }
 
-const toolOf = (call: OwlCall) => (call.method === 'tools/call' ? call.tool : undefined)
+/** A perch's sign names its one tool, above the Aviary's route: the only thing that decides who may land. */
+export function readPerchSign(tool: OwlTool) {
+  const { title, description } = OWL_ERRANDS[tool]
+
+  const never = isForbidden(tool)
+    ? ' The deny rule names every tool that starts with open_, so this perch never opens, whoever the owl flies for.'
+    : ''
+
+  quest.say(
+    [
+      {
+        who: `Sign · ${tool}`,
+        text: `${title}. ${description} This perch is one of the Aviary's tools, and sending your owl here is a call to it: tools/call ${tool}. No wall or gate stands around the perch. The Aviary's policy, below, decides whether the owl may land.${never}`,
+        code: zoneRouteYaml(aviary()),
+        links: [link('mcpTool'), link('mcpServer')],
+      },
+    ],
+    () => learn('mcpServer'),
+  )
+}
+
+const LOG_DECISION: Record<OwlOutcome['kind'], 'ALLOW' | 'DENY' | 'SIGN IN'> = {
+  tools: 'ALLOW',
+  result: 'ALLOW',
+  refused: 'DENY',
+  signin: 'SIGN IN',
+  error: 'DENY',
+}
+
+const logFlight = (flight: OwlFlight, what: string, id: Identity) =>
+  quest.log({
+    decision: LOG_DECISION[flight.outcome.kind],
+    method: 'MCP',
+    path: `aviary · ${what}`,
+    who: who(id),
+  })
+
+/** What the Aviary's sign adds once the owl has asked for the list of tools, by how Pomerium answered. */
+function toolsPage(flight: OwlFlight | null): Page {
+  const sign = `Sign · ${aviary().name}`
+  const outcome = flight?.outcome
+
+  if (outcome?.kind === 'tools') {
+    return {
+      who: sign,
+      text: 'Your owl asked the Aviary which tools it offers (a tools/list request), and this is the list that came back. Each one has a perch in these grounds.',
+      code: outcome.tools.map((tool) => `${tool.name} · ${tool.title ?? ''}`).join('\n'),
+      links: [link('mcpServer')],
+    }
+  }
+
+  if (outcome?.kind === 'refused') {
+    const refused = {
+      who: sign,
+      text: `Your owl asked the Aviary which tools it offers (a tools/list request), and Pomerium turned it back. The route asks for ${GROUPS.falconers}, and your papers don't say so. Even the list of tools is behind the policy.`,
+      links: [link('mcpServer'), link('authz')],
+    }
+
+    // Pomerium's own answer, when it sent one: the JSON-RPC error an MCP client reads.
+    return flight?.response ? { ...refused, code: flight.response } : refused
+  }
+
+  return {
+    who: sign,
+    text: "Your owl couldn't reach the Aviary to ask which tools it offers. Try the sign again.",
+  }
+}
+
+/**
+ * The Aviary's sign: the MCP server's route, then its list of tools. The list is a real tools/list request,
+ * so only an owl Pomerium lets in comes back with it.
+ */
+export async function readAviarySign() {
+  const zone = aviary()
+
+  const sign: Page = {
+    who: `Sign · ${zone.name}`,
+    text: SIGN_TEXT.aviary ?? '',
+    code: zoneRouteYaml(zone),
+    links: SIGN_DOCS.aviary ?? [],
+  }
+
+  if (!owlAtLeast('fledged')) {
+    quest.say(
+      [
+        sign,
+        {
+          who: sign.who,
+          text: 'The Aviary gives its list of tools to any owl it lets in. You have no owl to ask for it yet.',
+        },
+      ],
+      () => learn('mcpServer'),
+    )
+
+    return
+  }
+
+  const id = identity()
+  const sent = await sendOwl({ method: 'tools/list' })
+
+  if (sent.ok) logFlight(sent.value, 'tools/list', id)
+
+  quest.say([sign, toolsPage(sent.ok ? sent.value : null)], () => learn('mcpServer'))
+}
 
 /** A refused flight, told twice like any refusal: the keeper's words, then how Pomerium decided. */
-function refusedView(roost: Roost, call: OwlCall, id: Identity, requestId: string | null): DenyView {
-  const zone = zoneById(roost)
-  const tool = toolOf(call)
+function refusedView(tool: OwlTool, id: Identity, requestId: string | null): DenyView {
+  const zone = aviary()
   const request = { method: 'POST', path: MCP_PATH, tool } as const
   const decision = decide(zone, id, request)
   // As at a gate: the game's view of the session already qualifies, so Pomerium decided with the copy of
@@ -123,54 +310,58 @@ function refusedView(roost: Roost, call: OwlCall, id: Identity, requestId: strin
   const fromPomerium = requestId ? { requestId } : {}
   const fromCache = stale ? { cachedClaims: { session: id.groups, cached: before } } : {}
 
+  // Pomerium answers a refused MCP request with a JSON-RPC error, not a 403 page.
+  const readable =
+    'Pomerium answers a refused MCP request with a JSON-RPC error rather than a 403 page, so an MCP client can read the refusal: that is the 200 above.'
+
   const told = (): Pick<DenyView, 'story' | 'hint' | 'links'> => {
     if (stale) {
       return {
         story: {
           title: 'The ink is still wet',
-          text: `The ${ROOST_NAME[roost]}'s keeper squints at the papers tied to the owl's leg. "Fresh from the Oracle, are they? Let the ink dry a minute, then send the owl again."`,
+          text: 'The Aviary\'s keeper squints at the papers tied to the owl\'s leg. "Fresh from the Oracle, are they? Let the ink dry a minute, then send the owl again."',
         },
-        hint: 'Try again in a moment. Once the cached copy expires, Pomerium reads your updated user record and lets the owl through.',
+        hint: 'Try again in a moment. Once the cached copy expires, Pomerium reads your updated user record and lets the owl land.',
         links: STALE_DOCS,
       }
     }
 
-    if (roost === 'aviary' && tool === OWL_TOOLS.openVault) {
-      return {
-        story: {
-          title: 'Not that errand',
-          text: 'The owl is turned back at the Aviary\'s window. "Any errand but that one," says the keeper. "My orders name the vault, and they say no, whoever the owl flies for."',
-        },
-        hint: `The allow rule matched: you are everything the keep asks for. But the deny rule names this tool, mcp_tool: ${tool}, and a deny always beats an allow. Pomerium read the tool's name from the tools/call request itself. It answers a refused MCP request with a JSON-RPC error rather than a 403 page, so an MCP client can read the refusal: that is the 200 above.`,
-        links: [link('mcpTool'), link('denyWins')],
-      }
-    }
-
-    if (roost === 'rookery') {
+    if (!id.groups.includes(GROUPS.falconers)) {
       return {
         story: {
           title: "Falconers' owls only",
-          text: 'The Rookery\'s keeper holds up a hand. "This window is for falconers\' owls, and nothing in these papers says falconer."',
+          text: 'The owl is turned back before it reaches the perch. "Whose owl is this?" calls the Aviary\'s keeper, reading the papers on its leg. "Nothing in here says falconer. I don\'t care which perch it was after."',
         },
-        hint: `The Rookery's only rule needs claim/groups: ${GROUPS.falconers}. The owl flies with your session, and its groups claim doesn't include ${GROUPS.falconers}, so Pomerium refused the whole route, even a request that only lists the tools.`,
+        hint: `The Aviary's allow rule needs claim/groups: ${GROUPS.falconers}. The owl flies on your behalf, so Pomerium checked your session, and its groups claim doesn't include ${GROUPS.falconers}. No allow rule matched, so Pomerium refused the request before the MCP server saw it, whichever tool it named. ${readable}`,
         links: [link('mcpServer'), link('authz')],
+      }
+    }
+
+    if (isForbidden(tool)) {
+      return {
+        story: {
+          title: 'This perch never opens',
+          text: 'The owl circles the perch and is waved off. "Not that one," says the Aviary\'s keeper. "My orders name every errand that starts with open, and they say no, whoever the owl flies for."',
+        },
+        hint: `The allow rule matched: you are a falconer. But the deny rule matches any tool whose name starts with open_, and this call names ${tool}. A deny always beats an allow. Pomerium read the tool's name from the tools/call request itself. ${readable}`,
+        links: [link('mcpTool'), link('denyWins')],
       }
     }
 
     return {
       story: {
         title: "The owl isn't let in",
-        text: `The ${ROOST_NAME[roost]}'s keeper waves the owl off. "My orders don't cover whoever sent you."`,
+        text: 'The Aviary\'s keeper waves the owl off. "My orders don\'t cover whoever sent you."',
       },
-      hint: 'No allow rule matched this request, so Pomerium refused it. The owl flies with your session: what you may not do, it may not do.',
+      hint: 'No allow rule matched this request, so Pomerium refused it. The owl flies on your behalf: what you may not do, it may not do.',
       links: [link('mcpServer'), link('authz')],
     }
   }
 
   return {
     status: 200,
-    title: tool ? 'Tool call refused' : 'MCP request refused',
-    requestLine: `POST ${roostOrigin(location.origin, roost)}${MCP_PATH} · ${call.method}${tool ? ` ${tool}` : ''}`,
+    title: 'Tool call refused',
+    requestLine: `POST ${aviaryOrigin(location.origin)}${MCP_PATH} · tools/call ${tool}`,
     who: who(id),
     lines: cached ? decide(zone, cached, request).lines : decision.lines,
     ...told(),
@@ -179,116 +370,111 @@ function refusedView(roost: Roost, call: OwlCall, id: Identity, requestId: strin
   }
 }
 
-/** The owl's letter reached the Oracle: the perch closes, and he comes to sign the player in again. */
-function letterDelivered(pages: readonly Page[], group: string) {
+/** A part of the story that waits until the player leaves the perch, so they can read the call first. */
+let afterPerch: (() => void) | undefined
+
+/** Closes the perch's panel, then tells whatever the last errand set in motion. */
+export function leavePerch() {
+  const next = afterPerch
+  afterPerch = undefined
   quest.closePerch()
-  quest.say(pages, () => {
-    learn('claims')
-    oracleArrives(`The owl's letter arrived. I've added ${group} to your groups.`)
-  })
+  next?.()
 }
 
 /** What each errand does in the kingdom once Pomerium has allowed it and the tool has run. */
-const DONE: Record<OwlTool, (roost: Roost) => void> = {
+const DONE: Partial<Record<OwlTool, () => void>> = {
   [OWL_TOOLS.whoami]: () => learn('mcpIdentity'),
   [OWL_TOOLS.ringBell]: () => {
     sfx('bell')
-    quest.toast('High above the Aviary, the bell rings twice', 'info')
+    quest.toast('High above the grounds, the bell rings twice', 'info')
   },
+  [OWL_TOOLS.scoutGrounds]: () =>
+    quest.toast('From high up, the owl saw a falcon in the trees, in the south-east corner', 'info'),
   [OWL_TOOLS.deliverLetter]: () => {
-    if (owlStage() !== 'fledged') return
-    quest.sendOwl({ type: 'LETTER_DELIVERED' })
-    letterDelivered(
-      [
-        {
-          who: 'Falconer',
-          text: `The owl is back, and the letter is gone from its leg. The Oracle has it: from now on you are in the ${GROUPS.falconers} group.`,
-        },
-        {
-          who: 'Falconer',
-          text: 'Notice who wrote to the Oracle. Not you: a tool, called by your owl, with your identity. Pomerium allowed the call, so the Aviary acted for you. That is why it matters which tools an agent may call.',
-          links: [link('mcpIdentity')],
-        },
-        {
-          who: 'Falconer',
-          text: 'And you know the catch by now: your session still holds the claims from when you signed in. Here comes the Oracle.',
-        },
-      ],
-      GROUPS.falconers,
-    )
-  },
-  [OWL_TOOLS.openVault]: () => {
     if (owlStage() !== 'falconer') return
-    quest.sendOwl({ type: 'VAULT_OPENED' })
-    letterDelivered(
-      [
-        {
-          who: 'Rookery',
-          text: `The owl returns with a wax seal in its beak. The same tool the Aviary refused ran here: the Oracle now lists you in the ${GROUPS.keyholders} group.`,
+    quest.sendOwl({ type: 'LETTER_DELIVERED' })
+
+    afterPerch = () =>
+      quest.say(
+        [
+          {
+            who: 'Owl',
+            text: `The letter is gone from the owl's leg, and a note from the Oracle is tied there in its place. From now on you are in the ${GROUPS.keyholders} group.`,
+          },
+          {
+            who: 'Owl',
+            text: 'Notice who wrote to the Oracle. Not you: a tool, called by your owl, on your behalf. Pomerium allowed the call, so the Aviary acted for you. That is why it matters which tools an agent may call.',
+            links: [link('mcpIdentity')],
+          },
+          {
+            who: 'Owl',
+            text: 'And you know the catch by now: your session still holds the claims from when you signed in. Here comes the Oracle.',
+          },
+        ],
+        () => {
+          learn('claims')
+          oracleArrives(`The owl's letter arrived. I've added ${GROUPS.keyholders} to your groups.`)
         },
-        {
-          who: 'Rookery',
-          text: 'The tool never changed, and neither did the server behind it. The route did. The Aviary and the Rookery are two routes to one MCP server, and each route has its own policy.',
-          links: [link('onroute'), link('mcpTool')],
-        },
-      ],
-      GROUPS.keyholders,
-    )
+      )
   },
 }
 
-const LOG_DECISION: Record<OwlOutcome['kind'], 'ALLOW' | 'DENY' | 'SIGN IN'> = {
-  tools: 'ALLOW',
-  result: 'ALLOW',
-  refused: 'DENY',
-  signin: 'SIGN IN',
-  error: 'DENY',
-}
+/** Waits out a part of the owl's flight, for players who have motion on; with it off the owl doesn't fly. */
+const watch = (ms: number) =>
+  matchMedia('(prefers-reduced-motion: no-preference)').matches
+    ? new Promise<void>((resolve) => setTimeout(resolve, ms))
+    : Promise.resolve()
 
 /**
- * Sends the owl on one errand and tells the story of how it went. The request and Pomerium's answer land
- * in the perch's panel and the access log either way.
+ * Sends the owl to a perch, which is one tool call, and tells the story of how it went. The owl flies out
+ * while the request does, and comes back with the answer: the request, the response and how Pomerium decided
+ * land in the perch's panel and the access log either way.
  */
-export async function flyOwl(roost: Roost, call: OwlCall) {
+export async function flyOwl(tool: OwlTool) {
   const id = identity()
-  const tool = toolOf(call)
-  quest.perchBusy(true)
-  const sent = await sendOwl(roost, call)
+  sfx('hoot')
+  quest.perchAway('out')
+  const [sent] = await Promise.all([sendOwl({ method: 'tools/call', tool }), watch(FLIGHT_MS.out)])
 
   if (!sent.ok) {
-    quest.perchBusy(false)
-    quest.toast(`The owl never left the perch: ${sent.message}`, 'deny')
+    quest.perchAway(null)
+    quest.toast(`The owl never left your shoulder: ${sent.message}`, 'deny')
 
     return
   }
 
   const flight = sent.value
   const { outcome } = flight
+  const landed = outcome.kind === 'result'
 
+  quest.perchAway(landed ? 'landed' : 'turned')
+  await watch(landed ? FLIGHT_MS.landed : FLIGHT_MS.turned)
   quest.perchFlew(flight)
-
-  quest.log({
-    decision: LOG_DECISION[outcome.kind],
-    method: 'MCP',
-    path: `${roost} · ${call.method}${tool ? ` ${tool}` : ''}`,
-    who: who(id),
-  })
+  logFlight(flight, `tools/call ${tool}`, id)
 
   switch (outcome.kind) {
     case 'tools':
-      learn('mcpServer')
-
       return
     case 'result':
       if (outcome.failed) quest.toast('The owl came back with nothing. See what the tool said.', 'deny')
-      else if (tool) DONE[tool](roost)
+      else DONE[tool]?.()
 
       return
     case 'refused':
       sfx('denied')
-      quest.showDeny(refusedView(roost, call, id, outcome.requestId), () => {
-        // The lesson is the deny rule that names one tool, not a route that refuses everything.
-        if (roost === 'aviary' && tool === OWL_TOOLS.openVault) learn('mcpTool')
+      quest.showDeny(refusedView(tool, id, outcome.requestId), () => {
+        learn('mcpServer')
+
+        // The lesson is the deny rule that names a class of tools, not a route that refuses everything.
+        if (id.groups.includes(GROUPS.falconers) && isForbidden(tool)) {
+          learn('mcpTool')
+          learn('denyWins')
+        }
+
+        if (owlStage() === 'fledged') {
+          quest.sendOwl({ type: 'OWL_TURNED_BACK' })
+          quest.toast('Tell the Falconer the owl was turned back', 'info')
+        }
       })
 
       return
@@ -301,31 +487,34 @@ export async function flyOwl(roost: Roost, call: OwlCall) {
   }
 }
 
-/** The chest in the Royal Vault. Only a keyholder gets this far. */
-export function openVaultChest(): boolean {
-  if (owlStage() !== 'keyholder') return false
-  quest.sendOwl({ type: 'TREASURE_TAKEN' })
+/** Mochi's falcon, lost in the open ground: a second MCP client, which flies on Mochi's behalf. */
+export function findFalcon() {
+  if (falconFound()) return false
+
+  quest.sendOwl({ type: 'FALCON_FOUND' })
   sfx('itemGet')
   quest.say([
     {
-      who: 'Royal Vault',
-      text: "Inside the chest lies the Royal Seal: the kingdom's own signing key. The owl lands on the rim and hoots, rather pleased with itself.",
+      who: 'Falcon',
+      text: "A falcon sits low in the trees, a teal ribbon on its leg. This is Mochi's falcon! It looks you over, then flutters down and settles on your back.",
     },
     {
-      who: 'Royal Vault',
-      text: 'You never touched the lock. An owl asked for the key on your behalf, and Pomerium checked every errand it ran: who it flew for, which route it flew to, and which tool it called.',
-      links: [link('mcpTool')],
-    },
-    {
-      who: 'Royal Vault',
-      text: 'One gate is left. Carry the seal to the Throne Room, where Mochi is waiting: the lane runs south between the Mews and the vault.',
+      who: 'Falcon',
+      text: "The falcon is an MCP client too, but it flies on Mochi's behalf, not yours. Your papers are no use to it, and it runs no errands for you. It will ride with you until you find Mochi.",
+      links: [link('mcpIdentity')],
     },
   ])
 
   return true
 }
 
-/** Mochi, the friend who went ahead: finding them in the Throne Room ends the quest. */
+const SAME_GATE: Page = {
+  who: 'Mochi',
+  text: 'The guard read my papers at that gate too, top to bottom, same as yours. Nobody waved me through for having been here before, and nobody let you in for knowing me. One route, one policy, checked for each of us, every time.',
+  links: [link('every'), link('allOf')],
+}
+
+/** Mochi, the friend who went ahead: bringing them their falcon ends the quest. */
 export function friend() {
   if (owlStage() === 'triumphant') {
     quest.say([
@@ -338,21 +527,29 @@ export function friend() {
     return
   }
 
+  if (!falconFound()) {
+    quest.say([
+      { who: 'Mochi', text: 'You made it! I knew you would.' },
+      SAME_GATE,
+      {
+        who: 'Mochi',
+        text: "Have you seen my falcon? I lost it out in the grounds, somewhere past the perches. The gate let you in without it, mind: a gate checks your claims, not what you carry. But I'd dearly like it back.",
+      },
+    ])
+
+    return
+  }
+
   quest.say(
     [
+      { who: 'Mochi', text: 'You made it! And is that… you found my falcon!' },
+      SAME_GATE,
       {
         who: 'Mochi',
-        text: "You made it! I knew you would. I've been keeping a spot on the carpet warm for you.",
+        text: 'Thank you for finding it. It flies on my behalf, the way your owl flies on yours: the same Aviary and the same policy, each of us checked by our own papers.',
+        links: [link('mcpIdentity')],
       },
-      {
-        who: 'Mochi',
-        text: 'The guard read my papers at that gate too, top to bottom, same as yours. Nobody waved me through for having been here before, and nobody let you in for knowing me. One route, one policy, checked for each of us, every time.',
-        links: [link('every'), link('allOf')],
-      },
-      {
-        who: 'Mochi',
-        text: 'Come on. The whole kingdom wants to celebrate.',
-      },
+      { who: 'Mochi', text: 'Come on. The whole kingdom wants to celebrate.' },
     ],
     () => {
       quest.sendOwl({ type: 'REUNITED' })
@@ -360,15 +557,4 @@ export function friend() {
       quest.openChapterTwoEnd()
     },
   )
-}
-
-/** The throne, behind the quest's last gate. Nobody sits on it. */
-export function readThrone() {
-  quest.say([
-    {
-      who: 'Throne',
-      text: "The throne is empty, and has been for years. Nobody needs to sit here and decide who comes and goes. Every gate in the kingdom asks Pomerium, every time, and Pomerium reads the gate's orders.",
-      links: [link('every')],
-    },
-  ])
 }

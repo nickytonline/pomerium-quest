@@ -3,7 +3,7 @@
 // shows the same policy on signs and denial screens.
 
 import { GROUPS } from './groups.ts'
-import { MCP_PATH, OWL_TOOLS, type OwlTool, type Roost } from './owl.ts'
+import { AVIARY_HOST, FORBIDDEN_PREFIX, MCP_PATH } from './owl.ts'
 
 /**
  * One PPL criterion, e.g. { kind: 'claim', claim: 'groups', value: 'knights' } renders as
@@ -17,8 +17,8 @@ export type Criterion =
   | { readonly kind: 'email'; readonly is: string }
   | { readonly kind: 'http_method'; readonly is: 'GET' | 'POST' }
   | { readonly kind: 'claim'; readonly claim: ClaimName; readonly value: string }
-  /** Matches an MCP tools/call request for this tool, and nothing else: not even a tools/list. */
-  | { readonly kind: 'mcp_tool'; readonly is: OwlTool }
+  /** Matches an MCP tools/call request for a tool whose name starts this way, and nothing else: not even a tools/list. */
+  | { readonly kind: 'mcp_tool'; readonly startsWith: string }
 
 /**
  * One rule: `allow: { and: [...] }`, `deny: { or: [...] }` and so on. PPL operators hold criteria, not
@@ -46,10 +46,7 @@ export type ZoneId =
   | 'builder'
   | 'perch'
   | 'aviary'
-  | 'rookery'
-  | 'mews'
-  | 'vault'
-  | 'throne'
+  | 'eyrie'
 
 export interface Zone {
   readonly id: ZoneId
@@ -58,7 +55,7 @@ export interface Zone {
   readonly prefix: string
   readonly policy: readonly PolicyRule[]
   /** A zone with a host of its own (aviary.<domain>) instead of a path on the game's. MCP servers need one. */
-  readonly host?: Roost
+  readonly host?: typeof AVIARY_HOST
   /**
    * An MCP route. A `server` is where tools are called: Pomerium signs MCP clients in and can check each
    * tool call. A `client` is an app that calls MCP servers for its user: Pomerium hands it a token to do so.
@@ -79,7 +76,7 @@ const citizen = inGroup(GROUPS.citizens)
 
 /**
  * What the Royal Keep asks, and so what finishing chapter one means: a citizen who is a knight and a scholar.
- * Chapter two's owl is for them alone, so its routes ask the same.
+ * Walking into chapter two's grounds asks the same, and so does the owl's perch.
  */
 const keepsRule = all(citizen, inGroup(GROUPS.knights), inGroup(GROUPS.scholars))
 
@@ -114,37 +111,25 @@ export const ZONES: readonly Zone[] = [
     prefix: '/zones/keep',
     policy: [keepsRule],
   },
-  // Chapter two, beyond the keep, so its routes ask what the keep asks. The perch is the game acting as an
-  // MCP client: Pomerium hands the game server a token for the signed-in player, and the server sends the
-  // owl's tool calls with it.
+  // Chapter two, beyond the keep. The perch is where the player sends their owl from, and its route is
+  // the game's MCP client route: Pomerium hands the game server a token for the signed-in player, and the
+  // server sends the owl's tool calls with it. Anyone the keep admits may send an owl.
   { id: 'perch', name: "The Owl's Perch", prefix: '/zones/perch', policy: [keepsRule], mcp: 'client' },
-  // The Aviary and the Rookery are the same MCP server behind two routes. The owl of anyone the keep
-  // admits may use the Aviary, except for one tool: a deny rule beats the allow, for that tool's calls only.
+  // The Aviary is the MCP server, behind this one route. Only a falconer's owl gets in at all. One deny rule
+  // then forbids a class of tools to every owl, by the start of their names: a deny beats the allow.
   {
     id: 'aviary',
     name: 'The Aviary',
-    host: 'aviary',
+    host: AVIARY_HOST,
     prefix: MCP_PATH,
-    policy: [keepsRule, denyAny({ kind: 'mcp_tool', is: OWL_TOOLS.openVault })],
+    policy: [all(inGroup(GROUPS.falconers)), denyAny({ kind: 'mcp_tool', startsWith: FORBIDDEN_PREFIX })],
     mcp: 'server',
   },
-  // Only a falconer's owl reaches the Rookery at all, and there every tool is allowed.
-  {
-    id: 'rookery',
-    name: 'The Rookery',
-    host: 'rookery',
-    prefix: MCP_PATH,
-    policy: [all(inGroup(GROUPS.falconers))],
-    mcp: 'server',
-  },
-  // The gates the owl's errands open: each waits for a group only a tool call can earn.
-  { id: 'mews', name: 'The Mews', prefix: '/zones/mews', policy: [all(inGroup(GROUPS.falconers))] },
-  { id: 'vault', name: 'Royal Vault', prefix: '/zones/vault', policy: [all(inGroup(GROUPS.keyholders))] },
   // The end of chapter two, as the keep ends chapter one: one rule, asking for everything both chapters earn.
   {
-    id: 'throne',
-    name: 'Throne Room',
-    prefix: '/zones/throne',
+    id: 'eyrie',
+    name: 'The Eyrie',
+    prefix: '/zones/eyrie',
     policy: [all(...keepsRule.criteria, inGroup(GROUPS.falconers), inGroup(GROUPS.keyholders))],
   },
 ]

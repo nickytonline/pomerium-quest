@@ -26,8 +26,7 @@ describe('citizens', () => {
       'builder',
       'keep',
       'perch',
-      'aviary',
-      'throne',
+      'eyrie',
     ])
   })
 
@@ -48,7 +47,7 @@ describe('zone routes', () => {
   it('give every MCP server a host of its own, which Pomerium needs to sign MCP clients in', () => {
     const servers = ZONES.filter((zone) => zone.mcp === 'server')
 
-    expect(servers.map((zone) => zone.id)).toEqual(['aviary', 'rookery'])
+    expect(servers.map((zone) => zone.id)).toEqual(['aviary'])
     expect(servers.every((zone) => zone.host === zone.id)).toBe(true)
     expect(ZONES.filter((zone) => zone.mcp !== 'server').every((zone) => !zone.host)).toBe(true)
   })

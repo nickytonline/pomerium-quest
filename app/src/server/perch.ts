@@ -1,12 +1,12 @@
 import { Effect, Option, Schema } from 'effect'
-import { MCP_PATH, roostOrigin, type Roost } from '../game/owl.ts'
+import { MCP_PATH, aviaryOrigin } from '../game/owl.ts'
 import type { OwlCall, OwlFlight, OwlOutcome } from '../game/perch.ts'
 import { QuestConfig } from './config.ts'
 
-// The owl's perch: the game as an MCP client. Its route is an MCP client route, so Pomerium adds an
+// Where the owl is sent from. The perch's route is the game's MCP client route, so Pomerium adds an
 // Authorization header carrying a token for the signed-in player. The server sends the owl's request to
-// an MCP server route with that token, and Pomerium checks it there against that route's policy, as the
-// player. The game never decides what the owl may do.
+// the Aviary, an MCP server route, with that token, and Pomerium checks it there against the Aviary's
+// policy, on the player's behalf. The game never decides what the owl may do.
 
 const Rpc = Schema.Struct({
   result: Schema.optional(
@@ -51,7 +51,7 @@ function read(status: number, message: string): OwlOutcome {
 
   const parsed = Option.getOrNull(Schema.decodeUnknownOption(Schema.fromJsonString(Rpc))(message))
 
-  if (!parsed) return { kind: 'error', message: `the roost answered ${status}` }
+  if (!parsed) return { kind: 'error', message: `the Aviary answered ${status}` }
 
   const { result, error } = parsed
 
@@ -83,11 +83,11 @@ const pretty = (message: string) => {
   }
 }
 
-/** Sends one MCP request to a roost as the player whose token Pomerium put on `request`. */
-export const fly = (request: Request, roost: Roost, call: OwlCall) =>
+/** Sends one MCP request to the Aviary with the token Pomerium put on `request` for its player. */
+export const fly = (request: Request, call: OwlCall) =>
   Effect.gen(function* () {
     const config = yield* QuestConfig
-    const url = `${roostOrigin(config.publicOrigin, roost)}${MCP_PATH}`
+    const url = `${aviaryOrigin(config.publicOrigin)}${MCP_PATH}`
     const rpc = JSON.stringify({ jsonrpc: '2.0', id: 1, method: call.method, ...params(call) }, null, 2)
     const authorization = request.headers.get('authorization')
 

@@ -344,30 +344,14 @@ const signpost = (rect, ground) => {
   rect(4, 7, 6, 1, '#6b4a27')
 }
 
-/** The owl's perch: a wooden T-post with the owl on it, standing on `ground`. A blink shuts its eyes. */
-const perch = (rect, ground, blink = false) => {
-  ground(rect)
+/** A perch: a bare wooden T-post standing in the grass, waiting for an owl to land on it. */
+const perch = (rect) => {
+  grass(rect)
   rect(7, 9, 2, 7, '#5b3a22')
   rect(2, 9, 12, 2, '#7a5126')
   rect(2, 9, 12, 1, '#a87a45')
-  // The owl: ear tufts, round body, pale belly, yellow eyes.
-  rect(4, 1, 2, 1, '#241a2e')
-  rect(10, 1, 2, 1, '#241a2e')
-  rect(4, 2, 8, 7, '#241a2e')
-  rect(5, 3, 6, 5, '#9a6b3f')
-  rect(6, 5, 4, 3, '#d9b98a')
-  rect(5, 3, 2, 2, '#ffd86b')
-  rect(9, 3, 2, 2, '#ffd86b')
-  rect(6, 4, 1, 1, '#241a2e')
-  rect(9, 4, 1, 1, '#241a2e')
-  rect(7, 5, 2, 1, '#e9b44c')
-
-  if (blink) {
-    rect(5, 3, 2, 2, '#9a6b3f')
-    rect(9, 3, 2, 2, '#9a6b3f')
-    rect(5, 4, 2, 1, '#241a2e')
-    rect(9, 4, 2, 1, '#241a2e')
-  }
+  rect(2, 8, 1, 1, '#5b3a22')
+  rect(13, 8, 1, 1, '#5b3a22')
 }
 
 /** The writing desk and its quill, with a sheet of paper on it or a sealed letter waiting. */
@@ -587,28 +571,8 @@ const painters = [
   (rect) => eatenLoaf(rect, 2),
   // 41 sign indoors, on the floor
   (rect) => signpost(rect, floor),
-  // 42 the owl's perch, outdoors
-  (rect) => perch(rect, grass),
-  // 43 the owl's perch indoors, on the floor
-  (rect) => perch(rect, floor),
-  // 44 the throne: a tall gold back, a red cushion, and nobody on it
-  (rect) => {
-    floor(rect)
-    rect(2, 15, 12, 1, '#4a2f18')
-    rect(3, 0, 10, 15, '#241a2e')
-    rect(2, 8, 12, 7, '#241a2e')
-    rect(4, 1, 8, 8, '#e3b341')
-    rect(5, 2, 6, 6, '#a8432b')
-    rect(7, 3, 2, 2, '#ffd86b')
-    rect(3, 9, 10, 5, '#e3b341')
-    rect(5, 9, 6, 3, '#7a2a1c')
-    rect(5, 9, 6, 1, '#a8432b')
-    rect(3, 12, 10, 1, '#b8862b')
-  },
-  // 45 the owl's perch outdoors, mid-blink
-  (rect) => perch(rect, grass, true),
-  // 46 the owl's perch indoors, mid-blink
-  (rect) => perch(rect, floor, true),
+  // 42 a perch: one of the Aviary's tools, out in the open
+  perch,
 ]
 
 export const tiles = painters.map((paint) => {

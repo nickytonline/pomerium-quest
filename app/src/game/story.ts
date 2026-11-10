@@ -21,7 +21,7 @@ import { VISITORS, type VisitorId } from './house.ts'
 import { addDeed, citizenshipPages } from './house-story.ts'
 import { owlAtLeast, owlStage } from './owl-machine.ts'
 import { falconer, friend } from './owl-story.ts'
-import { roostOrigin } from './owl.ts'
+import { aviaryOrigin } from './owl.ts'
 import { KNIGHT_QUOTA, hasSteel, isAtLeast, stage, type QuestStage } from './quest-machine.ts'
 import { sfx } from './sound.ts'
 import { MAX_HP, quest, type DenyView, type LogEntry } from './store.ts'
@@ -34,7 +34,7 @@ const MCP_UPSTREAM = 'http://mcp.quest.svc.cluster.local:3000'
 /** A zone's route as it appears in Pomerium's config: an MCP server on its own host, the rest on the game's. */
 export const zoneRouteYaml = (zone: Zone) =>
   zone.host
-    ? routeYaml(zone, new URL(roostOrigin(location.origin, zone.host)).host, MCP_UPSTREAM)
+    ? routeYaml(zone, new URL(aviaryOrigin(location.origin)).host, MCP_UPSTREAM)
     : routeYaml(zone, location.host, UPSTREAM)
 
 /** Townsfolk as Pomerium sees them: the same accounts that visit the player's house. */
@@ -95,22 +95,22 @@ function keepRefusal(id: Identity): Refusal {
   }
 }
 
-/** The Throne Room asks for every group in the quest. The keep already checked three; the owl earns the rest. */
-function throneRefusal(id: Identity): Refusal {
+/** The Eyrie asks for every group in the quest. The keep already checked three; chapter two earns the rest. */
+function eyrieRefusal(id: Identity): Refusal {
   const missing: string[] = []
 
   if (!id.groups.includes(GROUPS.falconers))
     missing.push(
       owlAtLeast('vouched')
         ? "carrying your falconer's papers (sign in with the Oracle again)"
-        : "a falconer (the Falconer's owl can carry a letter to the Oracle for you)",
+        : 'a falconer (catch your owl, and the Falconer will vouch for you)',
     )
 
   if (!id.groups.includes(GROUPS.keyholders))
     missing.push(
       owlAtLeast('entrusted')
         ? 'carrying your key (sign in with the Oracle again)'
-        : 'a keyholder (the owl can ask for that key at the Rookery, inside the Mews)',
+        : "a keyholder (send your owl to the letter's perch, and the Oracle will make you one)",
     )
 
   // Only someone the keep admits gets this far on foot, so a session that fails here on the keep's three
@@ -120,9 +120,9 @@ function throneRefusal(id: Identity): Refusal {
   return {
     story: {
       title: 'Not yet, friend',
-      text: `The Throne Room's guard reads your papers from top to bottom. "My orders are the longest in the kingdom: everything the keep asks, and a falconer, and a keyholder. Your friend Mochi had all of it, and went in. You still need to be ${missing.join(', and ')}."`,
+      text: `The Eyrie's guard reads your papers from top to bottom. "My orders are the longest in the kingdom: everything the keep asks, and a falconer, and a keyholder. Your friend Mochi had all of it, and went in. You still need to be ${missing.join(', and ')}."`,
     },
-    hint: `The Throne Room's one rule has five checks under and: claim/groups: ${GROUPS.citizens}, ${GROUPS.knights}, ${GROUPS.scholars}, ${GROUPS.falconers} and ${GROUPS.keyholders}. Every check must pass; the ✗ lines are the ones your session fails.`,
+    hint: `The Eyrie's one rule has five checks under and: claim/groups: ${GROUPS.citizens}, ${GROUPS.knights}, ${GROUPS.scholars}, ${GROUPS.falconers} and ${GROUPS.keyholders}. Every check must pass; the ✗ lines are the ones your session fails.`,
   }
 }
 
@@ -159,28 +159,8 @@ function refusal(zone: Zone, id: Identity): Refusal {
       }
     case 'keep':
       return keepRefusal(id)
-    case 'mews':
-      return {
-        story: {
-          title: 'Falconers only',
-          text: owlAtLeast('vouched')
-            ? 'The guard shakes their head. "The Oracle may have your letter, but your papers don\'t say falconer yet. Sign in with him again, then come back."'
-            : 'The guard glances at your empty shoulder. "The Mews is for falconers, and nothing in your papers says falconer. The Falconer\'s owl can carry a letter to the Oracle for you."',
-        },
-        hint: `The Mews's only rule needs claim/groups: ${GROUPS.falconers}, and the groups claim in your session doesn't include ${GROUPS.falconers}. Only the owl's deliver_letter tool asks the Oracle to add it.`,
-      }
-    case 'vault':
-      return {
-        story: {
-          title: 'Keyholders only',
-          text: owlAtLeast('entrusted')
-            ? 'The guard taps your papers. "The Oracle may have added your key, but it isn\'t in here yet. Sign in with him again."'
-            : 'The vault\'s guard doesn\'t even look up. "Keyholders only. Nobody hands out that key. They say an owl can ask the Oracle for it, at the Rookery."',
-        },
-        hint: `The vault's only rule needs claim/groups: ${GROUPS.keyholders}, and the groups claim in your session doesn't include ${GROUPS.keyholders}. Only the owl's open_vault tool asks the Oracle to add it, and only the Rookery's route allows that tool.`,
-      }
-    case 'throne':
-      return throneRefusal(id)
+    case 'eyrie':
+      return eyrieRefusal(id)
     case 'library':
       return citizensOnly('The library')
     case 'scriptorium':
@@ -208,7 +188,7 @@ const STALE_STORY: Partial<Record<ZoneId, DenyView['story']>> = {
     title: 'Easy there, Sir Eager',
     text: 'The guard squints at your papers. "Knighted this very minute, were you? The ink\'s still wet. Go polish your sword for a bit, then come back."',
   },
-  throne: {
+  eyrie: {
     title: 'The wax is still warm',
     text: 'The guard holds your papers up to the light. "A keyholder, since just now? The wax on that is still warm. Let it set a minute, then come back."',
   },
@@ -291,7 +271,7 @@ function denyView(
  * Sends a request, records it in the access log, and shows the denial screen when refused. `askSignIn`
  * false skips the sign-in screen, for callers that handle a missing session themselves.
  */
-async function attempt(
+export async function attempt(
   zone: Zone,
   method: 'GET' | 'POST',
   action: string,
@@ -341,7 +321,7 @@ export async function enterGate(
   if (zone.id === 'armory' || zone.id === 'library') learn('jwt')
 
   // The quest's last gate. The ending waits inside, with the friend who got here first.
-  if (zone.id === 'throne') learn('allOf')
+  if (zone.id === 'eyrie') learn('allOf')
 
   // The keep's doors open with a fanfare once; after that it's the way through to chapter two.
   if (zone.id === 'keep' && owlStage() === 'afar') {
@@ -449,7 +429,7 @@ const welcomeBack = (next: Identity, onDone?: () => void) =>
     onDone,
   )
 
-/** Groups the Captain, the Librarian or the owl asked the Oracle to add, whether or not the session has them yet. */
+/** Groups the Captain, the Librarian, the Falconer or the owl asked the Oracle to add, whether or not the session has them yet. */
 function vouchedGroups() {
   const vouched: string[] = []
 

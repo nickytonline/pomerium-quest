@@ -12,7 +12,7 @@ import { join } from 'node:path'
 import { parseAllDocuments, stringify } from 'yaml'
 import { BASE_GROUP, GRANTED_GROUPS } from '../app/src/game/groups.ts'
 import { VISITORS, VISITOR_IDS, visitorPassword } from '../app/src/game/house.ts'
-import { ROOSTS } from '../app/src/game/owl.ts'
+import { AVIARY_HOST } from '../app/src/game/owl.ts'
 import { policyDocument } from '../app/src/game/ppl.ts'
 import { ZONES, type Zone } from '../app/src/game/zones.ts'
 
@@ -40,7 +40,7 @@ const CONTROLLER = join(ROOT, 'deploy/pomerium/ingress-controller.yaml')
 const APP_IMAGE = 'pomerium-quest/app:dev'
 const APP_DEV_IMAGE = 'pomerium-quest/app-dev:dev'
 
-/** The owl's MCP server (mcp/), which Pomerium serves at the Aviary's and the Rookery's addresses. */
+/** The owl's MCP server (mcp/), which Pomerium serves at the Aviary's address. */
 const MCP_IMAGE = 'pomerium-quest/mcp:dev'
 
 /** Where `./quest up` mounts this repo inside the k3d node. */
@@ -586,17 +586,14 @@ function manifests(secrets: Secrets): Yaml[] {
     ),
     service('quest', 3000, 3000),
     // The owl's MCP server. It verifies Pomerium's JWT like the game does, and writes to the Oracle with
-    // the game's own client, since its tools grant groups the way the Captain and the Librarian do.
+    // the game's own client, since one of its tools grants a group the way the Captain and the Librarian do.
     deployment(
       'mcp',
       MCP_IMAGE,
       3000,
       {
         env: [
-          ...ROOSTS.map((roost) => ({
-            name: `QUEST_${roost.toUpperCase()}_ORIGIN`,
-            value: publicUrl(roost),
-          })),
+          { name: 'QUEST_AVIARY_ORIGIN', value: publicUrl(AVIARY_HOST) },
           { name: 'KEYCLOAK_URL', value: svc('keycloak', 8080) },
           { name: 'KEYCLOAK_REALM', value: REALM },
           { name: 'KEYCLOAK_CLIENT_ID', value: 'quest-admin' },

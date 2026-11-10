@@ -1,6 +1,6 @@
 // The Aviary: the MCP server chapter two's owl talks to, built from
-// https://github.com/nickytonline/mcp-typescript-template. Pomerium serves it at two addresses (the
-// Aviary and the Rookery), each a route with its own policy; nothing else can reach it.
+// https://github.com/nickytonline/mcp-typescript-template. Pomerium serves it at one route, whose
+// policy decides which owls get in and which tools they may call; nothing else can reach it.
 import { toNodeHandler } from '@modelcontextprotocol/node'
 import { McpServer, createMcpHandler } from '@modelcontextprotocol/server'
 import express from 'express'

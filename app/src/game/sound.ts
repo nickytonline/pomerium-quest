@@ -41,6 +41,7 @@ export type Effect =
   | 'munch'
   | 'bell'
   | 'hoot'
+  | 'flutter'
 
 const STORAGE_KEY = 'pomerium-quest/sound/v1'
 
@@ -530,6 +531,11 @@ const EFFECTS: Record<Effect, (mix: Mixer, out: AudioNode, at: number) => void> 
   hoot: (_mix, out, at) => {
     tone(out, at, { wave: 'sine', freq: 392, to: 349, dur: 0.14, peak: 0.16, hold: true })
     tone(out, at + 0.2, { wave: 'sine', freq: 392, to: 311, dur: 0.34, peak: 0.16, hold: true })
+  },
+  /** The owl hopping out of reach: three quick wingbeats, each a soft puff of air. */
+  flutter: (mix, out, at) => {
+    for (const beat of [0, 0.08, 0.16])
+      hiss(mix, out, at + beat, { filter: 'bandpass', freq: 700, to: 350, q: 0.8, dur: 0.06, peak: 0.22 })
   },
   /** A text box popping open: two quick rising blips. */
   dialogOpen: (_mix, out, at) => {

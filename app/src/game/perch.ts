@@ -1,9 +1,9 @@
-// What the owl's perch sends and hears. The perch is the game acting as an MCP client: the browser asks
-// the game server (through Pomerium's /zones/perch route), and the server makes the real MCP request to
-// the Aviary or the Rookery, through Pomerium again, with the token Pomerium gave it for the player.
+// What a perch sends and hears. Sending the owl from a perch is a tool call: the browser asks the game
+// server (through Pomerium's /zones/perch route), and the server makes the real MCP request to the
+// Aviary, through Pomerium again, with the token Pomerium gave it for the player.
 import type { OwlTool } from './owl.ts'
 
-/** What the player asks the owl to do: list a roost's tools, or call one. */
+/** What the owl is sent to do: list the Aviary's tools, or call one. */
 export type OwlCall =
   | { readonly method: 'tools/list' }
   | { readonly method: 'tools/call'; readonly tool: OwlTool }
@@ -15,7 +15,7 @@ export type ToolInfo = {
   readonly description: string | null
 }
 
-/** How the roost answered, read from the MCP response. */
+/** How the Aviary answered, read from the MCP response. */
 export type OwlOutcome =
   | { readonly kind: 'tools'; readonly tools: readonly ToolInfo[] }
   /** The tool ran. `failed` is the tool's own error (isError), not a refusal by Pomerium. */
@@ -37,3 +37,12 @@ export type OwlFlight = {
   readonly response: string | null
   readonly outcome: OwlOutcome
 }
+
+/** Where the owl is on an errand: on its way out, landed on the perch, or turned back before it could land. */
+export type OwlAway = 'out' | 'landed' | 'turned'
+
+/**
+ * How long each part of the owl's flight takes to watch, in milliseconds, for players who have motion on.
+ * The request is already on its way while the owl flies out; the answer decides whether it lands.
+ */
+export const FLIGHT_MS = { out: 650, landed: 1100, turned: 750 } as const

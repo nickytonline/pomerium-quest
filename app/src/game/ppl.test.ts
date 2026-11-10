@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { parse } from 'yaml'
 import { GROUPS } from './groups.ts'
-import { OWL_TOOLS, type OwlTool } from './owl.ts'
+import { OWL_TOOLS, isForbidden, type OwlTool } from './owl.ts'
 import { decide, policyDocument, policyYaml, type Identity } from './ppl.ts'
 import { ZONES, zoneById, type PolicyRule, type ZoneId } from './zones.ts'
 
@@ -24,52 +24,69 @@ const allowed = (zone: ZoneId, who: Identity, method: 'GET' | 'POST' = 'GET') =>
 const KEEP_GROUPS = [GROUPS.citizens, GROUPS.knights, GROUPS.scholars]
 const falconer = person('falconer@example.org', [...KEEP_GROUPS, GROUPS.falconers])
 
-/** An MCP request to a roost: a tools/call for `tool`, or with none, a tools/list. */
-const owlAllowed = (zone: ZoneId, who: Identity, tool?: OwlTool) =>
-  decide(zoneById(zone), who, { method: 'POST', path: zoneById(zone).prefix, tool }).allow
+/** An MCP request to the Aviary: a tools/call for `tool`, or with none, a tools/list. */
+const owlAllowed = (who: Identity, tool?: OwlTool) =>
+  decide(zoneById('aviary'), who, { method: 'POST', path: zoneById('aviary').prefix, tool }).allow
 
-describe('the owl is checked as the player, one tool call at a time', () => {
-  it('lets the owl of anyone the keep admits list the Aviary’s tools and call most of them', () => {
-    expect(owlAllowed('aviary', knightAndScholar)).toBe(true)
-    expect(owlAllowed('aviary', knightAndScholar, OWL_TOOLS.whoami)).toBe(true)
-    expect(owlAllowed('aviary', knightAndScholar, OWL_TOOLS.deliverLetter)).toBe(true)
-  })
-
-  it('keeps the owl from anyone who hasn’t finished chapter one', () => {
-    expect(owlAllowed('aviary', citizen)).toBe(false)
-    expect(owlAllowed('aviary', knight, OWL_TOOLS.whoami)).toBe(false)
-    expect(owlAllowed('aviary', traveler)).toBe(false)
+describe('the owl is checked on the player’s behalf, one tool call at a time', () => {
+  it('lets anyone the keep admits send an owl from the perch', () => {
     expect(allowed('perch', citizen, 'POST')).toBe(false)
     expect(allowed('perch', knightAndScholar, 'POST')).toBe(true)
   })
 
-  it('refuses one tool at the Aviary by name, whoever the owl flies for', () => {
-    expect(owlAllowed('aviary', knightAndScholar, OWL_TOOLS.openVault)).toBe(false)
-    expect(owlAllowed('aviary', falconer, OWL_TOOLS.openVault)).toBe(false)
+  it('turns back the owl of anyone who is not a falconer, whatever it asks for', () => {
+    expect(owlAllowed(knightAndScholar)).toBe(false)
+    expect(owlAllowed(knightAndScholar, OWL_TOOLS.whoami)).toBe(false)
+    expect(owlAllowed(traveler, OWL_TOOLS.ringBell)).toBe(false)
   })
 
-  it('opens the Rookery, and every tool there, to falconers only', () => {
-    expect(owlAllowed('rookery', knightAndScholar)).toBe(false)
-    expect(owlAllowed('rookery', falconer)).toBe(true)
-    expect(owlAllowed('rookery', falconer, OWL_TOOLS.openVault)).toBe(true)
+  it('lets a falconer’s owl list the tools and call the allowed ones', () => {
+    expect(owlAllowed(falconer)).toBe(true)
+
+    for (const tool of Object.values(OWL_TOOLS).filter((name) => !isForbidden(name)))
+      expect(owlAllowed(falconer, tool), tool).toBe(true)
   })
 
-  it('opens the gates the errands earn', () => {
-    expect(allowed('mews', citizen)).toBe(false)
-    expect(allowed('mews', falconer)).toBe(true)
-    expect(allowed('vault', falconer)).toBe(false)
-    expect(allowed('vault', person('k@example.org', [GROUPS.keyholders]))).toBe(true)
+  it('forbids every open_ tool to every owl with one deny rule', () => {
+    const forbidden = Object.values(OWL_TOOLS).filter(isForbidden)
+
+    expect(forbidden).toEqual([OWL_TOOLS.openVault, OWL_TOOLS.openCages])
+
+    for (const tool of forbidden) {
+      expect(owlAllowed(falconer, tool), tool).toBe(false)
+      expect(owlAllowed(person('k@example.org', Object.values(GROUPS)), tool), tool).toBe(false)
+    }
+
+    expect(zoneById('aviary').policy.filter((rule) => rule.action === 'deny')).toHaveLength(1)
   })
 
-  it('opens the Throne Room only to someone who holds every group both chapters earn', () => {
+  it('never puts a tool check and a group check in the same rule', () => {
+    // Two criteria under one operator would read as "and" in the game, but a rule with two operators is
+    // joined with "or" in Pomerium, and open-source PPL can't negate a claim inside an and.
+    for (const rule of ZONES.flatMap((zone) => zone.policy)) {
+      const kinds = new Set(rule.criteria.map((criterion) => criterion.kind))
+
+      expect(kinds.has('mcp_tool') && kinds.size > 1).toBe(false)
+    }
+  })
+
+  it('writes the deny rule with starts_with, as Pomerium reads it', () => {
+    expect(policyDocument(zoneById('aviary').policy)).toEqual([
+      { allow: { and: [{ 'claim/groups': GROUPS.falconers }] } },
+      { deny: { or: [{ mcp_tool: { starts_with: 'open_' } }] } },
+    ])
+  })
+
+  it('opens the Eyrie only to someone who holds every group both chapters earn', () => {
     const everything = [GROUPS.citizens, GROUPS.knights, GROUPS.scholars, GROUPS.falconers, GROUPS.keyholders]
 
-    expect(allowed('throne', person('k@example.org', everything))).toBe(true)
+    expect(allowed('eyrie', person('k@example.org', everything))).toBe(true)
+    expect(allowed('eyrie', falconer)).toBe(false)
 
     for (const missing of everything)
       expect(
         allowed(
-          'throne',
+          'eyrie',
           person(
             'k@example.org',
             everything.filter((group) => group !== missing),
