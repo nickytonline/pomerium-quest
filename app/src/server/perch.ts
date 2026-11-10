@@ -3,6 +3,9 @@ import { MCP_PATH, aviaryOrigin } from '../game/owl.ts'
 import type { OwlCall, OwlFlight, OwlOutcome } from '../game/perch.ts'
 import { QuestConfig } from './config.ts'
 
+/** How long the Aviary has to answer before the owl is reported lost. The callers wait a little longer. */
+const FLIGHT_TIMEOUT_MS = 15_000
+
 // Where the owl is sent from. The perch's route is the game's MCP client route, so Pomerium adds an
 // Authorization header carrying a token for the signed-in player. The server sends the owl's request to
 // the Aviary, an MCP server route, with that token, and Pomerium checks it there against the Aviary's
@@ -105,6 +108,7 @@ export const fly = (request: Request, call: OwlCall) =>
     return yield* Effect.tryPromise(async (): Promise<OwlFlight> => {
       const response = await fetch(url, {
         method: 'POST',
+        signal: AbortSignal.timeout(FLIGHT_TIMEOUT_MS),
         headers: {
           authorization,
           'content-type': 'application/json',

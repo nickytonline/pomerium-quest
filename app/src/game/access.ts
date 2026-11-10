@@ -191,6 +191,12 @@ export const knockAs = (knocker: Knocker, method: 'GET' | 'POST') =>
 /** How long the player's knock keeps trying while Pomerium takes up new rules, as the visitors' knocks do. */
 const PICKUP_MS = 25_000
 
+/** A flight that hasn't come back by now is lost, so the perch is freed. Longer than the server's own wait. */
+const FLIGHT_TIMEOUT_MS = 20_000
+
+/** The Falconer's errand signs in first, then flies, so it gets longer than a player's owl. */
+const FALCONER_TIMEOUT_MS = 35_000
+
 /** One knock by the player: Pomerium's status, and the rules version the house saw if it got in. */
 async function knockOnce(path: string, method: 'GET' | 'POST') {
   try {
@@ -238,6 +244,7 @@ export async function sendFalconersOwl(): Promise<Built<OwlFlight>> {
     const response = await fetch('/zones/perch/falconer', {
       method: 'POST',
       redirect: 'manual',
+      signal: AbortSignal.timeout(FALCONER_TIMEOUT_MS),
       headers: { accept: 'application/json' },
     })
 
@@ -263,6 +270,7 @@ export async function sendOwl(call: OwlCall): Promise<Built<OwlFlight>> {
       redirect: 'manual',
       headers: { accept: 'application/json', 'content-type': 'application/json' },
       body: JSON.stringify(call),
+      signal: AbortSignal.timeout(FLIGHT_TIMEOUT_MS),
     })
 
     if (needsSignIn(response)) return { ok: false, message: 'You have no session. Sign in with the Oracle.' }

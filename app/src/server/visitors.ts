@@ -25,6 +25,9 @@ const TOWNSFOLK: Record<TownspersonId, Visitor> = { ...VISITORS, falconer: FALCO
 /** The perch's own address on the game's host: a request there gets a token for whoever is signed in. */
 const PERCH_PATH = '/zones/perch/aviary'
 
+/** The perch's own flight gives up after 15 seconds (see perch.ts), so this waits a little longer. */
+const PERCH_TIMEOUT_MS = 20_000
+
 /** How long to wait for Pomerium to start enforcing a house's latest rules. */
 const PICKUP_MS = 45_000
 
@@ -193,6 +196,7 @@ export const VisitorsLive = Layer.effect(
           const response = await fetch(url, {
             method: 'POST',
             redirect: 'manual',
+            signal: AbortSignal.timeout(PERCH_TIMEOUT_MS),
             headers: {
               cookie: jar.header(url),
               accept: 'application/json',
