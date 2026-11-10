@@ -77,7 +77,7 @@ export interface PerchView {
   readonly flight: OwlFlight | null
   /** How far the errand has got: the scene flies the owl to match. */
   readonly phase: PerchPhase
-  /** The player asked to see the tool call the owl made, so the perch's panel is open. */
+  /** The player asked to read what the owl brought back, so the perch's panel is open. */
   readonly explained: boolean
 }
 
@@ -358,11 +358,11 @@ export const quest = {
   perchPhase: (phase: PerchPhase) => {
     if (state.perch) update({ perch: { ...state.perch, phase } })
   },
-  /** The owl is back on the perch with its answer, which the text box tells. */
+  /** The owl is back on the perch with its answer, which waits until the player asks to read it. */
   perchFlew: (flight: OwlFlight) => {
     if (state.perch) update({ perch: { ...state.perch, flight, phase: 'done', explained: false } })
   },
-  /** The player asks to see the tool call the owl made: the perch's panel opens. */
+  /** The player asks to read what the owl brought back: the perch's panel opens. */
   explainPerch: () => {
     if (state.perch) update({ perch: { ...state.perch, explained: true } })
   },

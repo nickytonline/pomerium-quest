@@ -1,6 +1,6 @@
 // A moment told twice, as the kingdom tells it and as Pomerium decided it: the screens for a refusal,
 // the finale and the house's desk all share these two tabs.
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 type Tab = 'kingdom' | 'pomerium'
 
@@ -16,7 +16,9 @@ export const switchTab = () => window.dispatchEvent(new Event(TAB_EVENT))
 
 /**
  * A moment told twice: first as the game tells it, then as Pomerium decided it. Both tabs share
- * one grid cell, so the screen keeps the taller one's size when switching.
+ * one grid cell, so the screen keeps the taller one's size when switching. A screen whose tabs differ a
+ * lot in length asks for each tab to keep its own size instead: sized to the longer one, the shorter tab
+ * would be mostly empty, with whatever is at its foot scrolled far out of view.
  */
 export function TabbedScreen({
   name,
@@ -24,6 +26,7 @@ export function TabbedScreen({
   showing,
   overlay,
   role = 'alertdialog',
+  sized = 'tallest',
   kingdom,
   pomerium,
 }: {
@@ -34,10 +37,19 @@ export function TabbedScreen({
   readonly overlay: string
   /** A refusal or a result is an alert; a screen the player works in is a plain dialog. */
   readonly role?: 'alertdialog' | 'dialog'
+  /** Whether both tabs take the taller one's size, or each keeps its own. */
+  readonly sized?: 'tallest' | 'each'
   readonly kingdom: ReactNode
   readonly pomerium: ReactNode
 }) {
   const [tab, setTab] = useState<Tab>('kingdom')
+  const panels = useRef<HTMLDivElement>(null)
+  const away = sized === 'each' ? 'hidden' : 'invisible'
+
+  // A tab opens at its top, not wherever the other one was scrolled to.
+  useEffect(() => {
+    panels.current?.scrollTo({ top: 0 })
+  }, [tab, showing])
 
   useEffect(() => {
     setTab('kingdom')
@@ -70,12 +82,15 @@ export function TabbedScreen({
           ))}
         </div>
         {/* One column that may shrink, so a long line scrolls inside its block instead of widening the screen. */}
-        <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] overflow-y-auto overscroll-contain">
+        <div
+          ref={panels}
+          className="grid min-h-0 grid-cols-[minmax(0,1fr)] overflow-y-auto overscroll-contain"
+        >
           {TABS.map(({ id }) => (
             <div
               key={id}
               id={`${name}-panel-${id}`}
-              className={`grid grid-cols-[minmax(0,1fr)] [grid-area:1/1] ${tab === id ? '' : 'invisible'}`}
+              className={`grid grid-cols-[minmax(0,1fr)] [grid-area:1/1] ${tab === id ? '' : away}`}
               role="tabpanel"
               aria-labelledby={`${name}-tab-${id}`}
               aria-hidden={tab !== id}

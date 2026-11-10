@@ -158,10 +158,10 @@ press E or Enter (or tap the A button) to pick it up. No quick reflexes are need
 Six perches stand in the grounds, with no walls or gates around them. Each one is an errand. Walk up
 beside a perch and your owl hops onto it. Walk into the perch (or face it and press E or Enter, or tap the
 A button) and the text box asks whether to send the owl. Every errand is a real MCP request through
-Pomerium, so you need no AI agent to play. The owl flies off and comes back to its perch with the answer,
-which the text box tells. From there you can send it again, leave, or look at the tool call behind the
-errand: the request the owl carried, what came back and how Pomerium decided. Walk away and the owl flies
-back to your shoulder.
+Pomerium, so you need no AI agent to play. The owl flies off and comes back to its perch, and the text
+box says it has a message. Read it, and two tabs explain the call: what happened in the kingdom, and the
+request the owl carried, what came back and how Pomerium decided. Walk away and the owl flies back to
+your shoulder.
 
 The first time, Pomerium turns the owl back: the Aviary only lets in a falconer's owl. Tell the Falconer,
 who has the Oracle make you a falconer. After that four perches work, and two never do: one rule forbids
