@@ -32,7 +32,7 @@ const MEET: readonly Page[] = [
   },
   {
     who: 'Falconer',
-    text: "The owl has no papers of its own. It flies under yours. Pomerium checks every tool it calls against the route's policy, as you, the same way a guard checks you at a gate.",
+    text: "The owl has no papers of its own. It flies on your behalf, so it carries yours. Pomerium checks every tool it calls against the route's policy, by your papers, the same way a guard checks you at a gate.",
     links: [link('mcpIdentity')],
   },
   {
@@ -313,7 +313,7 @@ export function openVaultChest(): boolean {
     },
     {
       who: 'Royal Vault',
-      text: 'You never touched the lock. An owl asked for the key, as you, and Pomerium checked every errand it ran: who it flew for, which route it flew to, and which tool it called.',
+      text: 'You never touched the lock. An owl asked for the key on your behalf, and Pomerium checked every errand it ran: who it flew for, which route it flew to, and which tool it called.',
       links: [link('mcpTool')],
     },
     {

@@ -191,7 +191,7 @@ function PerchPanel({ perch }: { readonly perch: PerchView }) {
         side of it, without the AI: you pick the tool. The game's route for the perch is an MCP client route,
         so Pomerium hands the game a token for your session. The game sends each request to{' '}
         <code className="wrap-anywhere">{url}</code> with that token, and Pomerium checks it against the route
-        below, as you.
+        below. The owl acts on your behalf, so the claims Pomerium checks are yours.
       </p>
       <p className={paperLabel}>The route the owl flies to</p>
       <pre className={paperCode}>{zoneRouteYaml(zone)}</pre>
@@ -241,8 +241,8 @@ function PerchPanel({ perch }: { readonly perch: PerchView }) {
 
 const ERRANDS: readonly { readonly what: string; readonly how: string }[] = [
   {
-    what: 'The owl flew as you',
-    how: 'Pomerium signed it in with your session, and whoami read your claims back',
+    what: 'The owl flew on your behalf',
+    how: 'Pomerium tied its token to your session, and whoami read your claims back',
   },
   {
     what: 'One errand was refused',

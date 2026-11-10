@@ -39,15 +39,15 @@ Chapter two, beyond the Royal Keep, is about agents. The Falconer gives you an o
 over [MCP](https://www.pomerium.com/docs/capabilities/mcp) (the Model Context Protocol, the way AI agents call
 tools):
 
-| Beyond the keep                                              | In Pomerium                                                                          |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| The Aviary offers errands, and the owl asks for them by name | An MCP server behind a route, and an MCP client calling its tools                    |
-| The owl has no papers of its own; it flies under yours       | Pomerium signs the MCP client in as you, and checks each request against the policy  |
-| Only those the keep admits may send the owl                  | The MCP routes ask for the same `claim/groups` as the keep                           |
-| The Aviary refuses one errand, whoever the owl flies for     | A `deny` rule with `mcp_tool` refuses one tool by name                               |
-| The owl's letter makes you a falconer, and the Mews opens    | A tool call changes a claim at the IdP; you sign in again for your session to see it |
-| The Rookery allows the errand the Aviary refused             | One MCP server behind two routes, each with its own policy                           |
-| The perch shows what the owl carried and what came back      | The JSON-RPC request, and Pomerium's answer (a JSON-RPC error when it refuses)       |
+| Beyond the keep                                              | In Pomerium                                                                                                           |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| The Aviary offers errands, and the owl asks for them by name | An MCP server behind a route, and an MCP client calling its tools                                                     |
+| The owl has no papers of its own; it flies under yours       | The MCP client acts on your behalf: its token is tied to your session, and each request is checked against the policy |
+| Only those the keep admits may send the owl                  | The MCP routes ask for the same `claim/groups` as the keep                                                            |
+| The Aviary refuses one errand, whoever the owl flies for     | A `deny` rule with `mcp_tool` refuses one tool by name                                                                |
+| The owl's letter makes you a falconer, and the Mews opens    | A tool call changes a claim at the IdP; you sign in again for your session to see it                                  |
+| The Rookery allows the errand the Aviary refused             | One MCP server behind two routes, each with its own policy                                                            |
+| The perch shows what the owl carried and what came back      | The JSON-RPC request, and Pomerium's answer (a JSON-RPC error when it refuses)                                        |
 
 ## How the game works
 
@@ -56,23 +56,23 @@ asks Pomerium whether to let you through, so what you can reach depends on who t
 
 ### Who's who
 
-|                                                                  | Who                 | What they do                                                                                  |
-| ---------------------------------------------------------------- | ------------------- | --------------------------------------------------------------------------------------------- |
-| <img src="docs/images/legend/dog.gif" width="48" alt="">         | **You**             | The Pomerium Pomeranian                                                                       |
-| <img src="docs/images/legend/sage.png" width="48" alt="">        | **The sage**        | Starts you on the quest, and once you've signed in, sends you to the Oracle for citizenship   |
-| <img src="docs/images/legend/oracle.png" width="48" alt="">      | **The Oracle**      | Your identity provider. He signs you in, in his temple, and grants you a deed to a house      |
-| <img src="docs/images/legend/guard.png" width="48" alt="">       | **A guard**         | Stands at every gate and follows that route's policy, to the letter, on every request         |
-| <img src="docs/images/legend/captain.png" width="48" alt="">     | **The Captain**     | Runs the Knights' Guild. Beat three bot slimes and they have the Oracle add you to `knights`  |
-| <img src="docs/images/legend/armorer.png" width="48" alt="">     | **The Armorer**     | Keeps the forge. The armory's guard, not the Armorer, decides who gets the steel sword        |
-| <img src="docs/images/legend/librarian.png" width="48" alt="">   | **The Librarian**   | Read every book in the library and they have the Oracle add you to `scholars`                 |
-| <img src="docs/images/legend/falconer.png" width="48" alt="">    | **The Falconer**    | Waits beyond the Royal Keep with an owl for you: an MCP client that calls tools as you        |
-| <img src="docs/images/legend/perch.png" width="48" alt="">       | **The owl's perch** | Where you send the owl from. It lists the errands (tools) and shows what Pomerium answered    |
-| <img src="docs/images/legend/baker.png" width="48" alt="">       | **The baker**       | `baker@game.localhost.pomerium.io`, in the citizens group, so the town gate lets them in      |
-| <img src="docs/images/legend/traveler.png" width="48" alt="">    | **The traveler**    | `wanderer@outlands.net`: signed in, but not a citizen, so the town gate turns them away       |
-| <img src="docs/images/legend/phish.png" width="48" alt="">       | **A phish**         | Dresses as the Oracle and offers to sign you in. Hand over your password and you lose         |
-| <img src="docs/images/legend/bot-slime.gif" width="48" alt="">   | **A bot slime**     | Roams the Slime Fields and bites. It never signs in, so it's a request with no session at all |
-| <img src="docs/images/legend/fish.gif" width="48" alt="">        | **A fish**          | Swims in the ponds. Catch one to get a heart back                                             |
-| <img src="docs/images/legend/steel-sword.png" width="48" alt=""> | **The steel sword** | Waits in a chest in the armory. It hits harder than your wooden one, and splits cracked rock  |
+|                                                                  | Who                 | What they do                                                                                   |
+| ---------------------------------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------- |
+| <img src="docs/images/legend/dog.gif" width="48" alt="">         | **You**             | The Pomerium Pomeranian                                                                        |
+| <img src="docs/images/legend/sage.png" width="48" alt="">        | **The sage**        | Starts you on the quest, and once you've signed in, sends you to the Oracle for citizenship    |
+| <img src="docs/images/legend/oracle.png" width="48" alt="">      | **The Oracle**      | Your identity provider. He signs you in, in his temple, and grants you a deed to a house       |
+| <img src="docs/images/legend/guard.png" width="48" alt="">       | **A guard**         | Stands at every gate and follows that route's policy, to the letter, on every request          |
+| <img src="docs/images/legend/captain.png" width="48" alt="">     | **The Captain**     | Runs the Knights' Guild. Beat three bot slimes and they have the Oracle add you to `knights`   |
+| <img src="docs/images/legend/armorer.png" width="48" alt="">     | **The Armorer**     | Keeps the forge. The armory's guard, not the Armorer, decides who gets the steel sword         |
+| <img src="docs/images/legend/librarian.png" width="48" alt="">   | **The Librarian**   | Read every book in the library and they have the Oracle add you to `scholars`                  |
+| <img src="docs/images/legend/falconer.png" width="48" alt="">    | **The Falconer**    | Waits beyond the Royal Keep with an owl for you: an MCP client that calls tools on your behalf |
+| <img src="docs/images/legend/perch.png" width="48" alt="">       | **The owl's perch** | Where you send the owl from. It lists the errands (tools) and shows what Pomerium answered     |
+| <img src="docs/images/legend/baker.png" width="48" alt="">       | **The baker**       | `baker@game.localhost.pomerium.io`, in the citizens group, so the town gate lets them in       |
+| <img src="docs/images/legend/traveler.png" width="48" alt="">    | **The traveler**    | `wanderer@outlands.net`: signed in, but not a citizen, so the town gate turns them away        |
+| <img src="docs/images/legend/phish.png" width="48" alt="">       | **A phish**         | Dresses as the Oracle and offers to sign you in. Hand over your password and you lose          |
+| <img src="docs/images/legend/bot-slime.gif" width="48" alt="">   | **A bot slime**     | Roams the Slime Fields and bites. It never signs in, so it's a request with no session at all  |
+| <img src="docs/images/legend/fish.gif" width="48" alt="">        | **A fish**          | Swims in the ponds. Catch one to get a heart back                                              |
+| <img src="docs/images/legend/steel-sword.png" width="48" alt=""> | **The steel sword** | Waits in a chest in the armory. It hits harder than your wooden one, and splits cracked rock   |
 
 ### What you can do
 

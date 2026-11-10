@@ -174,7 +174,7 @@ falconer="$email"
 check "an MCP server route takes a token, not a browser session" 401 \
   "$(curl -s -o /dev/null -w '%{http_code}' -b "$owl" -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' -X POST "${AVIARY}/mcp" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')"
 check "the Aviary lists its tools for the owl of a player the keep admits" tools "$(perch "$owl" aviary "$tools" | field outcome.kind)"
-check "whoami: the owl flies as the player" yes \
+check "whoami: the owl flies on the player's behalf" yes \
   "$(perch "$owl" aviary "$(call whoami)" | field outcome.text | grep -q "$falconer" && echo yes || echo no)"
 check "ring_bell is allowed at the Aviary" result "$(perch "$owl" aviary "$(call ring_bell)" | field outcome.kind)"
 check "the Aviary refuses open_vault (deny: mcp_tool)" refused "$(perch "$owl" aviary "$(call open_vault)" | field outcome.kind)"

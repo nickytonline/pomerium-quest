@@ -230,7 +230,7 @@ const CAST: readonly {
     sheet: NPCS,
     frame: NPC_FRAME.falconer,
   },
-  { name: 'The Owl', role: 'your MCP client: an agent, acting as you', sheet: ITEMS, frame: 7 },
+  { name: 'The Owl', role: 'your MCP client: an agent, acting on your behalf', sheet: ITEMS, frame: 7 },
   {
     name: 'Mochi',
     role: 'another user: the same route and policy, checked just the same',

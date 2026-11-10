@@ -29,11 +29,11 @@ The removal commit has the full implementation to restore from (`git log --grep 
 The road should open onto real content, each piece a Pomerium capability taught the way chapter one does
 it: play first, then the Pomerium parallel on the second tab.
 
-| Place              | Pomerium capability                     | Sketch                                                                               |
-| ------------------ | --------------------------------------- | ------------------------------------------------------------------------------------ |
-| The Night Market   | Time-based rules (`date`/`time_of_day`) | Stalls that only open after dark; the gate's policy checks the hour.                 |
-| The Thieves' Guild | Device identity                         | The guild knows faces and devices; a new device is turned away until it is enrolled. |
-| The owl familiar   | Acting for you over MCP                 | Built: an owl that runs errands as you, with one tool denied by name at the Aviary.  |
+| Place              | Pomerium capability                     | Sketch                                                                                      |
+| ------------------ | --------------------------------------- | ------------------------------------------------------------------------------------------- |
+| The Night Market   | Time-based rules (`date`/`time_of_day`) | Stalls that only open after dark; the gate's policy checks the hour.                        |
+| The Thieves' Guild | Device identity                         | The guild knows faces and devices; a new device is turned away until it is enrolled.        |
+| The owl familiar   | Acting for you over MCP                 | Built: an owl that runs errands on your behalf, with one tool denied by name at the Aviary. |
 
 ## Done when
 

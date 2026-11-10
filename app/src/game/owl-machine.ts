@@ -44,7 +44,7 @@ export const owlMachine = setup({
       on: { OWL_GIVEN: 'fledged', SIGNED_IN: [toKeyholder, toFalconer] },
     },
     fledged: {
-      description: 'The owl flies for you: an MCP client, calling the Aviary’s tools as you.',
+      description: 'The owl flies for you: an MCP client, calling the Aviary’s tools on your behalf.',
       on: { LETTER_DELIVERED: 'vouched', SIGNED_IN: [toKeyholder, toFalconer] },
     },
     vouched: {
