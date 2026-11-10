@@ -619,6 +619,25 @@ const NPCS = {
       '................',
     ],
   },
+  // Mochi, the friend waiting in the Throne Room: the dog's own shape in white fur and a teal jacket,
+  // with bright eyes where the player's sunglasses are.
+  friend: {
+    palette: {
+      O: '#f3ead9',
+      U: '#ffffff',
+      S: '#cdbfa6',
+      L: '#fff8ec',
+      Y: '#e6d8c0',
+      J: '#1f6f73',
+      H: '#3fc1b0',
+    },
+    rows: withFeet(
+      HEAD_DOWN.map(
+        (row, y) => ({ 4: '.KOOOOOOOOOOOOK.', 5: '.KOOKWOOOOKWOOK.', 6: '.KOOOOLLLLOOOOK.' })[y] ?? row,
+      ),
+      FRONT_FEET.idle,
+    ),
+  },
 }
 
 // Frame order is load-bearing: see NPC_FRAME in app/src/game/world.ts.
