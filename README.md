@@ -35,19 +35,21 @@ Then the Oracle makes you a citizen with a house in the Slime Fields, and you wr
 | Knights may look in (GET) but not knock (POST)                 | `http_method`                                                                         |
 | Saving door rules sends the townsfolk and a slime to your door | Real requests through Pomerium, with real sessions (or none)                          |
 
-Chapter two, beyond the Royal Keep, is about agents. The Falconer gives you an owl that runs errands for you
-over [MCP](https://www.pomerium.com/docs/capabilities/mcp) (the Model Context Protocol, the way AI agents call
+Chapter two, beyond the Royal Keep, is about agents. You catch an owl that runs errands on your behalf over
+[MCP](https://www.pomerium.com/docs/capabilities/mcp) (the Model Context Protocol, the way AI agents call
 tools):
 
-| Beyond the keep                                              | In Pomerium                                                                                                           |
-| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| The Aviary offers errands, and the owl asks for them by name | An MCP server behind a route, and an MCP client calling its tools                                                     |
-| The owl has no papers of its own; it flies under yours       | The MCP client acts on your behalf: its token is tied to your session, and each request is checked against the policy |
-| Only those the keep admits may send the owl                  | The MCP routes ask for the same `claim/groups` as the keep                                                            |
-| The Aviary refuses one errand, whoever the owl flies for     | A `deny` rule with `mcp_tool` refuses one tool by name                                                                |
-| The owl's letter makes you a falconer, and the Mews opens    | A tool call changes a claim at the IdP; you sign in again for your session to see it                                  |
-| The Rookery allows the errand the Aviary refused             | One MCP server behind two routes, each with its own policy                                                            |
-| The perch shows what the owl carried and what came back      | The JSON-RPC request, and Pomerium's answer (a JSON-RPC error when it refuses)                                        |
+| Beyond the keep                                                 | In Pomerium                                                                                                           |
+| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| The owl runs errands for you, and the Aviary offers them        | An MCP client calling the tools of an MCP server, which sits behind one route                                         |
+| Each perch in the grounds is one errand                         | Each perch is one of the server's tools; sending the owl there is a `tools/call`                                      |
+| The owl has no papers of its own; it carries yours              | The MCP client acts on your behalf: its token is tied to your session, and each request is checked against the policy |
+| No wall or gate stands around a perch                           | Policy alone decides whether a tool call is allowed                                                                   |
+| The Aviary turns back the owl of anyone who isn't a falconer    | The route's `allow` rule asks for `claim/groups: falconers`, before any tool is looked at                             |
+| Two perches never open, whoever the owl flies for               | One `deny` rule with `mcp_tool` and `starts_with: open_` forbids a class of tools                                     |
+| The owl's letter makes you a keyholder, and the last gate opens | A tool call changes a claim at the IdP; you sign in again for your session to see it                                  |
+| Mochi's falcon flies for Mochi, not for you                     | Another MCP client acts on another user's behalf, with that user's claims                                             |
+| The perch shows what the owl carried and what came back         | The JSON-RPC request, Pomerium's answer (a JSON-RPC error when it refuses), and how the policy was evaluated          |
 
 ## How the game works
 
@@ -56,23 +58,26 @@ asks Pomerium whether to let you through, so what you can reach depends on who t
 
 ### Who's who
 
-|                                                                  | Who                 | What they do                                                                                   |
-| ---------------------------------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------- |
-| <img src="docs/images/legend/dog.gif" width="48" alt="">         | **You**             | The Pomerium Pomeranian                                                                        |
-| <img src="docs/images/legend/sage.png" width="48" alt="">        | **The sage**        | Starts you on the quest, and once you've signed in, sends you to the Oracle for citizenship    |
-| <img src="docs/images/legend/oracle.png" width="48" alt="">      | **The Oracle**      | Your identity provider. He signs you in, in his temple, and grants you a deed to a house       |
-| <img src="docs/images/legend/guard.png" width="48" alt="">       | **A guard**         | Stands at every gate and follows that route's policy, to the letter, on every request          |
-| <img src="docs/images/legend/captain.png" width="48" alt="">     | **The Captain**     | Runs the Knights' Guild. Beat three bot slimes and they have the Oracle add you to `knights`   |
-| <img src="docs/images/legend/armorer.png" width="48" alt="">     | **The Armorer**     | Keeps the forge. The armory's guard, not the Armorer, decides who gets the steel sword         |
-| <img src="docs/images/legend/librarian.png" width="48" alt="">   | **The Librarian**   | Read every book in the library and they have the Oracle add you to `scholars`                  |
-| <img src="docs/images/legend/falconer.png" width="48" alt="">    | **The Falconer**    | Waits beyond the Royal Keep with an owl for you: an MCP client that calls tools on your behalf |
-| <img src="docs/images/legend/perch.png" width="48" alt="">       | **The owl's perch** | Where you send the owl from. It lists the errands (tools) and shows what Pomerium answered     |
-| <img src="docs/images/legend/baker.png" width="48" alt="">       | **The baker**       | `baker@game.localhost.pomerium.io`, in the citizens group, so the town gate lets them in       |
-| <img src="docs/images/legend/traveler.png" width="48" alt="">    | **The traveler**    | `wanderer@outlands.net`: signed in, but not a citizen, so the town gate turns them away        |
-| <img src="docs/images/legend/phish.png" width="48" alt="">       | **A phish**         | Dresses as the Oracle and offers to sign you in. Hand over your password and you lose          |
-| <img src="docs/images/legend/bot-slime.gif" width="48" alt="">   | **A bot slime**     | Roams the Slime Fields and bites. It never signs in, so it's a request with no session at all  |
-| <img src="docs/images/legend/fish.gif" width="48" alt="">        | **A fish**          | Swims in the ponds. Catch one to get a heart back                                              |
-| <img src="docs/images/legend/steel-sword.png" width="48" alt=""> | **The steel sword** | Waits in a chest in the armory. It hits harder than your wooden one, and splits cracked rock   |
+|                                                                  | Who                 | What they do                                                                                  |
+| ---------------------------------------------------------------- | ------------------- | --------------------------------------------------------------------------------------------- |
+| <img src="docs/images/legend/dog.gif" width="48" alt="">         | **You**             | The Pomerium Pomeranian                                                                       |
+| <img src="docs/images/legend/sage.png" width="48" alt="">        | **The sage**        | Starts you on the quest, and once you've signed in, sends you to the Oracle for citizenship   |
+| <img src="docs/images/legend/oracle.png" width="48" alt="">      | **The Oracle**      | Your identity provider. He signs you in, in his temple, and grants you a deed to a house      |
+| <img src="docs/images/legend/guard.png" width="48" alt="">       | **A guard**         | Stands at every gate and follows that route's policy, to the letter, on every request         |
+| <img src="docs/images/legend/captain.png" width="48" alt="">     | **The Captain**     | Runs the Knights' Guild. Beat three bot slimes and they have the Oracle add you to `knights`  |
+| <img src="docs/images/legend/armorer.png" width="48" alt="">     | **The Armorer**     | Keeps the forge. The armory's guard, not the Armorer, decides who gets the steel sword        |
+| <img src="docs/images/legend/librarian.png" width="48" alt="">   | **The Librarian**   | Read every book in the library and they have the Oracle add you to `scholars`                 |
+| <img src="docs/images/legend/falconer.png" width="48" alt="">    | **The Falconer**    | Waits beyond the Royal Keep. Catch your owl and they have the Oracle add you to `falconers`   |
+| <img src="docs/images/legend/owl.png" width="48" alt="">         | **Your owl**        | An MCP client: it flies on your behalf and carries your papers. You have to catch it first    |
+| <img src="docs/images/legend/perch.png" width="48" alt="">       | **A perch**         | One of the Aviary's tools. Send the owl to it, and it shows what Pomerium answered            |
+| <img src="docs/images/legend/mochi.png" width="48" alt="">       | **Mochi**           | Your friend, waiting behind the last gate. They lost their falcon on the way                  |
+| <img src="docs/images/legend/falcon.png" width="48" alt="">      | **Mochi's falcon**  | Another MCP client, lost in the Aviary's grounds. It flies on Mochi's behalf, not yours       |
+| <img src="docs/images/legend/baker.png" width="48" alt="">       | **The baker**       | `baker@game.localhost.pomerium.io`, in the citizens group, so the town gate lets them in      |
+| <img src="docs/images/legend/traveler.png" width="48" alt="">    | **The traveler**    | `wanderer@outlands.net`: signed in, but not a citizen, so the town gate turns them away       |
+| <img src="docs/images/legend/phish.png" width="48" alt="">       | **A phish**         | Dresses as the Oracle and offers to sign you in. Hand over your password and you lose         |
+| <img src="docs/images/legend/bot-slime.gif" width="48" alt="">   | **A bot slime**     | Roams the Slime Fields and bites. It never signs in, so it's a request with no session at all |
+| <img src="docs/images/legend/fish.gif" width="48" alt="">        | **A fish**          | Swims in the ponds. Catch one to get a heart back                                             |
+| <img src="docs/images/legend/steel-sword.png" width="48" alt=""> | **The steel sword** | Waits in a chest in the armory. It hits harder than your wooden one, and splits cracked rock  |
 
 ### What you can do
 
@@ -146,21 +151,30 @@ signed in as themselves (or not at all), so you see what Pomerium does with your
 
 ### Send the owl
 
-Past the Royal Keep, the Falconer gives you an owl. Walk up to its perch and press E or Enter: the perch
-lists the errands the Aviary offers, and a button sends the owl on each one. Every errand is a real MCP
-request through Pomerium, so you need no AI agent to play. The Aviary refuses one errand by name. Another
-has the Oracle make you a falconer, which opens the Mews, where a second perch reaches the Rookery: the
-same errands behind a different route, and the one the Aviary refused is allowed there. It earns the key
-to the Royal Vault. One gate is left after that: the Throne Room, down the lane between the Mews and the
-vault. Its guard asks for every group in the quest. Your friend Mochi, who went ahead of you, is waiting
-inside, and finding them ends the game, with fireworks.
+Past the Royal Keep, the Falconer tells you that to become a falconer you must catch your owl. It sits in
+the open ground and hops away when you get close, but it tires after a few hops. Then walk up to it and
+press E or Enter (or tap the A button) to pick it up. No quick reflexes are needed.
+
+Six perches stand in the grounds, with no walls or gates around them. Each one is an errand, and its sign
+names it. Walk up to a perch and press E or Enter, then send the owl. Every errand is a real MCP request
+through Pomerium, so you need no AI agent to play. The owl flies out and comes back with the answer, and
+the perch shows the request it carried, what came back and how Pomerium decided.
+
+The first time, Pomerium turns the owl back: the Aviary only lets in a falconer's owl. Tell the Falconer,
+who has the Oracle make you a falconer. After that four perches work, and two never do: one rule forbids
+every errand whose name starts with `open_`, whoever the owl flies for. One errand carries a letter to the
+Oracle, who makes you a keyholder. The last gate, the Eyrie's, asks for every group in the quest.
+
+Your friend Mochi is waiting behind that gate, and has lost their falcon somewhere in the grounds. Find
+it and bring it along. The gate checks your claims, not what you carry, so it lets you in either way, but
+Mochi will ask after the falcon. Handing it back ends the game, with fireworks.
 
 ### Bring your own agent
 
 The Aviary is a real MCP server, so an MCP client of your own can use it too, once you've been through the
-keep. Its address is `https://aviary.localhost.pomerium.io/mcp` (the Rookery's is
-`https://rookery.localhost.pomerium.io/mcp`). The client registers itself with Pomerium, sends you to the
-Oracle to sign in, and then gets the same tools and the same refusals as the owl. The certificate comes
+keep and the Falconer has made you a falconer. Its address is `https://aviary.localhost.pomerium.io/mcp`.
+The client registers itself with Pomerium, sends you to the Oracle to sign in, and then gets the same
+tools and the same refusals as the owl. The certificate comes
 from mkcert, so a client that doesn't use your system's certificates needs mkcert's root. For Claude Code:
 
 ```sh
@@ -295,11 +309,8 @@ flowchart LR
       builder["/zones/builder/* · claim/groups: citizens"]
       home["/zones/home/{id}/ · the rules each player wrote"]
       perch["/zones/perch/* · MCP client · the keep's rule"]
-      mews["/zones/mews/* · claim/groups: falconers"]
-      vault["/zones/vault/* · claim/groups: keyholders"]
-      throne["/zones/throne/* · the keep's rule, falconers and keyholders"]
-      aviary["aviary.localhost.pomerium.io · MCP server · the keep's rule, deny mcp_tool: open_vault"]
-      rookery["rookery.localhost.pomerium.io · MCP server · claim/groups: falconers"]
+      eyrie["/zones/eyrie/* · the keep's rule, falconers and keyholders"]
+      aviary["aviary.localhost.pomerium.io · MCP server · claim/groups: falconers, deny mcp_tool starts_with open_"]
       shell["/* game shell · public"]
       idpRoute["oracle.localhost.pomerium.io"]
     end
@@ -312,10 +323,10 @@ flowchart LR
 
   browser --> pomerium
   oracleRoute & fields & town & guild & armory & scriptorium & library & keep & builder & home & shell --> quest
-  perch & mews & vault & throne --> quest
-  aviary & rookery --> mcp
+  perch & eyrie --> quest
+  aviary --> mcp
   quest -. "the owl's MCP requests, with the player's token" .-> pomerium
-  mcp -- "adds you to falconers or keyholders" --> keycloak
+  mcp -- "adds you to keyholders" --> keycloak
   idpRoute --> keycloak
   pomerium -. "OIDC sign-in" .-> keycloak
   quest -- "adds you to knights or scholars" --> keycloak
@@ -362,7 +373,8 @@ ID.
 
 ### What happens when the owl flies
 
-The owl's perch is the game acting as an MCP client, and the game still never decides what the owl may do:
+Sending the owl to a perch is a tool call. The game sends it from an MCP client route, and the game still
+never decides what the owl may do:
 
 ```mermaid
 sequenceDiagram
@@ -386,13 +398,13 @@ sequenceDiagram
 
 1. `/zones/perch` is an MCP client route (`mcp: client`), so Pomerium adds an `Authorization` header
    carrying a token for the signed-in player's session.
-2. The game server ([`perch.ts`](app/src/server/perch.ts)) sends the MCP request to the Aviary or the
-   Rookery with that token. Both are MCP server routes (`mcp: server`): they take a token, never a
-   browser's session cookie.
+2. The game server ([`perch.ts`](app/src/server/perch.ts)) sends the MCP request to the Aviary with that
+   token. The Aviary is an MCP server route (`mcp: server`): it takes a token, never a browser's session
+   cookie.
 3. Pomerium finds the player's session behind the token and checks the route's policy with it. On a
    `tools/call`, the `mcp_tool` criterion sees the tool's name.
-4. The MCP server ([`mcp/`](mcp)) verifies Pomerium's JWT and acts for the player in it. Two of its tools
-   ask the Oracle to add a group, as the Captain does.
+4. The MCP server ([`mcp/`](mcp)) verifies Pomerium's JWT and acts for the player in it. One of its tools
+   asks the Oracle to add a group, as the Captain does.
 
 ### One source of truth for policy
 
@@ -417,9 +429,8 @@ Players' houses are the one exception: their policy comes from the player.
   can't start (see the load test in the plan, and `scripts/house-load-test.sh`).
 - **The owl's MCP server** ([`mcp/`](mcp)) is a second npm workspace, built from
   [nickytonline/mcp-typescript-template](https://github.com/nickytonline/mcp-typescript-template) with the
-  MCP TypeScript SDK. Pomerium serves it at two hosts, the Aviary and the Rookery, since an MCP server
-  route needs a host of its own. Every request gets tools bound to the player in Pomerium's JWT, and the
-  JWT's audience says which of the two routes it came through.
+  MCP TypeScript SDK. Pomerium serves it at a host of its own, the Aviary's, since an MCP server route
+  needs one. Every request gets tools bound to the player in Pomerium's JWT.
 - **The townsfolk** (the baker, the traveler, the Captain and the Librarian) have real Oracle
   accounts, which `./quest` imports at every deploy. The game server signs them in through Pomerium and
   knocks on houses as them; a slime is a knock with no session at all.
@@ -446,12 +457,12 @@ keyboard.
 
 Progress lives in four [XState](https://stately.ai/docs/xstate) statecharts, saved to local storage:
 
-| Machine                                               | Tracks                                                                                                    |
-| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| [`quest-machine.ts`](app/src/game/quest-machine.ts)   | Chapter one: anonymous → newcomer → invited → granted → citizen → proven → knighted → knight → armed      |
-| [`house-machine.ts`](app/src/game/house-machine.ts)   | Your house: one stage per letter on the desk, solved by real visits                                       |
-| [`player-machine.ts`](app/src/game/player-machine.ts) | The dog: walking, waiting on a gate, swinging, and a moment's safety after a hit                          |
-| [`owl-machine.ts`](app/src/game/owl-machine.ts)       | Chapter two: afar → arrived → fledged → vouched → falconer → entrusted → keyholder → crowned → triumphant |
+| Machine                                               | Tracks                                                                                                             |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| [`quest-machine.ts`](app/src/game/quest-machine.ts)   | Chapter one: anonymous → newcomer → invited → granted → citizen → proven → knighted → knight → armed               |
+| [`house-machine.ts`](app/src/game/house-machine.ts)   | Your house: one stage per letter on the desk, solved by real visits                                                |
+| [`player-machine.ts`](app/src/game/player-machine.ts) | The dog: walking, waiting on a gate, swinging, and a moment's safety after a hit                                   |
+| [`owl-machine.ts`](app/src/game/owl-machine.ts)       | Chapter two: afar → arrived → seeking → fledged → turned → vouched → falconer → entrusted → keyholder → triumphant |
 
 `knighted` is the stage the chapter turns on: the Oracle lists you in `knights`, but your Pomerium
 session still holds the claims from when you signed in, so the armory says no until you sign in again.
@@ -521,6 +532,11 @@ request with the token Pomerium put on the perch's request.
   error that names its request ID, so an MCP client can read it. The game's refusal screen shows that.
 - **`mcp_tool` only matches tool calls.** It's false for every other MCP request, a `tools/list` included,
   so it belongs under `deny`. Under `allow` it would refuse the client's handshake.
+- **A tool check and a group check don't share a rule.** `mcp_tool` takes a string matcher (`is`,
+  `starts_with` and so on), so one `deny` rule can forbid a class of tools. But open-source PPL can't
+  negate a claim inside an `and`, and two operators in one rule are joined with "or". So "this tool, unless
+  you're in that group" can't be written as one rule. The Aviary keeps the two apart: an `allow` rule for
+  the group, and a `deny` rule for the tools.
 - **MCP clients register themselves.** The `mcp_dynamic_client_registration` runtime flag is on, so a
   client such as Claude Code can register with Pomerium without being set up by hand. That suits a local
   game; think before turning it on anywhere real.
