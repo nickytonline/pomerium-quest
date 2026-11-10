@@ -43,6 +43,8 @@ export const TILE = {
   perch: 42,
   perchIndoors: 43,
   throne: 44,
+  perchBlink: 45,
+  perchIndoorsBlink: 46,
 } as const
 
 export type TileId = (typeof TILE)[keyof typeof TILE]

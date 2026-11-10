@@ -107,7 +107,16 @@ const SWING = { from: 100, to: -50, ms: 160 }
 /** What a player hears when the game has lost their session somewhere they could only be with one. */
 const LOST_SESSION = 'Something went wrong and your session was lost, so you start again in Hearth Village.'
 
-const ITEM = { swordWood: 0, swordSteel: 1, owl: 7 }
+const ITEM = { swordWood: 0, swordSteel: 1, owl: 7, owlBlink: 8 }
+
+/** A perch's tile with its owl's eyes shut. */
+const PERCH_BLINK: ReadonlyMap<number, number> = new Map([
+  [TILE.perch, TILE.perchBlink],
+  [TILE.perchIndoors, TILE.perchIndoorsBlink],
+])
+
+/** How long an owl's eyes stay shut, and the shortest and longest it waits between blinks. */
+const OWL_BLINK = { shut: 140, every: [2200, 6000] } as const
 
 /** Where the owl sits on the dog, from the dog's center, and how high above that its hop starts. */
 const OWL_SEAT = { x: 5, y: -8, hop: 14 }
@@ -418,6 +427,7 @@ export class KingdomScene extends Phaser.Scene {
     map.createLayer(0, tileset, 0, 0)
     this.map = map
     this.animateFountain()
+    this.animateOwls()
 
     this.npcs = this.world.npcs.map((npc) => ({
       ...npc,
@@ -655,6 +665,44 @@ export class KingdomScene extends Phaser.Scene {
         this.map?.putTileAt(first + 3, x + 1, y + 1)
       },
     })
+  }
+
+  /** Every owl blinks now and then, each in its own time, unless the player prefers less motion. */
+  private animateOwls() {
+    // Motion is opt-in: the owls stare, unblinking, for anyone who hasn't said they want it.
+    if (!matchMedia('(prefers-reduced-motion: no-preference)').matches) return
+
+    const blinking = (shut: () => void, open: () => void) => {
+      const [soonest, latest] = OWL_BLINK.every
+
+      const wait = () =>
+        this.time.delayedCall(soonest + Math.random() * (latest - soonest), () => {
+          shut()
+          this.time.delayedCall(OWL_BLINK.shut, () => {
+            open()
+            wait()
+          })
+        })
+
+      wait()
+    }
+
+    for (const perch of this.world.perches) {
+      const open = this.tileAt(perch)
+      const shut = PERCH_BLINK.get(open)
+
+      // Only the map's picture changes: the world still holds the perch itself.
+      if (shut !== undefined)
+        blinking(
+          () => this.map?.putTileAt(shut, perch.x, perch.y),
+          () => this.map?.putTileAt(open, perch.x, perch.y),
+        )
+    }
+
+    blinking(
+      () => this.owl?.setFrame(ITEM.owlBlink),
+      () => this.owl?.setFrame(ITEM.owl),
+    )
   }
 
   private setTile(p: Point, tile: number, draw = true) {

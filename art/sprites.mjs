@@ -686,11 +686,17 @@ function sheet(file, cells, { scale = 1, checker = false } = {}) {
   writeFileSync(file, png(w, h, buf))
 }
 
+// The same owl mid-blink: lids down over both eyes.
+const OWL_BLINK = {
+  ...OWL,
+  rows: OWL.rows.map((row) => (row === '....KYKQQKYK....' ? '....KKKQQKKK....' : row)),
+}
+
 const grids = {
   ...dog,
   bot_slime: BOT_SLIME,
   fish: FISH.map((f) => f.rows),
-  owl: [OWL.rows],
+  owl: [OWL.rows, OWL_BLINK.rows],
   sword_wood: [SWORD_WOOD],
   sword_steel: [SWORD_STEEL],
   shield_wood: [SHIELD_WOOD],
@@ -709,7 +715,9 @@ const dogCells = [dog.down, dog.up, dog.right, dog.left]
 // Game sheets. Frame order is load-bearing: see app/src/game/sprites.ts.
 sheet(join(assets, 'dog.png'), [dogCells.flat()])
 
-sheet(join(assets, 'items.png'), [[SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, ...BOT_SLIME, ...FISH, OWL]])
+sheet(join(assets, 'items.png'), [
+  [SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, ...BOT_SLIME, ...FISH, OWL, OWL_BLINK],
+])
 
 sheet(join(assets, 'npcs.png'), [npcs])
 
@@ -720,7 +728,7 @@ sheet(
   join(out, 'preview.png'),
   [
     ...dogCells.map((r) => [...r, null, null]),
-    [SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, ...BOT_SLIME, ...FISH, OWL],
+    [SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, ...BOT_SLIME, ...FISH, OWL, OWL_BLINK],
     npcs.slice(0, 5),
     [npcs[5], npcs[6], npcs[7], npcs[8], npcs[9], tiles[15], tiles[42]],
   ],
