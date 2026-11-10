@@ -35,6 +35,20 @@ Then the Oracle makes you a citizen with a house in the Slime Fields, and you wr
 | Knights may look in (GET) but not knock (POST)                 | `http_method`                                                                         |
 | Saving door rules sends the townsfolk and a slime to your door | Real requests through Pomerium, with real sessions (or none)                          |
 
+Chapter two, beyond the Royal Keep, is about agents. The Falconer gives you an owl that runs errands for you
+over [MCP](https://www.pomerium.com/docs/capabilities/mcp) (the Model Context Protocol, the way AI agents call
+tools):
+
+| Beyond the keep                                              | In Pomerium                                                                          |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| The Aviary offers errands, and the owl asks for them by name | An MCP server behind a route, and an MCP client calling its tools                    |
+| The owl has no papers of its own; it flies under yours       | Pomerium signs the MCP client in as you, and checks each request against the policy  |
+| Only those the keep admits may send the owl                  | The MCP routes ask for the same `claim/groups` as the keep                           |
+| The Aviary refuses one errand, whoever the owl flies for     | A `deny` rule with `mcp_tool` refuses one tool by name                               |
+| The owl's letter makes you a falconer, and the Mews opens    | A tool call changes a claim at the IdP; you sign in again for your session to see it |
+| The Rookery allows the errand the Aviary refused             | One MCP server behind two routes, each with its own policy                           |
+| The perch shows what the owl carried and what came back      | The JSON-RPC request, and Pomerium's answer (a JSON-RPC error when it refuses)       |
+
 ## How the game works
 
 You wake up in Hearth Village. Walk around, talk to people, read the signs, and try the gates. Every gate
@@ -51,6 +65,8 @@ asks Pomerium whether to let you through, so what you can reach depends on who t
 | <img src="docs/images/legend/captain.png" width="48" alt="">     | **The Captain**     | Runs the Knights' Guild. Beat three bot slimes and they have the Oracle add you to `knights`  |
 | <img src="docs/images/legend/armorer.png" width="48" alt="">     | **The Armorer**     | Keeps the forge. The armory's guard, not the Armorer, decides who gets the steel sword        |
 | <img src="docs/images/legend/librarian.png" width="48" alt="">   | **The Librarian**   | Read every book in the library and they have the Oracle add you to `scholars`                 |
+| <img src="docs/images/legend/falconer.png" width="48" alt="">    | **The Falconer**    | Waits beyond the Royal Keep with an owl for you: an MCP client that calls tools as you        |
+| <img src="docs/images/legend/perch.png" width="48" alt="">       | **The owl's perch** | Where you send the owl from. It lists the errands (tools) and shows what Pomerium answered    |
 | <img src="docs/images/legend/baker.png" width="48" alt="">       | **The baker**       | `baker@game.localhost.pomerium.io`, in the citizens group, so the town gate lets them in      |
 | <img src="docs/images/legend/traveler.png" width="48" alt="">    | **The traveler**    | `wanderer@outlands.net`: signed in, but not a citizen, so the town gate turns them away       |
 | <img src="docs/images/legend/phish.png" width="48" alt="">       | **A phish**         | Dresses as the Oracle and offers to sign you in. Hand over your password and you lose         |
@@ -128,6 +144,30 @@ signed in as themselves (or not at all), so you see what Pomerium does with your
 | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | <img src="docs/images/house.png" width="300" alt="A slime has got into the house, and another waits on the doorstep"> | <img src="docs/images/door-rules.png" width="420" alt="Door rules that let in nick@game.localhost.pomerium.io or the traveler"> |
 
+### Send the owl
+
+Past the Royal Keep, the Falconer gives you an owl. Walk up to its perch and press E or Enter: the perch
+lists the errands the Aviary offers, and a button sends the owl on each one. Every errand is a real MCP
+request through Pomerium, so you need no AI agent to play. The Aviary refuses one errand by name. Another
+has the Oracle make you a falconer, which opens the Mews, where a second perch reaches the Rookery: the
+same errands behind a different route, and the one the Aviary refused is allowed there. It earns the key
+to the Royal Vault.
+
+### Bring your own agent
+
+The Aviary is a real MCP server, so an MCP client of your own can use it too, once you've been through the
+keep. Its address is `https://aviary.localhost.pomerium.io/mcp` (the Rookery's is
+`https://rookery.localhost.pomerium.io/mcp`). The client registers itself with Pomerium, sends you to the
+Oracle to sign in, and then gets the same tools and the same refusals as the owl. The certificate comes
+from mkcert, so a client that doesn't use your system's certificates needs mkcert's root. For Claude Code:
+
+```sh
+NODE_EXTRA_CA_CERTS="$(mkcert -CAROOT)/rootCA.pem" claude mcp add --transport http aviary https://aviary.localhost.pomerium.io/mcp
+```
+
+This path hasn't been tried end to end with a real agent yet. `./quest test` covers the perch, and checks
+that the Aviary sends a client without a token to sign in.
+
 ## Play it on a real Pomerium (local k3d)
 
 You need Docker, [k3d](https://k3d.io), [kubectl](https://kubernetes.io/docs/tasks/tools/),
@@ -199,9 +239,9 @@ password the first time.
 | `./quest dev`           | Same as `up`, but the game runs its Vite dev server and hot-reloads `app/src`           |
 | `./quest deploy`        | Rebuild and redeploy into the existing cluster                                          |
 | `./quest test`          | Sign players in through Pomerium with curl and check every zone policy and house        |
-| `npm test`              | Run the unit tests for the policy evaluator, house rule validation and statecharts      |
+| `npm test`              | Run the unit tests for the policy evaluator, house rules, statecharts and MCP tools     |
 | `./quest status`        | Show the pods, services and Ingresses                                                   |
-| `./quest logs pomerium` | Follow logs (`pomerium`, `quest` or `keycloak`)                                         |
+| `./quest logs pomerium` | Follow logs (`pomerium`, `quest`, `mcp` or `keycloak`)                                  |
 | `./quest admin`         | Open Keycloak's admin console on http://localhost:8080 and print its password           |
 | `./quest reset-oracle`  | Forget every player and re-import the Keycloak realm                                    |
 | `./quest down`          | Delete the cluster                                                                      |
@@ -231,7 +271,8 @@ Pomerium and Keycloak.
 
 ## Architecture
 
-Three services run in a local k3d cluster: Pomerium, the game (`quest`), and Keycloak (the Oracle).
+Four services run in a local k3d cluster: Pomerium, the game (`quest`), the owl's MCP server (`mcp`), and
+Keycloak (the Oracle).
 Every request from the browser goes through Pomerium first, including the game itself:
 
 ```mermaid
@@ -251,17 +292,27 @@ flowchart LR
       keep["/zones/keep/* · citizen, knights and scholars"]
       builder["/zones/builder/* · claim/groups: citizens"]
       home["/zones/home/{id}/ · the rules each player wrote"]
+      perch["/zones/perch/* · MCP client · the keep's rule"]
+      mews["/zones/mews/* · claim/groups: falconers"]
+      vault["/zones/vault/* · claim/groups: keyholders"]
+      aviary["aviary.localhost.pomerium.io · MCP server · the keep's rule, deny mcp_tool: open_vault"]
+      rookery["rookery.localhost.pomerium.io · MCP server · claim/groups: falconers"]
       shell["/* game shell · public"]
       idpRoute["oracle.localhost.pomerium.io"]
     end
 
     quest["quest<br/>TanStack Start + Effect<br/>verifies Pomerium's JWT"]
+    mcp["mcp<br/>the owl's MCP server<br/>verifies Pomerium's JWT"]
     keycloak[("Keycloak<br/>the Oracle, realm kingdom")]
     kube["Kubernetes API<br/>quest-houses namespace"]
   end
 
   browser --> pomerium
   oracleRoute & fields & town & guild & armory & scriptorium & library & keep & builder & home & shell --> quest
+  perch & mews & vault --> quest
+  aviary & rookery --> mcp
+  quest -. "the owl's MCP requests, with the player's token" .-> pomerium
+  mcp -- "adds you to falconers or keyholders" --> keycloak
   idpRoute --> keycloak
   pomerium -. "OIDC sign-in" .-> keycloak
   quest -- "adds you to knights or scholars" --> keycloak
@@ -306,6 +357,40 @@ sequenceDiagram
 Every check also lands in the access log beside the board, and a denial screen shows Pomerium's request
 ID.
 
+### What happens when the owl flies
+
+The owl's perch is the game acting as an MCP client, and the game still never decides what the owl may do:
+
+```mermaid
+sequenceDiagram
+  participant Game as Game (browser)
+  participant Pomerium
+  participant Quest as quest server
+  participant Mcp as mcp server
+
+  Game->>Pomerium: POST /zones/perch/aviary (session cookie)
+  Pomerium->>Quest: forward, with Authorization: Bearer (a token for the player)
+  Quest->>Pomerium: POST aviary…/mcp tools/call (that token)
+  Pomerium->>Pomerium: check the Aviary's policy, mcp_tool included, as the player
+  alt policy allows
+    Pomerium->>Mcp: forward, with X-Pomerium-Jwt-Assertion
+    Mcp->>Mcp: verify the JWT, run the tool for that player
+    Mcp-->>Game: the tool's result
+  else policy denies
+    Pomerium-->>Game: a JSON-RPC error with a request ID
+  end
+```
+
+1. `/zones/perch` is an MCP client route (`mcp: client`), so Pomerium adds an `Authorization` header
+   carrying a token for the signed-in player's session.
+2. The game server ([`perch.ts`](app/src/server/perch.ts)) sends the MCP request to the Aviary or the
+   Rookery with that token. Both are MCP server routes (`mcp: server`): they take a token, never a
+   browser's session cookie.
+3. Pomerium finds the player's session behind the token and checks the route's policy with it. On a
+   `tools/call`, the `mcp_tool` criterion sees the tool's name.
+4. The MCP server ([`mcp/`](mcp)) verifies Pomerium's JWT and acts for the player in it. Two of its tools
+   ask the Oracle to add a group, as the Captain does.
+
 ### One source of truth for policy
 
 [`app/src/game/zones.ts`](app/src/game/zones.ts) defines every zone and its rules.
@@ -327,6 +412,11 @@ Players' houses are the one exception: their policy comes from the player.
   and is rebuilt from the rules it keeps in a ConfigMap beside the Ingress, so they follow the player to any
   browser. At most 100 stand at once: past a few hundred, the Ingress Controller slows down, and at 1,000 it
   can't start (see the load test in the plan, and `scripts/house-load-test.sh`).
+- **The owl's MCP server** ([`mcp/`](mcp)) is a second npm workspace, built from
+  [nickytonline/mcp-typescript-template](https://github.com/nickytonline/mcp-typescript-template) with the
+  MCP TypeScript SDK. Pomerium serves it at two hosts, the Aviary and the Rookery, since an MCP server
+  route needs a host of its own. Every request gets tools bound to the player in Pomerium's JWT, and the
+  JWT's audience says which of the two routes it came through.
 - **The townsfolk** (the baker, the traveler, the Captain and the Librarian) have real Oracle
   accounts, which `./quest` imports at every deploy. The game server signs them in through Pomerium and
   knocks on houses as them; a slime is a knock with no session at all.
@@ -351,13 +441,14 @@ two share one small store ([`store.ts`](app/src/game/store.ts)): Phaser writes t
 health and region to it, and React writes the controls, so the touch buttons drive the same code as the
 keyboard.
 
-Progress lives in three [XState](https://stately.ai/docs/xstate) statecharts, saved to local storage:
+Progress lives in four [XState](https://stately.ai/docs/xstate) statecharts, saved to local storage:
 
 | Machine                                               | Tracks                                                                                               |
 | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | [`quest-machine.ts`](app/src/game/quest-machine.ts)   | Chapter one: anonymous → newcomer → invited → granted → citizen → proven → knighted → knight → armed |
 | [`house-machine.ts`](app/src/game/house-machine.ts)   | Your house: one stage per letter on the desk, solved by real visits                                  |
 | [`player-machine.ts`](app/src/game/player-machine.ts) | The dog: walking, waiting on a gate, swinging, and a moment's safety after a hit                     |
+| [`owl-machine.ts`](app/src/game/owl-machine.ts)       | Chapter two: afar → arrived → fledged → vouched → falconer → entrusted → keyholder → crowned         |
 
 `knighted` is the stage the chapter turns on: the Oracle lists you in `knights`, but your Pomerium
 session still holds the claims from when you signed in, so the armory says no until you sign in again.
@@ -380,6 +471,9 @@ allowed it.
 | [`Visitors`](app/src/server/visitors.ts)         | Signs the townsfolk in through Pomerium and knocks on a house as them                  |
 | [`Kube`](app/src/server/kube.ts)                 | Talks to the Kubernetes API with the pod's ServiceAccount                              |
 
+The owl's perch ([`perch.ts`](app/src/server/perch.ts)) is a plain function beside them: it sends one MCP
+request with the token Pomerium put on the perch's request.
+
 ### Where things live
 
 | Path                      | What it is                                                                     |
@@ -390,6 +484,8 @@ allowed it.
 | `app/src/game/story.ts`   | Talking, reading and gates: everything that asks Pomerium a question           |
 | `app/src/game/content.ts` | What characters say, what signs show, and the docs each lesson links to        |
 | `app/src/game/house*.ts`  | The player's house: its visitors, its statechart, and its letters and bell     |
+| `app/src/game/owl*.ts`    | Chapter two's owl: its tools' names, its statechart and its story              |
+| `mcp/`                    | The owl's MCP server: the Aviary's tools                                       |
 | `app/src/components/`     | The React UI around the game                                                   |
 | `app/src/server/`         | The server's Effect services                                                   |
 | `deploy/`                 | The vendored Pomerium Ingress Controller install and the Oracle's login theme  |
@@ -415,6 +511,16 @@ allowed it.
 - **Signing out lands where the game asks.** The Ingress Controller's settings have no
   `signout_redirect_url`, so the game passes `pomerium_redirect_uri` (allowed by the
   `allow_any_sign_out_redirect_uri` runtime flag) to land back at sign-in or on the title screen.
+- **MCP routes take a token, not a cookie.** An MCP server route answers 401 to a browser session. MCP
+  clients sign in through Pomerium's own OAuth flow, and the game's perch gets its token from being an
+  MCP client route.
+- **A refused tool call isn't a 403.** Pomerium answers a refused MCP request with HTTP 200 and a JSON-RPC
+  error that names its request ID, so an MCP client can read it. The game's refusal screen shows that.
+- **`mcp_tool` only matches tool calls.** It's false for every other MCP request, a `tools/list` included,
+  so it belongs under `deny`. Under `allow` it would refuse the client's handshake.
+- **MCP clients register themselves.** The `mcp_dynamic_client_registration` runtime flag is on, so a
+  client such as Claude Code can register with Pomerium without being set up by hand. That suits a local
+  game; think before turning it on anywhere real.
 - **PPL operators don't nest.** `and`/`or` hold criteria, not other operators. "Citizen and (GET or
   scribe)" is written as two allow rules, and a request is allowed when any rule matches.
 

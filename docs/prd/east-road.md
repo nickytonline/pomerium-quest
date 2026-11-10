@@ -1,8 +1,8 @@
 # PRD: The East Road and chapter two
 
-Status: not started. The East Road was removed from chapter one until there is something behind it. Its
-spot at the south end of the Library Quarter is now the Royal Keep, the gate that ends chapter one (a
-citizen who is both a knight and a scholar); the road to chapter two should start somewhere else.
+Status: partly built. Chapter two starts beyond the Royal Keep, the gate that ends chapter one, and so far
+holds the owl familiar: the Aviary, the Mews and the Royal Vault (see the README). The Night Market, the
+Thieves' Guild and the 404 lesson below are still to do.
 
 ## Why it was removed
 
@@ -32,7 +32,7 @@ it: play first, then the Pomerium parallel on the second tab.
 | ------------------ | --------------------------------------- | ------------------------------------------------------------------------------------ |
 | The Night Market   | Time-based rules (`date`/`time_of_day`) | Stalls that only open after dark; the gate's policy checks the hour.                 |
 | The Thieves' Guild | Device identity                         | The guild knows faces and devices; a new device is turned away until it is enrolled. |
-| The owl familiar   | Acting for you over MCP                 | An owl that runs errands on your behalf, with its own delegated, narrower access.    |
+| The owl familiar   | Acting for you over MCP                 | Built: an owl that runs errands as you, with one tool denied by name at the Aviary.  |
 
 ## Done when
 
