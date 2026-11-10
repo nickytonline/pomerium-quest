@@ -344,7 +344,7 @@ function refusedView(tool: OwlTool, id: Identity, flight: OwlFlight, requestId: 
       return {
         story: {
           title: 'Errand refused',
-          text: 'The owl brought back a message from the Aviary\'s keeper: "Not that errand. My orders name every errand that starts with open, and they say no, whoever the owl flies for."',
+          text: 'The owl brought back a message from the Aviary\'s keeper: "Not that errand. I refuse any errand that asks me to open something, whoever the owl flies for."',
         },
         hint: `The allow rule matched: you are a falconer. But the deny rule matches any tool whose name starts with open_, and this call names ${tool}. A deny always beats an allow. Pomerium read the tool's name from the tools/call request itself. ${readable}`,
         links: [link('mcpTool'), link('denyWins')],
