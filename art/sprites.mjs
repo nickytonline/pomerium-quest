@@ -207,13 +207,14 @@ const OWL = {
 }
 
 // Mochi's falcon, lost in the Aviary's grounds. It perches side-on, so it reads as a bird of prey and not
-// a second owl: a dark hood with a stripe down the cheek, a hooked beak, a barred chest, a folded wing, a
-// tail below its talons and a ribbon on one leg in the teal of Mochi's jacket.
+// a second owl, and faces left, away from the dog that carries it. It has a dark hood with a stripe down
+// the cheek, a hooked beak, a barred chest, a pale folded wing, a tail below its talons and a ribbon on
+// one leg in the teal of Mochi's jacket.
 const FALCON = {
   palette: {
-    B: '#4a5a78',
-    b: '#38456a',
-    f: '#6b7d9e',
+    B: '#7f93b8',
+    b: '#3d4a6b',
+    f: '#a9b9d6',
     w: '#f1ead8',
     s: '#b9ad94',
     Y: '#ffd86b',
@@ -221,18 +222,18 @@ const FALCON = {
   },
   rows: [
     '................',
-    '.......KKKK.....',
-    '......KbbbbK....',
-    '......KbbYbbK...',
-    '......KbbbwYEK..',
-    '.....KBbwbwKEK..',
-    '....KBBBwwwwK...',
-    '....KBfBBswsK...',
-    '....KBBfBwswK...',
-    '.....KBBfBswK...',
-    '.....KBfBBwK....',
-    '......KBBKYHK...',
-    '......KbbKY.Y...',
+    '.....KKKK.......',
+    '....KbbbbK......',
+    '...KbbYbbK......',
+    '..KEYwbbbK......',
+    '..KEKwbwbBK.....',
+    '...KwwwwBBBK....',
+    '...KswsBBfBK....',
+    '...KwswBfBBK....',
+    '...KwsBfBBK.....',
+    '....KwBBfBK.....',
+    '...KHYKBBK......',
+    '...Y.YKbbK......',
     '.......KK.......',
     '................',
     '................',
