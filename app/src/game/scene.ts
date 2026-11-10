@@ -7,7 +7,7 @@ import { sfx } from './sound.ts'
 import { KNIGHT_QUOTA, defeated, hasSteel, type MonsterKind } from './quest-machine.ts'
 import { houseStage, type HouseStage } from './house-machine.ts'
 import { mochisOwlFound, owlAtLeast, owlStage } from './owl-machine.ts'
-import { catchOwl, findMochisOwl, readAviarySign, readPerchSign, visitPerch } from './owl-story.ts'
+import { catchOwl, findMochisOwl, readAviarySign, visitPerch } from './owl-story.ts'
 import { FLIGHT_MS, type PerchPhase } from './perch.ts'
 import {
   currentLetter,
@@ -1266,7 +1266,7 @@ export class KingdomScene extends Phaser.Scene {
     }
 
     // A sign beside a gate shows the route that gate asks. The Aviary's shows the MCP server's route and
-    // its list of tools, and each perch's sign names the one tool that perch stands for.
+    // its list of tools.
     const sign = this.world.signs.find((candidate) => same(candidate, target))
 
     if (sign?.signId === 'aviary') {
@@ -1282,13 +1282,10 @@ export class KingdomScene extends Phaser.Scene {
       return
     }
 
-    const perch = this.world.perches.find(
-      (candidate) => same(candidate, target) || same(candidate.sign, target),
-    )
+    const perch = this.world.perches.find((candidate) => same(candidate, target))
 
     if (perch) {
-      if (same(perch.sign, target)) readPerchSign(perch.tool)
-      else visitPerch(perch.tool)
+      visitPerch(perch.tool)
 
       return
     }

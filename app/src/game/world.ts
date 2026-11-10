@@ -137,8 +137,6 @@ export interface Sign extends Point {
 /** A perch stands for one of the Aviary's tools: sending the owl to it calls that tool. */
 export interface Perch extends Point {
   readonly tool: OwlTool
-  /** The sign beside it, which names the tool. */
-  readonly sign: Point
 }
 
 export interface Npc extends Point {
@@ -433,12 +431,10 @@ export function buildWorld(): World {
     // Beside the vault it would open, if any policy allowed it.
     { x: 35, y: 38, tool: OWL_TOOLS.openVault },
     { x: 19, y: 41, tool: OWL_TOOLS.openCages },
-  ].map((perch) => ({ ...perch, sign: { x: perch.x + 1, y: perch.y } }))
+  ]
 
-  for (const perch of perches) {
-    set(perch.x, perch.y, TILE.perch)
-    set(perch.sign.x, perch.sign.y, TILE.sign)
-  }
+  // Only the Aviary has a sign. A perch needs none: walking into it already names its errand.
+  for (const perch of perches) set(perch.x, perch.y, TILE.perch)
 
   // Leaving through a gate puts the player back in the zone they passed to reach it, so its guard checks
   // that zone's rule again. The fields open onto Hearth Village, which no route guards.

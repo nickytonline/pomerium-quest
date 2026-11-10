@@ -183,8 +183,8 @@ export function visitPerch(tool: OwlTool) {
   if (!owlAtLeast('fledged')) {
     quest.say([
       {
-        who: 'Perch',
-        text: 'An empty perch. Its sign names an errand, but you have no owl to send. The Falconer can tell you how to get one.',
+        who: `Perch · ${OWL_ERRANDS[tool].title}`,
+        text: `An empty perch. Its errand is ${tool}, but you have no owl to send. The Falconer can tell you how to get one.`,
       },
     ])
 
@@ -204,27 +204,6 @@ export function visitPerch(tool: OwlTool) {
       ],
     },
   ])
-}
-
-/** A perch's sign names its one tool, above the Aviary's route: the only thing that decides who may land. */
-export function readPerchSign(tool: OwlTool) {
-  const { title, description } = OWL_ERRANDS[tool]
-
-  const never = isForbidden(tool)
-    ? ' The deny rule names every tool that starts with open_, so this perch never opens, whoever the owl flies for.'
-    : ''
-
-  quest.say(
-    [
-      {
-        who: `Sign · ${tool}`,
-        text: `${title}. ${description} This perch is one of the Aviary's tools, and sending your owl here is a call to it: tools/call ${tool}. No wall or gate stands around the perch. The Aviary's policy, below, decides whether the owl may run the errand.${never}`,
-        code: zoneRouteYaml(aviary()),
-        links: [link('mcpTool'), link('mcpServer')],
-      },
-    ],
-    () => learn('mcpServer'),
-  )
 }
 
 const LOG_DECISION: Record<OwlOutcome['kind'], 'ALLOW' | 'DENY' | 'SIGN IN'> = {
