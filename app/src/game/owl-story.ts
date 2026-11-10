@@ -435,11 +435,11 @@ const DONE: Partial<Record<OwlTool, () => void>> = {
   },
 }
 
+const flies = () => matchMedia('(prefers-reduced-motion: no-preference)').matches
+
 /** Waits out a part of the owl's flight, for players who have motion on; with it off the owl doesn't fly. */
 const watch = (ms: number) =>
-  matchMedia('(prefers-reduced-motion: no-preference)').matches
-    ? new Promise<void>((resolve) => setTimeout(resolve, ms))
-    : Promise.resolve()
+  flies() ? new Promise<void>((resolve) => setTimeout(resolve, ms)) : Promise.resolve()
 
 /**
  * Sends the owl on a perch's errand, which is one tool call, and tells the story of how it went. The owl
@@ -449,6 +449,7 @@ const watch = (ms: number) =>
  */
 export async function flyOwl(tool: OwlTool) {
   const id = identity()
+  const flew = flies()
   sfx('hoot')
   quest.perchPhase('out')
   const away = watch(FLIGHT_MS.out + FLIGHT_MS.away)
@@ -463,6 +464,12 @@ export async function flyOwl(tool: OwlTool) {
 
   const flight = sent.value
   const { outcome } = flight
+
+  // The owl calls from out of sight just before it comes back into view. With motion off it never left.
+  if (flew) {
+    sfx('hoot')
+    await watch(FLIGHT_MS.call)
+  }
 
   quest.perchPhase('back')
   await watch(FLIGHT_MS.back)

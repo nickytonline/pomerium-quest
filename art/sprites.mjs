@@ -716,11 +716,56 @@ const OWL_BLINK = {
   rows: OWL.rows.map((row) => (row === '....KYKQQKYK....' ? '....KKKQQKKK....' : row)),
 }
 
+// The owl in flight, wings up and wings down: the game swaps the two to make it flap.
+const OWL_WINGS_UP = {
+  ...OWL,
+  rows: [
+    '................',
+    '................',
+    '.KK..........KK.',
+    '.KQKKK....KKKQK.',
+    '.KQQKQKKKKQKQQK.',
+    '..KQQQQQQQQQQK..',
+    '...KKYKQQKYKK...',
+    '....KQQGGQQK....',
+    '....KQqqqqQK....',
+    '....KQqqqqQK....',
+    '.....KqqqqK.....',
+    '......KKKK......',
+    '................',
+    '................',
+    '................',
+    '................',
+  ],
+}
+
+const OWL_WINGS_DOWN = {
+  ...OWL,
+  rows: [
+    '................',
+    '................',
+    '................',
+    '....KK....KK....',
+    '....KQKKKKQK....',
+    '....KQQQQQQK....',
+    '...KKYKQQKYKK...',
+    '..KQQQQGGQQQQK..',
+    '.KQQKQqqqqQKQQK.',
+    '.KQKKQqqqqQKKQK.',
+    '.KK..KqqqqK..KK.',
+    '......KKKK......',
+    '................',
+    '................',
+    '................',
+    '................',
+  ],
+}
+
 const grids = {
   ...dog,
   bot_slime: BOT_SLIME,
   fish: FISH.map((f) => f.rows),
-  owl: [OWL.rows, OWL_BLINK.rows],
+  owl: [OWL.rows, OWL_BLINK.rows, OWL_WINGS_UP.rows, OWL_WINGS_DOWN.rows],
   falcon: [FALCON.rows],
   sword_wood: [SWORD_WOOD],
   sword_steel: [SWORD_STEEL],
@@ -741,7 +786,18 @@ const dogCells = [dog.down, dog.up, dog.right, dog.left]
 sheet(join(assets, 'dog.png'), [dogCells.flat()])
 
 sheet(join(assets, 'items.png'), [
-  [SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, ...BOT_SLIME, ...FISH, OWL, OWL_BLINK, FALCON],
+  [
+    SWORD_WOOD,
+    SWORD_STEEL,
+    SHIELD_WOOD,
+    ...BOT_SLIME,
+    ...FISH,
+    OWL,
+    OWL_BLINK,
+    FALCON,
+    OWL_WINGS_UP,
+    OWL_WINGS_DOWN,
+  ],
 ])
 
 sheet(join(assets, 'npcs.png'), [npcs])
@@ -753,7 +809,18 @@ sheet(
   join(out, 'preview.png'),
   [
     ...dogCells.map((r) => [...r, null, null]),
-    [SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, ...BOT_SLIME, ...FISH, OWL, OWL_BLINK, FALCON],
+    [
+      SWORD_WOOD,
+      SWORD_STEEL,
+      SHIELD_WOOD,
+      ...BOT_SLIME,
+      ...FISH,
+      OWL,
+      OWL_BLINK,
+      FALCON,
+      OWL_WINGS_UP,
+      OWL_WINGS_DOWN,
+    ],
     npcs.slice(0, 5),
     [npcs[5], npcs[6], npcs[7], npcs[8], npcs[9], tiles[15], tiles[42]],
   ],

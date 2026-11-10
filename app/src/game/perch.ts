@@ -47,7 +47,7 @@ export type PerchPhase = 'asking' | 'out' | 'back' | 'done'
 
 /**
  * How long each part of the owl's flight takes to watch, in milliseconds, for players who have motion on:
- * flying off the screen, staying away while the Aviary answers, and flying back to the perch. The request
- * is sent as the owl sets off.
+ * flying off the screen, staying away while the Aviary answers, the moment between its call from out of
+ * sight and its coming back into view, and flying back to the perch. The request is sent as the owl sets off.
  */
-export const FLIGHT_MS = { out: 900, away: 1200, back: 800 } as const
+export const FLIGHT_MS = { out: 1000, away: 1100, call: 400, back: 900 } as const

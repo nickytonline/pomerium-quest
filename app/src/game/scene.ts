@@ -109,7 +109,7 @@ const SWING = { from: 100, to: -50, ms: 160 }
 /** What a player hears when the game has lost their session somewhere they could only be with one. */
 const LOST_SESSION = 'Something went wrong and your session was lost, so you start again in Hearth Village.'
 
-const ITEM = { swordWood: 0, swordSteel: 1, owl: 7, owlBlink: 8, falcon: 9 }
+const ITEM = { swordWood: 0, swordSteel: 1, owl: 7, owlBlink: 8, falcon: 9, owlWingsUp: 10, owlWingsDown: 11 }
 
 /** How long the owl's eyes stay shut, and the shortest and longest it waits between blinks. */
 const OWL_BLINK = { shut: 140, every: [2200, 6000] } as const
@@ -128,10 +128,13 @@ const PERCH_BAR = { y: 1 }
 
 /**
  * The owl's flights around a perch: how long it takes to hop on and to fly back to the dog's shoulder, how
- * high it arcs, how far sideways it drifts on its way off the screen, and how many tiles the dog walks
- * from the perch before the owl follows.
+ * high it arcs, how far sideways it ends up and how wide it swoops on its way off the screen, and how many
+ * tiles the dog walks from the perch before the owl follows.
  */
-const OWL_FLIGHT = { hopMs: 260, homeMs: 650, lift: 12, drift: 40, leash: 2 }
+const OWL_FLIGHT = { hopMs: 320, homeMs: 700, lift: 10, drift: 48, swoop: 46, leash: 2 }
+
+/** How long each beat of the owl's wings lasts while it flies. */
+const WINGBEAT_MS = 90
 
 /** Rows of the dog's frame left above the waterline while swimming: head and collar. */
 const SWIM_DEPTH = 11
@@ -372,6 +375,8 @@ export class KingdomScene extends Phaser.Scene {
   private owlPerch: Perch | undefined
   /** The perch the player last walked into, until they let go of the key or step away. */
   private bumpedPerch: Perch | undefined
+  /** The owl is in the air, beating its wings, so it doesn't blink. */
+  private owlFlapping = false
   /** The latest flight each bird was sent on, so an older one still under way gives up. */
   private flights = new Map<Phaser.GameObjects.Image, number>()
   /** The owl is off the dog's shoulder: flying an errand, or on a perch until the dog walks away. */
@@ -620,7 +625,8 @@ export class KingdomScene extends Phaser.Scene {
   }
 
   /**
-   * Moves a bird to a point in the game's pixels, in an arc `lift` pixels high. The point is asked for on
+   * Flies a bird to a point in the game's pixels. The path curves: it rises `lift` pixels and swings
+   * `sway` pixels to one side on the way, and the bird bobs with each wingbeat. The point is asked for on
    * every frame, so a bird can fly to the dog while the dog walks. Motion is opt-in: without it the bird is
    * simply there.
    */
@@ -628,7 +634,7 @@ export class KingdomScene extends Phaser.Scene {
     bird: Phaser.GameObjects.Image,
     to: () => { readonly x: number; readonly y: number },
     ms: number,
-    lift: number,
+    { lift = 0, sway = 0 }: { readonly lift?: number; readonly sway?: number } = {},
     onDone?: () => void,
   ) {
     // A newer flight takes over from one still under way, whose callbacks then do nothing.
@@ -636,12 +642,19 @@ export class KingdomScene extends Phaser.Scene {
     this.flights.set(bird, flight)
 
     const current = () => this.flights.get(bird) === flight
+    const isOwl = bird === this.owl
 
     const land = () => {
       if (!current()) return
       const end = to()
 
       bird.setPosition(end.x, end.y)
+
+      if (isOwl) {
+        this.owlFlapping = false
+        bird.setFrame(ITEM.owl)
+      }
+
       onDone?.()
     }
 
@@ -653,6 +666,9 @@ export class KingdomScene extends Phaser.Scene {
 
     const from = { x: bird.x, y: bird.y }
     const along = { t: 0 }
+    const started = this.time.now
+
+    if (isOwl) this.owlFlapping = true
 
     this.tweens.add({
       targets: along,
@@ -662,11 +678,17 @@ export class KingdomScene extends Phaser.Scene {
       onUpdate: () => {
         if (!current()) return
         const end = to()
+        const { t } = along
+        // A curve through a point above and to one side of the straight line, so the bird swoops.
+        const bend = 2 * (1 - t) * t
+        const beat = Math.floor((this.time.now - started) / WINGBEAT_MS)
 
         bird.setPosition(
-          from.x + (end.x - from.x) * along.t,
-          from.y + (end.y - from.y) * along.t - Math.sin(Math.PI * along.t) * lift,
+          from.x + (end.x - from.x) * t + bend * sway,
+          from.y + (end.y - from.y) * t - bend * lift * 2 + (beat % 2 === 0 ? 0 : 1),
         )
+
+        if (isOwl) bird.setFrame(beat % 2 === 0 ? ITEM.owlWingsUp : ITEM.owlWingsDown)
       },
       onComplete: land,
     })
@@ -685,7 +707,7 @@ export class KingdomScene extends Phaser.Scene {
 
     this.owlAt += 1
     sfx('flutter')
-    this.glide(this.owl, () => ({ x: center(next.x), y: center(next.y) }), OWL_SHY.ms, OWL_SHY.lift)
+    this.glide(this.owl, () => ({ x: center(next.x), y: center(next.y) }), OWL_SHY.ms, { lift: OWL_SHY.lift })
 
     quest.toast(
       this.owlTired()
@@ -723,9 +745,10 @@ export class KingdomScene extends Phaser.Scene {
       const top = this.cameras.main.worldView.y - T
       const away = { x: bar.x + OWL_FLIGHT.drift, y: Math.min(top, bar.y - T) }
 
-      this.glide(owl, () => away, FLIGHT_MS.out, 0)
+      // It swings out to one side as it climbs, and comes back in from the other.
+      this.glide(owl, () => away, FLIGHT_MS.out, { sway: -OWL_FLIGHT.swoop })
     } else if (phase === 'back') {
-      this.glide(owl, () => bar, FLIGHT_MS.back, OWL_FLIGHT.lift)
+      this.glide(owl, () => bar, FLIGHT_MS.back, { sway: OWL_FLIGHT.swoop })
     }
   }
 
@@ -749,7 +772,7 @@ export class KingdomScene extends Phaser.Scene {
 
     this.owlAloft = true
     this.owlPerch = perch
-    this.glide(this.owl, () => this.barOf(perch), OWL_FLIGHT.hopMs, OWL_FLIGHT.lift)
+    this.glide(this.owl, () => this.barOf(perch), OWL_FLIGHT.hopMs, { lift: OWL_FLIGHT.lift })
   }
 
   /**
@@ -770,7 +793,7 @@ export class KingdomScene extends Phaser.Scene {
       owl,
       () => ({ x: player.x + OWL_SEAT.x, y: player.y + OWL_SEAT.y }),
       OWL_FLIGHT.homeMs,
-      OWL_FLIGHT.lift,
+      { lift: OWL_FLIGHT.lift, sway: OWL_FLIGHT.lift },
       () => {
         this.owlAloft = false
       },
@@ -877,9 +900,11 @@ export class KingdomScene extends Phaser.Scene {
 
     const wait = () =>
       this.time.delayedCall(soonest + Math.random() * (latest - soonest), () => {
-        this.owl?.setFrame(ITEM.owlBlink)
+        if (!this.owlFlapping) this.owl?.setFrame(ITEM.owlBlink)
+
         this.time.delayedCall(OWL_BLINK.shut, () => {
-          this.owl?.setFrame(ITEM.owl)
+          if (!this.owlFlapping) this.owl?.setFrame(ITEM.owl)
+
           wait()
         })
       })
