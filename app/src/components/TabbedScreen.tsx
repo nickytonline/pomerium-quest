@@ -101,7 +101,7 @@ export function TabbedScreen({
 
   return (
     <div className={overlay} role={role} aria-modal="true" aria-labelledby={`${name}-title-${tab}`}>
-      <div className="flex max-h-full w-[min(600px,100%)] min-h-0 flex-col">
+      <div className="flex max-h-full w-[min(750px,100%)] min-h-0 flex-col">
         <div className="flex gap-1" role="tablist" aria-label={label}>
           {TABS.map(({ id, label: tabLabel }) => (
             <button
