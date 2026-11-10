@@ -483,9 +483,8 @@ export function ChapterTwoEnd() {
         )}
       </ol>
       <p className="m-0 text-[0.9rem]">
-        The same server works with a real agent. Point an MCP client such as Claude Code or the MCP Inspector
-        at the Aviary's address, sign in with the Oracle when it asks, and it gets the same tools and the same
-        refusals.
+        The same server works with a real agent. Point an MCP client such as Claude Code at the Aviary's
+        address, sign in with the Oracle when it asks, and it gets the same tools and the same refusals.
       </p>
     </TabPane>
   )

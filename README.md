@@ -555,9 +555,6 @@ request with the token Pomerium put on the perch's request.
   source (`pkg/policy/criteria/matchers.go`) but not yet in the PPL docs, which list `has` only.
 - **Two operators in one rule are joined with "or".** `and` and `not` side by side in one rule don't mean
   "all of these and none of those", so the game's rules each use a single operator.
-- **MCP clients register themselves.** The `mcp_dynamic_client_registration` runtime flag is on, so a
-  client such as the MCP Inspector can register with Pomerium without being set up by hand. That suits a local
-  game; think before turning it on anywhere real.
 - **Hosted MCP clients are allowed by name.** Pomerium needs `mcpAllowedClientIdDomains` whenever MCP is on.
   It lists the domains whose client ID metadata documents Pomerium will fetch, so clients such as VS Code,
   Claude (including Claude Code), ChatGPT, Cursor, GitHub, Zed, Antigravity, Grok, OpenCode, Goose and
