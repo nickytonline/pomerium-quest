@@ -30,11 +30,11 @@ The removal commit has the full implementation to restore from (`git log --grep 
 The road should open onto real content, each piece a Pomerium capability taught the way chapter one does
 it: play first, then the Pomerium parallel on the second tab.
 
-| Place              | Pomerium capability                     | Sketch                                                                                                                         |
-| ------------------ | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| The Night Market   | Time-based rules (`date`/`time_of_day`) | Stalls that only open after dark; the gate's policy checks the hour.                                                           |
-| The Thieves' Guild | Device identity                         | The guild knows faces and devices; a new device is turned away until it is enrolled.                                           |
-| The owl familiar   | Acting for you over MCP                 | Built: an owl that flies on your behalf. One route lets in falconers' owls only, and one deny rule forbids every `open_` tool. |
+| Place              | Pomerium capability                     | Sketch                                                                                                                                                                                                                            |
+| ------------------ | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The Night Market   | Time-based rules (`date`/`time_of_day`) | Stalls that only open after dark; the gate's policy checks the hour.                                                                                                                                                              |
+| The Thieves' Guild | Device identity                         | The guild knows faces and devices; a new device is turned away until it is enrolled.                                                                                                                                              |
+| The owl familiar   | Acting for you over MCP                 | Built: an owl that flies on your behalf. One route lets in falconers' owls only, and one deny rule keeps every `open_` tool for a distinguished falconer's owl: the Falconer's, a real account, which opens the cage yours can't. |
 
 ## Done when
 
