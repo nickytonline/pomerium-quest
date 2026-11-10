@@ -1004,7 +1004,7 @@ function FinaleStory({ email }: { readonly email: string }) {
   return (
     <div className="flex flex-col gap-3 rounded-tr-lg rounded-b-lg border-3 border-sun bg-night-deep px-5 py-[18px]">
       <h2 id="finale-title-kingdom" className="sunset-text m-0 font-display text-[2rem] leading-tight">
-        Quest complete
+        Chapter one complete
       </h2>
       <p className="m-0">
         The Royal Keep opens its doors to {email}. The guard admits only someone who is all three, and you

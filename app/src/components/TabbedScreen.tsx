@@ -69,12 +69,13 @@ export function TabbedScreen({
             </button>
           ))}
         </div>
-        <div className="grid min-h-0 overflow-y-auto overscroll-contain">
+        {/* One column that may shrink, so a long line scrolls inside its block instead of widening the screen. */}
+        <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] overflow-y-auto overscroll-contain">
           {TABS.map(({ id }) => (
             <div
               key={id}
               id={`${name}-panel-${id}`}
-              className={`grid [grid-area:1/1] ${tab === id ? '' : 'invisible'}`}
+              className={`grid grid-cols-[minmax(0,1fr)] [grid-area:1/1] ${tab === id ? '' : 'invisible'}`}
               role="tabpanel"
               aria-labelledby={`${name}-tab-${id}`}
               aria-hidden={tab !== id}

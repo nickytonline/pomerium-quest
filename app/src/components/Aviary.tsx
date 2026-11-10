@@ -23,7 +23,7 @@ const ROOSTS: Record<Roost, { readonly title: string; readonly about: string }> 
   aviary: {
     title: "The Aviary's perch",
     about:
-      "The owl flies from here to the Aviary and asks for an errand by name. Pick one, and watch what comes back. The Aviary's guard checks every errand against its orders, as if you had asked yourself.",
+      "The owl flies from here to the Aviary and asks for an errand by name. Pick one, and watch what comes back. The Aviary's keeper checks every errand against their orders, as if you had asked yourself.",
   },
   rookery: {
     title: "The Rookery's perch",
@@ -47,7 +47,16 @@ export function Perch() {
   return <PerchPanel perch={perch} />
 }
 
-function ToolButton({ tool, perch }: { readonly tool: ToolInfo; readonly perch: PerchView }) {
+function ToolButton({
+  tool,
+  perch,
+  first,
+}: {
+  readonly tool: ToolInfo
+  readonly perch: PerchView
+  /** The first errand takes focus when the list arrives, so the keyboard can reach it without Tab. */
+  readonly first: boolean
+}) {
   const { name } = tool
 
   return (
@@ -61,6 +70,7 @@ function ToolButton({ tool, perch }: { readonly tool: ToolInfo; readonly perch: 
           className={`${smallButton} border-lens`}
           type="button"
           disabled={perch.busy || !isOwlTool(name)}
+          autoFocus={first}
           onClick={() => {
             if (isOwlTool(name)) void flyOwl(perch.roost, { method: 'tools/call', tool: name })
           }}
@@ -150,8 +160,8 @@ function PerchPanel({ perch }: { readonly perch: PerchView }) {
       <p className="m-0 text-[0.9rem]">{ROOSTS[roost].about}</p>
       {tools ? (
         <ul className="m-0 grid list-none gap-2 p-0" aria-label="Errands the owl can run">
-          {tools.map((tool) => (
-            <ToolButton key={tool.name} tool={tool} perch={perch} />
+          {tools.map((tool, index) => (
+            <ToolButton key={tool.name} tool={tool} perch={perch} first={index === 0} />
           ))}
         </ul>
       ) : (
