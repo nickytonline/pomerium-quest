@@ -56,6 +56,7 @@ import {
   type Gate,
   type GateRequest,
   type NpcId,
+  type Perch,
   type Point,
 } from './world.ts'
 
@@ -366,8 +367,10 @@ export class KingdomScene extends Phaser.Scene {
   private owlAt = 0
   /** The part of an errand the owl has been moved for, so each part starts once. */
   private owlPhase: PerchPhase | null = null
-  /** The perch the owl's errand is at, kept until it is home again. */
-  private owlPerch: Point | undefined
+  /** The perch the owl is on, or flying an errand from, until it is back on the dog's shoulder. */
+  private owlPerch: Perch | undefined
+  /** The perch the player last walked into, until they let go of the key or step away. */
+  private bumpedPerch: Perch | undefined
   /** The owl is off the dog's shoulder: flying an errand, or on a perch until the dog walks away. */
   private owlAloft = false
   private falcon: Phaser.GameObjects.Image | undefined
@@ -544,6 +547,7 @@ export class KingdomScene extends Phaser.Scene {
 
     const lost = this.world.falcon
     this.falcon = this.add.image(center(lost.x), center(lost.y), 'items', ITEM.falcon).setDepth(12)
+    this.perchOwl()
 
     this.cameras.main.setBounds(0, 0, MAP_WIDTH * T, MAP_HEIGHT * T)
     this.cameras.main.startFollow(this.player, true)
@@ -717,6 +721,7 @@ export class KingdomScene extends Phaser.Scene {
       fade(1, OWL_FLIGHT.landMs / 2)
     } else if (phase === 'turned') {
       // Pomerium refused: the owl comes straight back to the player, with nothing.
+      this.owlPerch = undefined
       this.glide(owl, { x: player.x + OWL_SEAT.x, y: player.y + OWL_SEAT.y }, FLIGHT_MS.turned, 0, () => {
         this.owlAloft = false
       })
@@ -727,12 +732,36 @@ export class KingdomScene extends Phaser.Scene {
     }
   }
 
-  /** The owl leaves the perch it was waiting on and flies to the dog's shoulder, as the dog walks off to `target`. */
+  /** The perch the player is standing right beside, if any. */
+  private perchBeside(p: Point) {
+    return this.world.perches.find((perch) => Math.abs(perch.x - p.x) + Math.abs(perch.y - p.y) === 1)
+  }
+
+  /** Coming up beside a perch is enough: the owl hops onto it without being asked. */
+  private perchOwl() {
+    const perch = this.perchBeside(this.pos)
+
+    if (!perch || !this.owl || !owlAtLeast('fledged')) return
+
+    if (this.owlAloft && this.owlPerch === perch) return
+
+    this.owlAloft = true
+    this.owlPerch = perch
+    this.glide(
+      this.owl,
+      { x: center(perch.x), y: center(perch.y) + PERCH_BAR.y },
+      OWL_FLIGHT.hopMs,
+      OWL_FLIGHT.lift,
+    )
+  }
+
+  /** The owl leaves its perch for the dog's shoulder when the dog walks off to `target`, away from the perch. */
   private callOwl(target: Point) {
     const owl = this.owl
 
-    if (!owl || !this.owlAloft || quest.get().perch) return
+    if (!owl || !this.owlAloft || quest.get().perch || this.perchBeside(target) === this.owlPerch) return
 
+    this.owlPerch = undefined
     this.glide(
       owl,
       { x: center(target.x) + OWL_SEAT.x, y: center(target.y) + OWL_SEAT.y },
@@ -791,7 +820,10 @@ export class KingdomScene extends Phaser.Scene {
     const dir = this.heldDir() ?? tapped
 
     if (dir) this.tryMove(dir)
-    else this.idle()
+    else {
+      this.bumpedPerch = undefined
+      this.idle()
+    }
   }
 
   private heldDir(): Dir | undefined {
@@ -930,6 +962,20 @@ export class KingdomScene extends Phaser.Scene {
 
     const tile = this.tileAt(target)
 
+    // Walking into a perch is how the player asks about its errand; no other key is needed.
+    const perch = this.world.perches.find((candidate) => same(candidate, target))
+
+    if (perch) {
+      // A key still held after the question was answered must not ask it again.
+      if (this.bumpedPerch !== perch) {
+        this.bumpedPerch = perch
+        this.perchOwl()
+        visitPerch(perch.tool)
+      }
+
+      return
+    }
+
     if (tile === TILE.gateClosed) {
       // From inside, the gate itself stands between the player and the guard outside. Walking out puts
       // the player back in the zone beyond, so the guard checks they still meet its rule.
@@ -978,6 +1024,7 @@ export class KingdomScene extends Phaser.Scene {
     if (!player) return
     this.mode.send({ type: 'WALK' })
     this.walkingTo = target
+    this.bumpedPerch = undefined
     this.callOwl(target)
 
     if (this.tileAt(target) === TILE.water) sfx(this.tileAt(this.pos) === TILE.water ? 'paddle' : 'splash')
@@ -1013,6 +1060,7 @@ export class KingdomScene extends Phaser.Scene {
     quest.progress({ x: target.x, y: target.y, dir: this.dir })
     quest.setRegion(regionAt(target))
     this.startleOwl()
+    this.perchOwl()
 
     if (cameIn) void this.cameHome()
   }

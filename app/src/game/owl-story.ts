@@ -176,8 +176,8 @@ export function catchOwl() {
 }
 
 /**
- * The player walks up to a perch: the owl hops onto it, and the perch asks whether to send the owl on its
- * errand. Nothing is sent until the player says so.
+ * The player walks into a perch, where the owl has already hopped: the perch asks whether to send the owl
+ * on its errand. Nothing is sent until the player says so.
  */
 export function visitPerch(tool: OwlTool) {
   if (!owlAtLeast('fledged')) {
@@ -197,7 +197,7 @@ export function visitPerch(tool: OwlTool) {
   quest.say([
     {
       who: `Perch · ${tool}`,
-      text: `Your owl hops onto the perch and looks back at you. ${title}: ${lowerFirst(description)} Send the owl?`,
+      text: `Your owl looks back at you from the perch. ${title}: ${lowerFirst(description)} Send the owl?`,
       choices: [
         { label: 'Send the owl', pick: () => void flyOwl(tool) },
         { label: 'Not now', pick: leavePerch },
