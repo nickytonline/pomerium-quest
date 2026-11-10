@@ -3,7 +3,7 @@
 Status: partly built. Chapter two starts beyond the Royal Keep, the gate that ends chapter one, and so far
 holds the owl familiar. The owl is an MCP client the player catches, the Aviary is an MCP server behind one
 route, and six perches in open ground are its tools. The Eyrie is the last gate, where a friend waits for
-their lost falcon and the quest ends (see the README). The Night Market, the Thieves' Guild and the 404
+their lost owl and the quest ends (see the README). The Night Market, the Thieves' Guild and the 404
 lesson below are still to do.
 
 ## Why it was removed

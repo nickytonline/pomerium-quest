@@ -192,8 +192,8 @@ export interface World {
   readonly perches: readonly Perch[]
   /** Where the owl waits to be caught, in order: it hops to the next when the player gets close, and tires at the last. */
   readonly owlSpots: readonly Point[]
-  /** Where Mochi's falcon is lost, until the player finds it. */
-  readonly falcon: Point
+  /** Where Mochi's owl is lost, until the player finds it. */
+  readonly mochisOwl: Point
   /** Where a game saved somewhere the Aviary's grounds no longer have resumes: just inside the keep. */
   readonly aviaryEntry: Point
   /** Top-left tile of the 2x2 fountain. */
@@ -395,7 +395,7 @@ export function buildWorld(): World {
       [38, 36],
       [22, 38],
       [18, 39],
-      // The falcon's corner: trees on three sides.
+      // The corner where Mochi's owl waits: trees on three sides.
       [36, 40],
       [37, 40],
       [38, 41],
@@ -502,7 +502,7 @@ export function buildWorld(): World {
       { x: 22, y: 41 },
       { x: 31, y: 35 },
     ],
-    falcon: { x: 37, y: 41 },
+    mochisOwl: { x: 37, y: 41 },
     aviaryEntry: { x: 21, y: 31 },
     fountain,
     npcs: [

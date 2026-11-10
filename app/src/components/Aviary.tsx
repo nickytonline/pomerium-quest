@@ -205,7 +205,7 @@ const ERRANDS: readonly { readonly what: string; readonly how: string }[] = [
     how: 'a tool call asked the Oracle for a group, and the Eyrie’s gate was waiting for it',
   },
   {
-    what: 'You brought Mochi their falcon',
+    what: 'You brought Mochi their owl',
     how: 'another MCP client, flying on Mochi’s behalf, not yours',
   },
 ]
@@ -215,7 +215,7 @@ const closeEnd = () => quest.closeChapterTwoEnd()
 const endButton =
   'motion-safe:animate-blink rounded border-3 border-night-deep bg-lime px-[18px] py-2.5 font-display text-[1.05rem] text-night-deep shadow-[4px_4px_0_var(--color-night-deep)]'
 
-/** The player brought Mochi their falcon in the Eyrie: chapter two is done, and so is the quest. */
+/** The player brought Mochi their owl in the Eyrie: chapter two is done, and so is the quest. */
 export function ChapterTwoEnd() {
   const open = useQuest((s) => s.chapterTwoDone)
   const dialog = useQuest((s) => s.dialog)
@@ -243,7 +243,7 @@ export function ChapterTwoEnd() {
         Chapter two complete
       </h2>
       <p className="m-0">
-        You found Mochi in the Eyrie, behind the last gate in the kingdom, and brought their falcon home. You
+        You found Mochi in the Eyrie, behind the last gate in the kingdom, and brought their owl home. You
         walked in yourself, but your owl did the work that got you here:
       </p>
       <ul className="m-0 grid list-none gap-1.5 p-0">

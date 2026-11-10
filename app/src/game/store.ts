@@ -145,7 +145,7 @@ export interface QuestState {
   readonly owlStage: OwlStage
   /** The perch the player is sending the owl from, until they leave it. Pauses the game. */
   readonly perch: PerchView | null
-  /** The player brought Mochi their falcon in the Eyrie: chapter two, and the quest, are complete. */
+  /** The player brought Mochi their owl in the Eyrie: chapter two, and the quest, are complete. */
   readonly chapterTwoDone: boolean
 }
 

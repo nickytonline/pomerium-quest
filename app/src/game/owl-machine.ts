@@ -5,7 +5,7 @@
 // `vouched` and `entrusted` are stale sessions, like chapter one's `knighted`: the Oracle has added a group
 // (the Falconer wrote for falconers, the owl's letter for keyholders), but the player's Pomerium session
 // still holds the claims from sign-in. A sign-in that already carries a group (a second browser, say) moves
-// straight to the stage that group earns. Finding Mochi's falcon can happen at any point, so it is kept
+// straight to the stage that group earns. Finding Mochi's owl can happen at any point, so it is kept
 // beside the stages, not among them.
 import { assign, createActor, setup, type SnapshotFrom } from 'xstate'
 import { GROUPS } from './groups.ts'
@@ -18,16 +18,16 @@ export type OwlEvent =
   | { readonly type: 'FALCONER_VOUCHED' }
   | { readonly type: 'LETTER_DELIVERED' }
   | { readonly type: 'SIGNED_IN'; readonly groups: readonly string[] }
-  | { readonly type: 'FALCON_FOUND' }
+  | { readonly type: 'MOCHIS_OWL_FOUND' }
   | { readonly type: 'REUNITED' }
 
 interface OwlContext {
-  /** The player has found Mochi's falcon, which follows them from then on. */
-  readonly falconFound: boolean
+  /** The player has found Mochi's owl, which follows them from then on. */
+  readonly mochisOwlFound: boolean
 }
 
 const toKeyholder = { guard: 'hasKeyholdersClaim', target: 'keyholder' } as const
-const toFalconer = { guard: 'hasFalconersClaim', target: 'falconer' } as const
+const toFalconer = { guard: 'hasMochisOwlersClaim', target: 'falconer' } as const
 
 export const owlMachine = setup({
   types: {
@@ -37,19 +37,20 @@ export const owlMachine = setup({
     context: {} as OwlContext,
   },
   actions: {
-    find: assign({ falconFound: true }),
+    find: assign({ mochisOwlFound: true }),
   },
   guards: {
-    hasFalconersClaim: ({ event }) => event.type === 'SIGNED_IN' && event.groups.includes(GROUPS.falconers),
+    hasMochisOwlersClaim: ({ event }) =>
+      event.type === 'SIGNED_IN' && event.groups.includes(GROUPS.falconers),
     hasKeyholdersClaim: ({ event }) => event.type === 'SIGNED_IN' && event.groups.includes(GROUPS.keyholders),
-    hasFalcon: ({ context }) => context.falconFound,
+    hasMochisOwl: ({ context }) => context.mochisOwlFound,
   },
 }).createMachine({
   id: 'owl',
   initial: 'afar',
-  context: { falconFound: false },
-  // The falcon is in the open ground, so it can be found whatever the owl's errands have come to.
-  on: { FALCON_FOUND: { actions: 'find' } },
+  context: { mochisOwlFound: false },
+  // Mochi's owl is in the open ground, so it can be found whatever the owl's errands have come to.
+  on: { MOCHIS_OWL_FOUND: { actions: 'find' } },
   states: {
     afar: {
       description: 'Chapter two lies beyond the Royal Keep.',
@@ -91,10 +92,10 @@ export const owlMachine = setup({
     },
     keyholder: {
       description: `The session carries '${GROUPS.keyholders}': the Eyrie's gate, the last one, will open.`,
-      on: { REUNITED: { guard: 'hasFalcon', target: 'triumphant' } },
+      on: { REUNITED: { guard: 'hasMochisOwl', target: 'triumphant' } },
     },
     triumphant: {
-      description: 'You brought Mochi their falcon. Chapter two, and the quest, are complete.',
+      description: 'You brought Mochi their owl. Chapter two, and the quest, are complete.',
     },
   },
 })
@@ -110,17 +111,20 @@ const LEGACY_STAGES: ReadonlyMap<string, OwlStage> = new Map([['crowned', 'keyho
 
 /**
  * Brings a saved snapshot up to this version of the machine: a stage that no longer exists becomes the one
- * that replaced it, and a save from before the falcon hasn't found it.
+ * that replaced it, and a save from before Mochi's owl hasn't found it.
  */
 export function migrate(saved: {
   readonly value: string
-  readonly context?: Partial<OwlContext> | undefined
+  // Mochi's owl was a falcon at first, and a save from then says so.
+  readonly context?: (Partial<OwlContext> & { readonly falconFound?: boolean }) | undefined
 }): OwlSnapshot {
+  const { falconFound = false, ...context } = saved.context ?? {}
+
   // SAFETY: a persisted snapshot is plain data; only the two fields this function sets differ by version.
   return {
     ...saved,
     value: LEGACY_STAGES.get(saved.value) ?? saved.value,
-    context: { falconFound: false, ...saved.context },
+    context: { mochisOwlFound: falconFound, ...context },
   } as OwlSnapshot
 }
 
@@ -184,5 +188,5 @@ const ORDER: readonly OwlStage[] = [
 /** Whether the owl's story has reached `target`. */
 export const owlAtLeast = (target: OwlStage) => ORDER.indexOf(owlStage()) >= ORDER.indexOf(target)
 
-/** Whether the player has found Mochi's falcon. */
-export const falconFound = () => owlActor.getSnapshot().context.falconFound
+/** Whether the player has found Mochi's owl. */
+export const mochisOwlFound = () => owlActor.getSnapshot().context.mochisOwlFound

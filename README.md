@@ -48,7 +48,7 @@ tools):
 | The Aviary turns back the owl of anyone who isn't a falconer    | The route's `allow` rule asks for `claim/groups: falconers`, before any tool is looked at                             |
 | Two perches never open, whoever the owl flies for               | One `deny` rule with `mcp_tool` and `starts_with: open_` forbids a class of tools                                     |
 | The owl's letter makes you a keyholder, and the last gate opens | A tool call changes a claim at the IdP; you sign in again for your session to see it                                  |
-| Mochi's falcon flies for Mochi, not for you                     | Another MCP client acts on another user's behalf, with that user's claims                                             |
+| Mochi's owl flies for Mochi, not for you                        | Another MCP client acts on another user's behalf, with that user's claims                                             |
 | The perch shows what the owl carried and what came back         | The JSON-RPC request, Pomerium's answer (a JSON-RPC error when it refuses), and how the policy was evaluated          |
 
 ## How the game works
@@ -70,8 +70,8 @@ asks Pomerium whether to let you through, so what you can reach depends on who t
 | <img src="docs/images/legend/falconer.png" width="48" alt="">    | **The Falconer**    | Waits beyond the Royal Keep. Catch your owl and they have the Oracle add you to `falconers`   |
 | <img src="docs/images/legend/owl.png" width="48" alt="">         | **Your owl**        | An MCP client: it flies on your behalf and carries your papers. You have to catch it first    |
 | <img src="docs/images/legend/perch.png" width="48" alt="">       | **A perch**         | One of the Aviary's tools. Send the owl to it, and it shows what Pomerium answered            |
-| <img src="docs/images/legend/mochi.png" width="48" alt="">       | **Mochi**           | Your friend, waiting behind the last gate. They lost their falcon on the way                  |
-| <img src="docs/images/legend/falcon.png" width="48" alt="">      | **Mochi's falcon**  | Another MCP client, lost in the Aviary's grounds. It flies on Mochi's behalf, not yours       |
+| <img src="docs/images/legend/mochi.png" width="48" alt="">       | **Mochi**           | Your friend, waiting behind the last gate. They lost their owl on the way                     |
+| <img src="docs/images/legend/mochis-owl.png" width="48" alt="">  | **Mochi's owl**     | Another MCP client, lost in the Aviary's grounds. It flies on Mochi's behalf, not yours       |
 | <img src="docs/images/legend/baker.png" width="48" alt="">       | **The baker**       | `baker@game.localhost.pomerium.io`, in the citizens group, so the town gate lets them in      |
 | <img src="docs/images/legend/traveler.png" width="48" alt="">    | **The traveler**    | `wanderer@outlands.net`: signed in, but not a citizen, so the town gate turns them away       |
 | <img src="docs/images/legend/phish.png" width="48" alt="">       | **A phish**         | Dresses as the Oracle and offers to sign you in. Hand over your password and you lose         |
@@ -167,9 +167,9 @@ who has the Oracle make you a falconer. After that four perches work, and two ne
 every errand whose name starts with `open_`, whoever the owl flies for. One errand carries a letter to the
 Oracle, who makes you a keyholder. The last gate, the Eyrie's, asks for every group in the quest.
 
-Your friend Mochi is waiting behind that gate, and has lost their falcon somewhere in the grounds. Find
+Your friend Mochi is waiting behind that gate, and has lost their owl somewhere in the grounds. Find
 it and bring it along. The gate checks your claims, not what you carry, so it lets you in either way, but
-Mochi will ask after the falcon. Handing it back ends the game, with fireworks.
+Mochi will ask after the owl. Handing it back ends the game, with fireworks.
 
 ### Bring your own agent
 

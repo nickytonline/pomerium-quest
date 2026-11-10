@@ -6,8 +6,8 @@ import { SHEETS } from './sheets.ts'
 import { sfx } from './sound.ts'
 import { KNIGHT_QUOTA, defeated, hasSteel, type MonsterKind } from './quest-machine.ts'
 import { houseStage, type HouseStage } from './house-machine.ts'
-import { falconFound, owlAtLeast, owlStage } from './owl-machine.ts'
-import { catchOwl, findFalcon, readAviarySign, readPerchSign, visitPerch } from './owl-story.ts'
+import { mochisOwlFound, owlAtLeast, owlStage } from './owl-machine.ts'
+import { catchOwl, findMochisOwl, readAviarySign, readPerchSign, visitPerch } from './owl-story.ts'
 import { FLIGHT_MS, type PerchPhase } from './perch.ts'
 import {
   currentLetter,
@@ -109,7 +109,15 @@ const SWING = { from: 100, to: -50, ms: 160 }
 /** What a player hears when the game has lost their session somewhere they could only be with one. */
 const LOST_SESSION = 'Something went wrong and your session was lost, so you start again in Hearth Village.'
 
-const ITEM = { swordWood: 0, swordSteel: 1, owl: 7, owlBlink: 8, falcon: 9, owlWingsUp: 10, owlWingsDown: 11 }
+const ITEM = {
+  swordWood: 0,
+  swordSteel: 1,
+  owl: 7,
+  owlBlink: 8,
+  mochisOwl: 9,
+  owlWingsUp: 10,
+  owlWingsDown: 11,
+}
 
 /** How long the owl's eyes stay shut, and the shortest and longest it waits between blinks. */
 const OWL_BLINK = { shut: 140, every: [2200, 6000] } as const
@@ -117,8 +125,8 @@ const OWL_BLINK = { shut: 140, every: [2200, 6000] } as const
 /** Where the owl sits on the dog, from the dog's center, and how high above that its hop starts. */
 const OWL_SEAT = { x: 5, y: -8, hop: 14 }
 
-/** Mochi's falcon rides on the dog's other side, higher than the owl so its tail clears the sunglasses. */
-const FALCON_SEAT = { x: -5, y: -10 }
+/** Mochi's owl rides on the dog's other side. */
+const MOCHIS_OWL_SEAT = { x: -5, y: -8 }
 
 /** The owl hops away when the player comes within this many tiles of it, and how long and high a hop is. */
 const OWL_SHY = { tiles: 2, ms: 520, lift: 18 }
@@ -381,7 +389,7 @@ export class KingdomScene extends Phaser.Scene {
   private flights = new Map<Phaser.GameObjects.Image, number>()
   /** The owl is off the dog's shoulder: flying an errand, or on a perch until the dog walks away. */
   private owlAloft = false
-  private falcon: Phaser.GameObjects.Image | undefined
+  private mochisOwl: Phaser.GameObjects.Image | undefined
   private monsters: Monster[] = []
   private fish: Fish[] = []
   private phish: Phish[] = []
@@ -553,8 +561,8 @@ export class KingdomScene extends Phaser.Scene {
     const [roost = this.pos] = this.world.owlSpots
     this.owl = this.add.image(center(roost.x), center(roost.y), 'items', ITEM.owl).setDepth(12)
 
-    const lost = this.world.falcon
-    this.falcon = this.add.image(center(lost.x), center(lost.y), 'items', ITEM.falcon).setDepth(12)
+    const lost = this.world.mochisOwl
+    this.mochisOwl = this.add.image(center(lost.x), center(lost.y), 'items', ITEM.mochisOwl).setDepth(12)
     this.perchOwl()
 
     this.cameras.main.setBounds(0, 0, MAP_WIDTH * T, MAP_HEIGHT * T)
@@ -602,16 +610,17 @@ export class KingdomScene extends Phaser.Scene {
     })
   }
 
-  /** Once caught, the owl rides on the dog's shoulder, and Mochi's falcon, once found, on the other side. */
+  /** Once caught, the owl rides on the dog's shoulder, and Mochi's owl, once found, on the other side. */
   private carryBirds() {
-    const { owl, falcon, player } = this
+    const { owl, mochisOwl, player } = this
 
     if (!player) return
 
     if (owl && owlAtLeast('fledged') && !this.owlAloft)
       owl.setPosition(player.x + OWL_SEAT.x, player.y + OWL_SEAT.y - this.owlHop)
 
-    if (falcon && falconFound()) falcon.setPosition(player.x + FALCON_SEAT.x, player.y + FALCON_SEAT.y)
+    if (mochisOwl && mochisOwlFound())
+      mochisOwl.setPosition(player.x + MOCHIS_OWL_SEAT.x, player.y + MOCHIS_OWL_SEAT.y)
   }
 
   /** Where the owl waits while it's still to be caught: a tile the player can't walk onto. */
@@ -619,9 +628,9 @@ export class KingdomScene extends Phaser.Scene {
     return owlAtLeast('fledged') ? undefined : this.world.owlSpots[this.owlAt]
   }
 
-  /** Where Mochi's falcon sits until the player finds it. */
-  private falconSpot(): Point | undefined {
-    return falconFound() ? undefined : this.world.falcon
+  /** Where Mochi's owl sits until the player finds it. */
+  private mochisOwlSpot(): Point | undefined {
+    return mochisOwlFound() ? undefined : this.world.mochisOwl
   }
 
   /**
@@ -943,12 +952,12 @@ export class KingdomScene extends Phaser.Scene {
     )
   }
 
-  /** Whether the owl, still to be caught, or Mochi's falcon, still to be found, sits on a tile. */
+  /** Whether the owl, still to be caught, or Mochi's owl, still to be found, sits on a tile. */
   private birdAt(p: Point) {
     const owl = this.owlSpot()
-    const falcon = this.falconSpot()
+    const mochisOwl = this.mochisOwlSpot()
 
-    return Boolean((owl && same(owl, p)) || (falcon && same(falcon, p)))
+    return Boolean((owl && same(owl, p)) || (mochisOwl && same(mochisOwl, p)))
   }
 
   private face(dir: Dir) {
@@ -1248,10 +1257,10 @@ export class KingdomScene extends Phaser.Scene {
       return
     }
 
-    const falcon = this.falconSpot()
+    const mochisOwl = this.mochisOwlSpot()
 
-    if (falcon && same(falcon, target)) {
-      findFalcon()
+    if (mochisOwl && same(mochisOwl, target)) {
+      findMochisOwl()
 
       return
     }

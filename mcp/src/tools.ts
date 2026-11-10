@@ -49,7 +49,7 @@ export function registerTools(server: McpServer, verified: Verified, grant: Gran
   run(OWL_TOOLS.whoami, (caller) => ({ email: caller.email, groups: caller.groups }))
   run(OWL_TOOLS.ringBell, (caller) => ({ rang: true, heardBy: caller.email }))
   run(OWL_TOOLS.scoutGrounds, () => ({
-    spotted: 'a falcon, alone and far from any perch',
+    spotted: 'a white owl, alone and far from any perch',
     where: 'among the trees in the south-east corner of the grounds',
   }))
 

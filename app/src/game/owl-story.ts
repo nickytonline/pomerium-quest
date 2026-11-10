@@ -1,10 +1,10 @@
-// Chapter two's story: the Falconer, the owl to catch, the perches, and Mochi and their falcon. The owl is
+// Chapter two's story: the Falconer, the owl to catch, the perches, and Mochi and their owl. The owl is
 // an MCP client, and sending it from a perch is a real MCP tool call through Pomerium (see perch.ts), so
 // whether the errand runs is Pomerium's call.
 import { sendOwl } from './access.ts'
 import { SIGN_DOCS, SIGN_TEXT, STALE_DOCS, link, type Page } from './content.ts'
 import { GROUPS } from './groups.ts'
-import { falconFound, owlAtLeast, owlStage, type OwlStage } from './owl-machine.ts'
+import { mochisOwlFound, owlAtLeast, owlStage, type OwlStage } from './owl-machine.ts'
 import { MCP_PATH, OWL_ERRANDS, OWL_TOOLS, aviaryOrigin, isForbidden, type OwlTool } from './owl.ts'
 import { FLIGHT_MS, type OwlFlight, type OwlOutcome } from './perch.ts'
 import { decide, type Identity } from './ppl.ts'
@@ -23,7 +23,7 @@ const MEET: readonly Page[] = [
   },
   {
     who: 'Falconer',
-    text: 'Mochi lost their falcon on the way. It is somewhere out in the open ground. If you find it, Mochi will want it back.',
+    text: 'Mochi lost their owl on the way. It is somewhere out in the open ground. If you find it, Mochi will want it back.',
   },
   {
     who: 'Falconer',
@@ -56,11 +56,11 @@ const CAUGHT: readonly Page[] = [
   },
 ]
 
-/** The falcon the Falconer mentions for as long as it's lost. */
-const falconHint = () =>
-  falconFound()
+/** Mochi's owl, which the Falconer mentions for as long as it's lost. */
+const mochisOwlHint = () =>
+  mochisOwlFound()
     ? ''
-    : " And keep an eye out for Mochi's falcon. Your owl can scout for it, from the perch to the south."
+    : " And keep an eye out for Mochi's owl. Your owl can scout for it, from the perch to the south."
 
 /** What the Falconer says between the story's turns, by how far the owl's errands have got. */
 const ADVICE: Record<
@@ -72,9 +72,9 @@ const ADVICE: Record<
   fledged: () =>
     "You caught it! That's the hard part. Now send it to a perch, any perch, and see what the Aviary makes of it. Then come and tell me.",
   falconer: () =>
-    `Your papers say falconer, so the Aviary lets your owl in. Try every perch. Two of them never open, for any owl, and that's worth seeing. One matters most: the owl carries my letter to the Oracle, who makes you a keyholder. The Eyrie's gate asks for that.${falconHint()}`,
+    `Your papers say falconer, so the Aviary lets your owl in. Try every perch. Two of them never open, for any owl, and that's worth seeing. One matters most: the owl carries my letter to the Oracle, who makes you a keyholder. The Eyrie's gate asks for that.${mochisOwlHint()}`,
   keyholder: () =>
-    `Your papers say keyholder. The Eyrie's gate is at the south end of the road. Its guard asks for everything you've earned, in both chapters. Mochi is inside.${falconFound() ? '' : " Mochi will ask after their falcon, and it's still lost somewhere in these grounds."}`,
+    `Your papers say keyholder. The Eyrie's gate is at the south end of the road. Its guard asks for everything you've earned, in both chapters. Mochi is inside.${mochisOwlFound() ? '' : " Mochi will ask after their owl, and it's still lost somewhere in these grounds."}`,
   triumphant: () =>
     "Same owl, same perches, all along. What changed was what your papers said when the owl got there. That's all Pomerium ever checks.",
 }
@@ -405,7 +405,7 @@ const DONE: Partial<Record<OwlTool, () => void>> = {
     quest.toast('High above the grounds, the bell rings twice', 'info')
   },
   [OWL_TOOLS.scoutGrounds]: () =>
-    quest.toast('From high up, the owl saw a falcon in the trees, in the south-east corner', 'info'),
+    quest.toast('From high up, your owl saw another owl in the trees, in the south-east corner', 'info'),
   [OWL_TOOLS.deliverLetter]: () => {
     if (owlStage() !== 'falconer') return
     quest.sendOwl({ type: 'LETTER_DELIVERED' })
@@ -517,20 +517,20 @@ export async function flyOwl(tool: OwlTool) {
   }
 }
 
-/** Mochi's falcon, lost in the open ground: a second MCP client, which flies on Mochi's behalf. */
-export function findFalcon() {
-  if (falconFound()) return false
+/** Mochi's owl, lost in the open ground: a second MCP client, which flies on Mochi's behalf. */
+export function findMochisOwl() {
+  if (mochisOwlFound()) return false
 
-  quest.sendOwl({ type: 'FALCON_FOUND' })
+  quest.sendOwl({ type: 'MOCHIS_OWL_FOUND' })
   sfx('itemGet')
   quest.say([
     {
-      who: 'Falcon',
-      text: "A falcon sits low in the trees, a teal ribbon on its leg. This is Mochi's falcon! It looks you over, then flutters down and settles on your back.",
+      who: "Mochi's owl",
+      text: "A white owl sits low in the trees, a teal ribbon on its leg. This is Mochi's owl! It looks you over, then flutters down and settles on your back, beside your own.",
     },
     {
-      who: 'Falcon',
-      text: "The falcon is an MCP client too, but it flies on Mochi's behalf, not yours. Your papers are no use to it, and it runs no errands for you. It will ride with you until you find Mochi.",
+      who: "Mochi's owl",
+      text: "Mochi's owl is an MCP client too, like yours, but it flies on Mochi's behalf, not yours. Your papers are no use to it, and it runs no errands for you. It will ride with you until you find Mochi.",
       links: [link('mcpIdentity')],
     },
   ])
@@ -544,7 +544,7 @@ const SAME_GATE: Page = {
   links: [link('every'), link('allOf')],
 }
 
-/** Mochi, the friend who went ahead: bringing them their falcon ends the quest. */
+/** Mochi, the friend who went ahead: bringing them their owl ends the quest. */
 export function friend() {
   if (owlStage() === 'triumphant') {
     quest.say([
@@ -557,13 +557,13 @@ export function friend() {
     return
   }
 
-  if (!falconFound()) {
+  if (!mochisOwlFound()) {
     quest.say([
       { who: 'Mochi', text: 'You made it! I knew you would.' },
       SAME_GATE,
       {
         who: 'Mochi',
-        text: "Have you seen my falcon? I lost it out in the grounds, somewhere past the perches. The gate let you in without it, mind: a gate checks your claims, not what you carry. But I'd dearly like it back.",
+        text: "Have you seen my owl? I lost it out in the grounds, somewhere past the perches. The gate let you in without it, mind: a gate checks your claims, not what you carry. But I'd dearly like it back.",
       },
     ])
 
@@ -572,7 +572,7 @@ export function friend() {
 
   quest.say(
     [
-      { who: 'Mochi', text: 'You made it! And is that… you found my falcon!' },
+      { who: 'Mochi', text: 'You made it! And is that… you found my owl!' },
       SAME_GATE,
       {
         who: 'Mochi',

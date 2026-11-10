@@ -45,12 +45,14 @@ describe('the owl’s errands', () => {
     expect(after(...TO_VOUCHED, { type: 'LETTER_DELIVERED' })).toBe('vouched')
   })
 
-  it('end only when a keyholder brings Mochi the falcon', () => {
+  it('end only when a keyholder brings Mochi their owl', () => {
     expect(after(KEYHOLDER, { type: 'REUNITED' })).toBe('keyholder')
-    expect(after(FALCONER, { type: 'FALCON_FOUND' }, { type: 'REUNITED' })).toBe('falconer')
-    expect(after(KEYHOLDER, { type: 'FALCON_FOUND' }, { type: 'REUNITED' })).toBe('triumphant')
-    // The falcon can be found long before the last gate opens.
-    expect(after(...TO_CAUGHT, { type: 'FALCON_FOUND' }, KEYHOLDER, { type: 'REUNITED' })).toBe('triumphant')
+    expect(after(FALCONER, { type: 'MOCHIS_OWL_FOUND' }, { type: 'REUNITED' })).toBe('falconer')
+    expect(after(KEYHOLDER, { type: 'MOCHIS_OWL_FOUND' }, { type: 'REUNITED' })).toBe('triumphant')
+    // Mochi's owl can be found long before the last gate opens.
+    expect(after(...TO_CAUGHT, { type: 'MOCHIS_OWL_FOUND' }, KEYHOLDER, { type: 'REUNITED' })).toBe(
+      'triumphant',
+    )
   })
 
   it('pick up where the claims say, in a browser that has never seen the owl', () => {
@@ -74,7 +76,17 @@ describe('a save from an older version of the chapter', () => {
     expect(resume('crowned').value).toBe('keyholder')
   })
 
-  it('keeps every stage that still exists, with the falcon still to find', () => {
+  it("remembers Mochi's owl was found when it was still a falcon", () => {
+    const saved = {
+      ...createActor(owlMachine).start().getPersistedSnapshot(),
+      value: 'keyholder',
+      context: { falconFound: true },
+    }
+
+    expect(migrate(saved).context).toEqual({ mochisOwlFound: true })
+  })
+
+  it("keeps every stage that still exists, with Mochi's owl still to find", () => {
     for (const stage of [
       'arrived',
       'fledged',
@@ -85,7 +97,7 @@ describe('a save from an older version of the chapter', () => {
       'triumphant',
     ]) {
       expect(resume(stage).value, stage).toBe(stage)
-      expect(resume(stage).context.falconFound, stage).toBe(false)
+      expect(resume(stage).context.mochisOwlFound, stage).toBe(false)
     }
   })
 })

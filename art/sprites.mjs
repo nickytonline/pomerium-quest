@@ -206,34 +206,25 @@ const OWL = {
   ],
 }
 
-// Mochi's falcon, lost in the Aviary's grounds. It perches side-on and slim, facing left, away from the
-// dog that carries it: a dark-hooded head with a white eye and a hooked beak, a narrow pale chest, an
-// outlined wing, a tail and a ribbon on its leg in the teal of Mochi's jacket.
-const FALCON = {
-  palette: {
-    B: '#7f93b8',
-    b: '#3d4a6b',
-    w: '#f1ead8',
-    s: '#b9ad94',
-    Y: '#ffd86b',
-    o: '#f08a2b',
-    H: '#3fc1b0',
-  },
+// Mochi's owl, lost in the Aviary's grounds: the same owl in snowy white, so the two read apart on the
+// dog's back, with grey flecks on its chest and a ribbon on one leg in the teal of Mochi's jacket.
+const MOCHIS_OWL = {
+  palette: { Q: '#dfe5ee', q: '#ffffff', s: '#aab3c2', Y: '#ffd86b', H: '#3fc1b0' },
   rows: [
     '................',
-    '.....KKKK.......',
-    '....KbbbbK......',
-    '...KbbbbbbK.....',
-    '..KKbWKbbbK.....',
-    '.KYYwbwbbbK.....',
-    '.KoKwwKBBBK.....',
-    '..KKwsKBBBBK....',
-    '...KwwKBBBBK....',
-    '...KwsKBBBBK....',
-    '....KwKBBBbK....',
-    '....KHKBbbK.....',
-    '.....K.KbbK.....',
-    '........KK......',
+    '................',
+    '................',
+    '....KK....KK....',
+    '....KQKKKKQK....',
+    '....KQQQQQQK....',
+    '....KYKQQKYK....',
+    '....KQQGGQQK....',
+    '....KQqsqqQK....',
+    '....KQqqsqQK....',
+    '.....KqqqqK.....',
+    '......KHKK......',
+    '................',
+    '................',
     '................',
     '................',
   ],
@@ -775,7 +766,7 @@ const grids = {
   bot_slime: BOT_SLIME,
   fish: FISH.map((f) => f.rows),
   owl: [OWL.rows, OWL_BLINK.rows, OWL_WINGS_UP.rows, OWL_WINGS_DOWN.rows],
-  falcon: [FALCON.rows],
+  mochis_owl: [MOCHIS_OWL.rows],
   sword_wood: [SWORD_WOOD],
   sword_steel: [SWORD_STEEL],
   shield_wood: [SHIELD_WOOD],
@@ -803,7 +794,7 @@ sheet(join(assets, 'items.png'), [
     ...FISH,
     OWL,
     OWL_BLINK,
-    FALCON,
+    MOCHIS_OWL,
     OWL_WINGS_UP,
     OWL_WINGS_DOWN,
   ],
@@ -826,7 +817,7 @@ sheet(
       ...FISH,
       OWL,
       OWL_BLINK,
-      FALCON,
+      MOCHIS_OWL,
       OWL_WINGS_UP,
       OWL_WINGS_DOWN,
     ],
