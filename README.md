@@ -46,7 +46,7 @@ tools):
 | The owl has no papers of its own; it carries yours              | The MCP client acts on your behalf: its token is tied to your session, and each request is checked against the policy |
 | No wall or gate stands around a perch                           | Policy alone decides whether a tool call is allowed                                                                   |
 | The Aviary turns back the owl of anyone who isn't a falconer    | The route's `allow` rule asks for `claim/groups: falconers`, before any tool is looked at                             |
-| Two errands that open things are refused to your owl            | One `deny` rule matches a call to an `open_` tool from anyone whose groups lack `distinguished-falconers`             |
+| The errand that opens the cage is refused to your owl           | One `deny` rule matches a call to an `open_` tool from anyone whose groups lack `distinguished-falconers`             |
 | The Falconer's owl opens the cage yours couldn't                | The same tool call, made on another user's behalf: the Falconer is a real account in that group, so no deny matches   |
 | The owl's letter makes you a keyholder, and the last gate opens | A tool call changes a claim at the IdP; you sign in again for your session to see it                                  |
 | Mochi's owl flies for Mochi, not for you                        | Another MCP client acts on another user's behalf, with that user's claims                                             |
@@ -157,7 +157,7 @@ Past the Royal Keep, the Falconer tells you that to become a falconer you must c
 the open ground and hops away when you get close, but it tires after a few hops. Then walk up to it and
 press E or Enter (or tap the A button) to pick it up. No quick reflexes are needed.
 
-Six perches stand in the grounds, with no walls or gates around them. Each one is an errand. Walk up
+Five perches stand in the grounds, with no walls or gates around them. Each one is an errand. Walk up
 beside a perch and your owl hops onto it. Walk into the perch (or face it and press E or Enter, or tap the
 A button) and the text box asks whether to send the owl. Every errand is a real MCP request through
 Pomerium, so you need no AI agent to play. The owl flies off and comes back to its perch, and the text
@@ -166,7 +166,7 @@ request the owl carried, what came back and how Pomerium decided. Walk away and 
 your shoulder.
 
 The first time, Pomerium turns the owl back: the Aviary only lets in a falconer's owl. Tell the Falconer,
-who has the Oracle make you a falconer. After that four errands run, and two are refused to your owl: one
+who has the Oracle make you a falconer. After that four errands run, and one is refused to your owl: a
 rule keeps every errand whose name starts with `open_` for the owl of a distinguished falconer. One errand
 carries a letter to the Oracle, who makes you a keyholder. The last gate, the Eyrie's, asks for every group
 in the quest.

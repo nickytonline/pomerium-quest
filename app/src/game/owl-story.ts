@@ -81,7 +81,7 @@ const ADVICE: Record<
   fledged: () =>
     "You caught it! That's the hard part. Now send it to a perch, any perch, and see what the Aviary makes of it. Then come and tell me.",
   falconer: () =>
-    `Your papers say falconer, so the Aviary lets your owl in. Try every perch. Two of the errands open things, and those are refused to your owl, which is worth seeing. One matters most: the owl carries my letter to the Oracle, who makes you a keyholder. The Eyrie's gate asks for that.${mochisOwlHint()}`,
+    `Your papers say falconer, so the Aviary lets your owl in. Try every perch. One errand opens a cage, and that one is refused to your owl, which is worth seeing. Another matters most: the owl carries my letter to the Oracle, who makes you a keyholder. The Eyrie's gate asks for that.${mochisOwlHint()}`,
   keyholder: () =>
     `Your papers say keyholder. The Eyrie's gate is at the south end of the road. Its guard asks for everything you've earned, in both chapters. Mochi is inside.${mochisOwlFound() ? '' : " Mochi will ask after their owl, and it's still lost somewhere in these grounds."}`,
   triumphant: () =>

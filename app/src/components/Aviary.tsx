@@ -348,7 +348,7 @@ const ERRANDS: readonly { readonly what: string; readonly how: string }[] = [
     how: 'your claims changed; the owl, the perches and the policy did not',
   },
   {
-    what: 'Two errands were refused to your owl',
+    what: 'One errand was refused to your owl',
     how: 'one deny rule matches a tool that starts with open_, called for anyone who is no distinguished falconer',
   },
   {

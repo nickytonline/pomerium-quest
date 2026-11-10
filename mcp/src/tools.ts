@@ -81,7 +81,6 @@ export function registerTools(server: McpServer, verified: Verified, grant: Gran
   })
 
   // The Aviary's route denies every open_ tool to all but a distinguished falconer's owl, so only such an
-  // owl's call gets here. The cage holds the stray owl the keeper took in; the vault opens for no owl at all.
-  run(OWL_TOOLS.openVault, () => ({ opened: false, reason: 'the vault has no lock an owl can turn' }))
+  // owl's call gets here. The cage holds the stray owl the keeper took in.
   run(OWL_TOOLS.openCage, (caller) => ({ opened: true, openedFor: caller.email, freed: 'a white owl' }))
 }

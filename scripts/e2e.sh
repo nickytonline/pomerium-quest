@@ -182,16 +182,15 @@ check "the Falconer vouches for the player, and the Oracle adds falconers" yes \
 check "the Aviary still refuses (session holds old claims)" refused "$(perch "$owl" "$tools" | field outcome.kind)"
 sign_in_again "$owl" "$falconer" >/dev/null
 check "the Aviary lists its tools for a falconer's owl" tools "$(perch_until "$owl" "$tools" tools)"
-check "it lists all six, the forbidden ones too" \
-  "whoami,ring_bell,scout_grounds,deliver_letter,open_vault,open_cage" \
+check "it lists all five, the forbidden one too" \
+  "whoami,ring_bell,scout_grounds,deliver_letter,open_cage" \
   "$(perch "$owl" "$tools" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).outcome.tools.map(t=>t.name).join(",")))')"
 check "whoami: the owl flies on the player's behalf" yes \
   "$(perch "$owl" "$(call whoami)" | field outcome.text | grep -q "$falconer" && echo yes || echo no)"
 check "ring_bell is allowed for a falconer's owl" result "$(perch "$owl" "$(call ring_bell)" | field outcome.kind)"
 check "scout_grounds is allowed too" result "$(perch "$owl" "$(call scout_grounds)" | field outcome.kind)"
-check "open_vault is refused for a falconer (deny: mcp_tool starts_with open_, groups exclude distinguished-falconers)" refused \
-  "$(perch "$owl" "$(call open_vault)" | field outcome.kind)"
-check "open_cage is refused by the same rule" refused "$(perch "$owl" "$(call open_cage)" | field outcome.kind)"
+check "open_cage is refused for a falconer (deny: mcp_tool starts_with open_, groups exclude distinguished-falconers)" refused \
+  "$(perch "$owl" "$(call open_cage)" | field outcome.kind)"
 # The Falconer has an account of their own, in the distinguished-falconers group. The game sends their owl from
 # the same perch to the same tool, and Pomerium decides it on the Falconer's behalf.
 falconers_owl="$(curl -s -b "$owl" -H "$JSON" -X POST "${GAME}/zones/perch/falconer")"
@@ -205,8 +204,8 @@ check "deliver_letter has the Oracle add keyholders" yes \
 check "the Eyrie still refuses (session holds old claims)" 403 "$(status "$owl" /zones/eyrie/enter)"
 sign_in_again "$owl" "$falconer" >/dev/null
 check "the Eyrie opens to all five groups, ending chapter two" 200 "$(gate_until "$owl" /zones/eyrie/enter)"
-check "both open_ tools stay refused, even for a keyholder" refused,refused \
-  "$(perch "$owl" "$(call open_vault)" | field outcome.kind),$(perch "$owl" "$(call open_cage)" | field outcome.kind)"
+check "open_cage stays refused, even for a keyholder" refused \
+  "$(perch "$owl" "$(call open_cage)" | field outcome.kind)"
 check "a restart takes falconers and keyholders back too" 200 "$(status "$owl" /zones/oracle/reset POST)"
 
 echo "Taking the claims back"

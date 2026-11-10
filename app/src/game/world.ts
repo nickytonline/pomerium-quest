@@ -382,8 +382,6 @@ export function buildWorld(): World {
   fill(21, 30, 21, 33, TILE.cobble)
   fill(21, 33, 35, 33, TILE.cobble)
   fill(28, 34, 28, EYRIE_WALL - 1, TILE.cobble)
-  // The Royal Vault: a landmark with no door. The errand at the perch beside it is refused to a player's owl.
-  fill(34, 35, 37, 37, TILE.wall)
   // The Eyrie, behind the quest's last gate, where Mochi waits.
   fill(17, EYRIE_WALL, MAP_WIDTH - 2, EYRIE_WALL, TILE.wall)
   fill(28, EYRIE_WALL + 1, 28, EYRIE_WALL + 2, TILE.cobble)
@@ -433,8 +431,6 @@ export function buildWorld(): World {
     { x: 19, y: 37, tool: OWL_TOOLS.ringBell },
     { x: 24, y: 40, tool: OWL_TOOLS.scoutGrounds },
     { x: 31, y: 40, tool: OWL_TOOLS.deliverLetter },
-    // Beside the vault it would open, if any policy allowed it.
-    { x: 35, y: 38, tool: OWL_TOOLS.openVault },
     { x: 19, y: 41, tool: OWL_TOOLS.openCage },
   ]
 

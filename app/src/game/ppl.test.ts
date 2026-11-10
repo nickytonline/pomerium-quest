@@ -48,10 +48,10 @@ describe('the owl is checked on the player’s behalf, one tool call at a time',
       expect(owlAllowed(falconer, tool), tool).toBe(true)
   })
 
-  it('forbids every open_ tool to a player’s owl with one deny rule, whatever groups a player can earn', () => {
+  it('forbids the open_ tools to a player’s owl with one deny rule, whatever groups a player can earn', () => {
     const forbidden = Object.values(OWL_TOOLS).filter(isForbidden)
 
-    expect(forbidden).toEqual([OWL_TOOLS.openVault, OWL_TOOLS.openCage])
+    expect(forbidden).toEqual([OWL_TOOLS.openCage])
 
     for (const tool of forbidden) {
       expect(owlAllowed(falconer, tool), tool).toBe(false)

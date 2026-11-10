@@ -10,7 +10,6 @@ export const OWL_TOOLS = {
   ringBell: 'ring_bell',
   scoutGrounds: 'scout_grounds',
   deliverLetter: 'deliver_letter',
-  openVault: 'open_vault',
   openCage: 'open_cage',
 } as const
 
@@ -18,7 +17,7 @@ export type OwlTool = (typeof OWL_TOOLS)[keyof typeof OWL_TOOLS]
 
 /**
  * Every tool whose name starts with this is kept for the owls of distinguished falconers, and so forbidden to
- * the player's: the Aviary's deny rule names the prefix.
+ * the player's: the Aviary's deny rule names the prefix, not the one tool that has it today.
  */
 export const FORBIDDEN_PREFIX = 'open_'
 
@@ -41,10 +40,6 @@ export const OWL_ERRANDS: Record<OwlTool, { readonly title: string; readonly des
   [OWL_TOOLS.deliverLetter]: {
     title: 'Deliver the letter',
     description: "Carries the Falconer's letter to the Oracle, who adds you to the keyholders group.",
-  },
-  [OWL_TOOLS.openVault]: {
-    title: 'Open the vault',
-    description: "Unlocks the Royal Vault. The Aviary's orders keep it for a distinguished falconer's owl.",
   },
   [OWL_TOOLS.openCage]: {
     title: 'Open the cage',

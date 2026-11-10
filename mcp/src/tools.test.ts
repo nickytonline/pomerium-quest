@@ -44,7 +44,7 @@ async function owlFor(verified: Verified) {
 }
 
 describe('the owl’s tools', () => {
-  it('are the six the game and the policy name', async () => {
+  it('are the five the game and the policy name', async () => {
     const { client } = await owlFor(PLAYER)
     const { tools } = await client.listTools()
 
@@ -65,7 +65,7 @@ describe('the owl’s tools', () => {
 
     expect((await call(OWL_TOOLS.deliverLetter)).data).toMatchObject({ granted: GROUPS.keyholders })
 
-    for (const tool of [OWL_TOOLS.ringBell, OWL_TOOLS.scoutGrounds, OWL_TOOLS.openVault, OWL_TOOLS.openCage])
+    for (const tool of [OWL_TOOLS.ringBell, OWL_TOOLS.scoutGrounds, OWL_TOOLS.openCage])
       expect(await call(tool), tool).toMatchObject({ failed: false })
 
     expect(granted).toEqual([`nick@example.org -> ${GROUPS.keyholders}`])
