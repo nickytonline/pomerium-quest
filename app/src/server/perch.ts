@@ -44,7 +44,7 @@ const messageIn = (body: string, contentType: string) => {
 }
 
 const params = (call: OwlCall) =>
-  call.method === 'tools/call' ? { params: { name: call.tool, arguments: {} } } : {}
+  call.method === 'tools/call' ? { params: { name: call.tool, arguments: call.args ?? {} } } : {}
 
 function read(status: number, message: string): OwlOutcome {
   if (status === 401) return { kind: 'signin' }

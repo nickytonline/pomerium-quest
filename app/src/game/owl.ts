@@ -49,6 +49,30 @@ export const OWL_ERRANDS: Record<OwlTool, { readonly title: string; readonly des
   },
 }
 
+/**
+ * Where Mochi's owl is. Only the game knows how far the player has got, so the scouting errand is told, as
+ * the tool call's one argument, and reports what there is to see from above.
+ */
+export const MOCHIS_OWL = { lost: 'lost', carried: 'carried', home: 'home' } as const
+
+export type MochisOwlAt = (typeof MOCHIS_OWL)[keyof typeof MOCHIS_OWL]
+
+/** What the scouting owl sees of Mochi's owl, wherever it is. */
+export const SIGHTINGS: Record<MochisOwlAt, { readonly spotted: string; readonly where: string }> = {
+  lost: {
+    spotted: 'a white owl, alone and far from any perch',
+    where: 'among the trees in the south-east corner of the grounds',
+  },
+  carried: {
+    spotted: 'a white owl with a teal ribbon on its leg',
+    where: 'riding on your own back, beside your owl',
+  },
+  home: {
+    spotted: 'a white owl, back with its owner',
+    where: "on Mochi's shoulder, in the Eyrie",
+  },
+}
+
 /** The first label of the Aviary's host: the MCP server has a host of its own, beside the game's. */
 export const AVIARY_HOST = 'aviary'
 

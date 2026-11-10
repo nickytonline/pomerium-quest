@@ -2,7 +2,7 @@ import { Client } from '@modelcontextprotocol/client'
 import { InMemoryTransport, McpServer } from '@modelcontextprotocol/server'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { GROUPS } from '../../app/src/game/groups.ts'
-import { OWL_TOOLS, type OwlTool } from '../../app/src/game/owl.ts'
+import { MOCHIS_OWL, OWL_TOOLS, SIGHTINGS, type OwlTool } from '../../app/src/game/owl.ts'
 import type { Verified } from './identity.ts'
 import { registerTools } from './tools.ts'
 
@@ -34,8 +34,8 @@ async function owlFor(verified: Verified) {
     () => server.close(),
   )
 
-  const call = async (tool: OwlTool) => {
-    const result = await client.callTool({ name: tool, arguments: {} })
+  const call = async (tool: OwlTool, args: Record<string, string> = {}) => {
+    const result = await client.callTool({ name: tool, arguments: args })
 
     return { failed: result.isError === true, data: result.structuredContent }
   }
@@ -69,6 +69,14 @@ describe('the owl’s tools', () => {
       expect(await call(tool), tool).toMatchObject({ failed: false })
 
     expect(granted).toEqual([`nick@example.org -> ${GROUPS.keyholders}`])
+  })
+
+  it('scout for Mochi’s owl where the call says it is, and in the trees when it doesn’t say', async () => {
+    const { call } = await owlFor(PLAYER)
+
+    expect((await call(OWL_TOOLS.scoutGrounds)).data).toMatchObject({ where: SIGHTINGS.lost.where })
+    expect((await call(OWL_TOOLS.scoutGrounds, { mochisOwl: MOCHIS_OWL.home })).data).toEqual(SIGHTINGS.home)
+    expect(await call(OWL_TOOLS.scoutGrounds, { mochisOwl: 'on the moon' })).toMatchObject({ failed: true })
   })
 
   it('refuse a call that didn’t come through Pomerium, and write nothing', async () => {

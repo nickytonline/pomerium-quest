@@ -1,7 +1,7 @@
 import { Effect, Schema } from 'effect'
 import { GROUPS } from '../game/groups.ts'
 import { turnsAwayOwner, type HouseRule } from '../game/house.ts'
-import { OWL_TOOLS } from '../game/owl.ts'
+import { MOCHIS_OWL, OWL_TOOLS } from '../game/owl.ts'
 import { SIGNED_IN_MESSAGE, ZONES } from '../game/zones.ts'
 import { QuestConfig } from './config.ts'
 import { InvalidRules } from './errors.ts'
@@ -58,7 +58,13 @@ const readBody =
 /** What the perch sends: list the Aviary's tools, or call one of them. */
 const OwlRequest = Schema.Union([
   Schema.Struct({ method: Schema.Literal('tools/list') }),
-  Schema.Struct({ method: Schema.Literal('tools/call'), tool: Schema.Literals(Object.values(OWL_TOOLS)) }),
+  Schema.Struct({
+    method: Schema.Literal('tools/call'),
+    tool: Schema.Literals(Object.values(OWL_TOOLS)),
+    args: Schema.optional(
+      Schema.Struct({ mochisOwl: Schema.optional(Schema.Literals(Object.values(MOCHIS_OWL))) }),
+    ),
+  }),
 ])
 
 const readKnock = readBody(KnockRequest)

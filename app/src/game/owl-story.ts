@@ -5,7 +5,16 @@ import { sendOwl } from './access.ts'
 import { SIGN_DOCS, SIGN_TEXT, STALE_DOCS, link, type Page } from './content.ts'
 import { GROUPS } from './groups.ts'
 import { mochisOwlFound, owlAtLeast, owlStage, type OwlStage } from './owl-machine.ts'
-import { MCP_PATH, OWL_ERRANDS, OWL_TOOLS, aviaryOrigin, isForbidden, type OwlTool } from './owl.ts'
+import {
+  MCP_PATH,
+  MOCHIS_OWL,
+  OWL_ERRANDS,
+  OWL_TOOLS,
+  aviaryOrigin,
+  isForbidden,
+  type MochisOwlAt,
+  type OwlTool,
+} from './owl.ts'
 import { FLIGHT_MS, type OwlFlight, type OwlOutcome } from './perch.ts'
 import { decide, type Identity } from './ppl.ts'
 import { sfx } from './sound.ts'
@@ -376,11 +385,28 @@ export function leavePerch() {
   next?.()
 }
 
+/** Where Mochi's owl is by now: still lost, riding with the player, or back with Mochi. */
+const mochisOwlAt = (): MochisOwlAt => {
+  if (owlStage() === 'triumphant') return MOCHIS_OWL.home
+
+  return mochisOwlFound() ? MOCHIS_OWL.carried : MOCHIS_OWL.lost
+}
+
+/** What the kingdom says the scouting owl saw. */
+const SCOUTED: Record<MochisOwlAt, string> = {
+  lost: 'From high up, your owl saw another owl in the trees, in the south-east corner',
+  carried: "From high up, your owl saw Mochi's owl: it is riding on your back",
+  home: "From high up, your owl saw Mochi's owl in the Eyrie, back with Mochi",
+}
+
+/** What a tool call carries besides its name: the scouting errand is told where Mochi's owl is. */
+const argsFor = (tool: OwlTool) =>
+  tool === OWL_TOOLS.scoutGrounds ? { args: { mochisOwl: mochisOwlAt() } } : {}
+
 /** What each errand does in the kingdom once Pomerium has allowed it and the tool has run. */
 const DONE: Partial<Record<OwlTool, () => void>> = {
   [OWL_TOOLS.whoami]: () => learn('mcpIdentity'),
-  [OWL_TOOLS.scoutGrounds]: () =>
-    quest.toast('From high up, your owl saw another owl in the trees, in the south-east corner', 'info'),
+  [OWL_TOOLS.scoutGrounds]: () => quest.toast(SCOUTED[mochisOwlAt()], 'info'),
   [OWL_TOOLS.deliverLetter]: () => {
     if (owlStage() !== 'falconer') return
     quest.sendOwl({ type: 'LETTER_DELIVERED' })
@@ -481,7 +507,7 @@ export async function flyOwl(tool: OwlTool) {
   sfx('hoot')
   quest.perchPhase('out')
   const away = watch(FLIGHT_MS.out + FLIGHT_MS.away)
-  const [sent] = await Promise.all([sendOwl({ method: 'tools/call', tool }), away])
+  const [sent] = await Promise.all([sendOwl({ method: 'tools/call', tool, ...argsFor(tool) }), away])
 
   if (!sent.ok) {
     leavePerch()

@@ -1,12 +1,15 @@
 // What a perch sends and hears. Sending the owl from a perch is a tool call: the browser asks the game
 // server (through Pomerium's /zones/perch route), and the server makes the real MCP request to the
 // Aviary, through Pomerium again, with the token Pomerium gave it for the player.
-import type { OwlTool } from './owl.ts'
+import type { MochisOwlAt, OwlTool } from './owl.ts'
+
+/** What a tool call carries besides the tool's name. Only the scouting errand takes anything. */
+export type OwlArgs = { readonly mochisOwl?: MochisOwlAt | undefined }
 
 /** What the owl is sent to do: list the Aviary's tools, or call one. */
 export type OwlCall =
   | { readonly method: 'tools/list' }
-  | { readonly method: 'tools/call'; readonly tool: OwlTool }
+  | { readonly method: 'tools/call'; readonly tool: OwlTool; readonly args?: OwlArgs | undefined }
 
 // Type aliases (not interfaces) so a flight stays assignable to the server's Json response type.
 export type ToolInfo = {

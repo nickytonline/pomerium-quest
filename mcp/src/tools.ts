@@ -3,7 +3,8 @@
 // Pomerium, then acts for the player Pomerium signed in. Nothing a call says about who is asking is trusted.
 import type { CallToolResult, McpServer } from '@modelcontextprotocol/server'
 import { GROUPS } from '../../app/src/game/groups.ts'
-import { OWL_ERRANDS, OWL_TOOLS, type OwlTool } from '../../app/src/game/owl.ts'
+import { z } from 'zod'
+import { MOCHIS_OWL, OWL_ERRANDS, OWL_TOOLS, SIGHTINGS, type OwlTool } from '../../app/src/game/owl.ts'
 import type { Caller, Verified } from './identity.ts'
 import { logger } from './logger.ts'
 import type { Grant } from './oracle.ts'
@@ -26,32 +27,48 @@ const LETTERS = { [OWL_TOOLS.deliverLetter]: GROUPS.keyholders } as const
  * tool refuses, since a call that skipped Pomerium has no one to act for.
  */
 export function registerTools(server: McpServer, verified: Verified, grant: Grant): void {
+  const annotated = (tool: OwlTool) => ({
+    ...OWL_ERRANDS[tool],
+    annotations: { readOnlyHint: !(tool in LETTERS), idempotentHint: true, openWorldHint: false },
+  })
+
+  const act = async (tool: OwlTool, errand: (caller: Caller) => Promise<Answer> | Answer) => {
+    if (!verified.ok) return failure(verified.reason)
+
+    try {
+      const result = await errand(verified.caller)
+      logger.info({ tool, email: verified.caller.email }, 'tool called')
+
+      return answer(result)
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error)
+      logger.error({ tool, reason }, 'tool failed')
+
+      return failure(reason)
+    }
+  }
+
   const run = (tool: OwlTool, errand: (caller: Caller) => Promise<Answer> | Answer) => {
-    const annotations = { readOnlyHint: !(tool in LETTERS), idempotentHint: true, openWorldHint: false }
-
-    server.registerTool(tool, { ...OWL_ERRANDS[tool], annotations }, async () => {
-      if (!verified.ok) return failure(verified.reason)
-
-      try {
-        const result = await errand(verified.caller)
-        logger.info({ tool, email: verified.caller.email }, 'tool called')
-
-        return answer(result)
-      } catch (error) {
-        const reason = error instanceof Error ? error.message : String(error)
-        logger.error({ tool, reason }, 'tool failed')
-
-        return failure(reason)
-      }
-    })
+    server.registerTool(tool, annotated(tool), () => act(tool, errand))
   }
 
   run(OWL_TOOLS.whoami, (caller) => ({ email: caller.email, groups: caller.groups }))
   run(OWL_TOOLS.ringBell, (caller) => ({ rang: true, heardBy: caller.email }))
-  run(OWL_TOOLS.scoutGrounds, () => ({
-    spotted: 'a white owl, alone and far from any perch',
-    where: 'among the trees in the south-east corner of the grounds',
-  }))
+  // The one errand that takes an argument. Where Mochi's owl is depends on how far the player has got,
+  // which only the game knows, so the call says; left out, the owl is still lost.
+  server.registerTool(
+    OWL_TOOLS.scoutGrounds,
+    {
+      ...annotated(OWL_TOOLS.scoutGrounds),
+      inputSchema: z.object({
+        mochisOwl: z
+          .enum(Object.values(MOCHIS_OWL))
+          .optional()
+          .describe("Where Mochi's owl is in the caller's game. Left out, it is still lost."),
+      }),
+    },
+    ({ mochisOwl }) => act(OWL_TOOLS.scoutGrounds, () => SIGHTINGS[mochisOwl ?? MOCHIS_OWL.lost]),
+  )
 
   run(OWL_TOOLS.deliverLetter, async (caller) => {
     const group = LETTERS[OWL_TOOLS.deliverLetter]
