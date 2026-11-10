@@ -14,13 +14,13 @@ export const TAB_EVENT = 'quest:switch-tab'
 
 export const switchTab = () => window.dispatchEvent(new Event(TAB_EVENT))
 
-/** How the panel of a tab that isn't showing is kept, and how the one that is showing is laid out. */
-const PANEL = {
-  // Both panels share one grid cell, so the screen is as tall as the taller of the two.
-  tallest: 'grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] [grid-area:1/1]',
+/** How each tab's panel is laid out. */
+const PANEL: Record<Tab, string> = {
+  // The kingdom's panel sets the screen's height.
+  kingdom: 'grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] [grid-area:1/1]',
   // The Pomerium panel is laid over the kingdom's, so it adds no height of its own.
-  over: 'absolute inset-0 grid grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)]',
-} as const
+  pomerium: 'absolute inset-0 grid grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)]',
+}
 
 /**
  * One tab's content. Its text scrolls when the screen is too short for it; its buttons stay put below the
@@ -56,10 +56,10 @@ export function TabPane({
 }
 
 /**
- * A moment told twice: first as the game tells it, then as Pomerium decided it. Both tabs share
- * one grid cell, so the screen keeps the taller one's size when switching. A screen whose Pomerium tab is
- * much the longer asks for the kingdom tab to set the size instead: the Pomerium tab then scrolls inside
- * that space, between a least and a greatest height, so neither tab is mostly empty.
+ * A moment told twice: first as the game tells it, then as Pomerium decided it. The kingdom tab sets the
+ * screen's size, between a least and a greatest height, and the Pomerium tab, often much the longer,
+ * scrolls inside that space. So the screen keeps one size when switching, and the kingdom tab is never
+ * mostly empty.
  */
 export function TabbedScreen({
   name,
@@ -67,7 +67,6 @@ export function TabbedScreen({
   showing,
   overlay,
   role = 'alertdialog',
-  sized = 'tallest',
   kingdom,
   pomerium,
 }: {
@@ -78,14 +77,11 @@ export function TabbedScreen({
   readonly overlay: string
   /** A refusal or a result is an alert; a screen the player works in is a plain dialog. */
   readonly role?: 'alertdialog' | 'dialog'
-  /** Whether both tabs take the taller one's size, or the kingdom tab sets it for both. */
-  readonly sized?: 'tallest' | 'kingdom'
   readonly kingdom: ReactNode
   readonly pomerium: ReactNode
 }) {
   const [tab, setTab] = useState<Tab>('kingdom')
   const panels = useRef<HTMLDivElement>(null)
-  const byKingdom = sized === 'kingdom'
 
   // A tab opens at the top of its text, not wherever it was last scrolled to.
   useEffect(() => {
@@ -126,18 +122,16 @@ export function TabbedScreen({
             scrolls sideways, and a tall pane scrolls its own text. */}
         <div
           ref={panels}
-          className={`relative grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] [&_pre]:overflow-x-hidden [&_pre]:wrap-anywhere [&_pre]:whitespace-pre-wrap ${byKingdom ? 'max-h-[75dvh] overflow-hidden' : ''}`}
+          className={`relative grid max-h-[75dvh] min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] overflow-hidden [&_pre]:overflow-x-hidden [&_pre]:wrap-anywhere [&_pre]:whitespace-pre-wrap`}
         >
           {/* A short kingdom tab still leaves room to read the Pomerium one: this sets the least height. It is
               only a wish, so a screen with less room than that shrinks past it instead of spilling out. */}
-          {byKingdom && (
-            <div className="pointer-events-none invisible h-[min(24rem,60dvh)] [grid-area:1/1]" />
-          )}
+          <div className="pointer-events-none invisible h-[min(20rem,60dvh)] [grid-area:1/1]" />
           {TABS.map(({ id }) => (
             <div
               key={id}
               id={`${name}-panel-${id}`}
-              className={`${byKingdom && id === 'pomerium' ? PANEL.over : PANEL.tallest} ${tab === id ? '' : 'invisible'}`}
+              className={`${PANEL[id]} ${tab === id ? '' : 'invisible'}`}
               role="tabpanel"
               aria-labelledby={`${name}-tab-${id}`}
               aria-hidden={tab !== id}

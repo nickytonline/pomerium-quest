@@ -181,7 +181,6 @@ function PerchPanel({ perch, flight }: { readonly perch: PerchView; readonly fli
         showing={tool}
         overlay={overlay}
         role="dialog"
-        sized="kingdom"
         kingdom={kingdom}
         pomerium={pomerium}
       />
