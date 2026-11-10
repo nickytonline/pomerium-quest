@@ -11,12 +11,13 @@ PLAYERS=players.example
 SUFFIX=""
 [ "$PORT" = 443 ] || SUFFIX=":${PORT}"
 GAME="https://game.${DOMAIN}${SUFFIX}"
+AVIARY="https://aviary.${DOMAIN}${SUFFIX}"
 ORACLE="https://oracle.${DOMAIN}${SUFFIX}"
 JAR_DIR="$(mktemp -d)"
 JSON='accept: application/json'
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # The group names come from the game's own constants, so these checks can't drift from the policies.
-read -r GROUP_CITIZEN GROUP_KNIGHTS < <(node --input-type=module -e "import { GROUPS } from '$ROOT/app/src/game/groups.ts'; console.log(GROUPS.citizens, GROUPS.knights)")
+read -r GROUP_CITIZEN GROUP_KNIGHTS GROUP_FALCONERS GROUP_KEYHOLDERS < <(node --input-type=module -e "import { GROUPS } from '$ROOT/app/src/game/groups.ts'; console.log(GROUPS.citizens, GROUPS.knights, GROUPS.falconers, GROUPS.keyholders)")
 [ -n "$GROUP_KNIGHTS" ] || { echo 'could not read the group names from app/src/game/groups.ts'; exit 1; }
 # The process id keeps runs started in the same second (in parallel) from sharing accounts.
 RUN="$(date +%s)-$$"
@@ -33,6 +34,9 @@ check() {
 }
 
 status() { curl -s -o /dev/null -w '%{http_code}' -b "$1" -H "$JSON" -X "${3:-GET}" "${GAME}$2"; }
+
+# One field of a JSON object on stdin; a dotted name reaches into nested objects.
+field() { node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{console.log(process.argv[1].split(".").reduce((o,k)=>o[k],JSON.parse(s)))}catch{console.log("")}})' "$1"; }
 
 PASSWORD="e2e-${RUN}-pass"
 
@@ -135,6 +139,61 @@ for _ in $(seq 1 45); do
 done
 check "keep opens for a citizen who is a knight and a scholar" 200 "$keep"
 
+echo "The Aviary (MCP)"
+# The perch is the game as an MCP client: Pomerium hands the game server a token for the player, and the
+# server calls the MCP server's routes with it. Each call's outcome is Pomerium's answer.
+perch() { curl -s -b "$1" -H "$JSON" -H 'content-type: application/json' -X POST "${GAME}/zones/perch/$2" -d "$3"; }
+tools='{"method":"tools/list"}'
+call() { printf '{"method":"tools/call","tool":"%s"}' "$1"; }
+# Asks a roost until Pomerium's answer is the one wanted, since new claims take a moment to reach it.
+perch_until() {
+  local got=""
+  for _ in $(seq 1 45); do
+    got="$(perch "$1" "$2" "$3" | field outcome.kind)"
+    [ "$got" = "$4" ] && break
+    sleep 2
+  done
+  echo "$got"
+}
+gate_until() {
+  local got=403
+  for _ in $(seq 1 45); do
+    got="$(status "$1" "$2")"
+    [ "$got" = 200 ] && break
+    sleep 2
+  done
+  echo "$got"
+}
+
+owl="${JAR_DIR}/owl"
+falconer="owl-${RUN}@${PLAYERS}"
+sign_up "$owl" "$falconer" >/dev/null
+check "the perch refuses a newcomer" 403 \
+  "$(curl -s -o /dev/null -w '%{http_code}' -b "$owl" -H "$JSON" -H 'content-type: application/json' -X POST "${GAME}/zones/perch/aviary" -d "$tools")"
+become_citizen "$owl" "$falconer"
+check "an MCP server route takes a token, not a browser session" 401 \
+  "$(curl -s -o /dev/null -w '%{http_code}' -b "$owl" -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' -X POST "${AVIARY}/mcp" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')"
+check "the Aviary lists its tools for a citizen's owl" tools "$(perch "$owl" aviary "$tools" | field outcome.kind)"
+check "whoami: the owl flies as the player" yes \
+  "$(perch "$owl" aviary "$(call whoami)" | field outcome.text | grep -q "$falconer" && echo yes || echo no)"
+check "ring_bell is allowed at the Aviary" result "$(perch "$owl" aviary "$(call ring_bell)" | field outcome.kind)"
+check "the Aviary refuses open_vault (deny: mcp_tool)" refused "$(perch "$owl" aviary "$(call open_vault)" | field outcome.kind)"
+check "the Rookery refuses an owl whose player is no falconer" refused "$(perch "$owl" rookery "$tools" | field outcome.kind)"
+check "the Mews refuses a citizen who is no falconer" 403 "$(status "$owl" /zones/mews/enter)"
+check "deliver_letter has the Oracle add falconers" yes \
+  "$(perch "$owl" aviary "$(call deliver_letter)" | field outcome.text | grep -q "\"granted\": \"$GROUP_FALCONERS\"" && echo yes || echo no)"
+check "the Mews still refuses (session holds old claims)" 403 "$(status "$owl" /zones/mews/enter)"
+sign_in_again "$owl" "$falconer" >/dev/null
+check "the Mews opens once the session carries falconers" 200 "$(gate_until "$owl" /zones/mews/enter)"
+check "the Rookery lists its tools for a falconer's owl" tools "$(perch_until "$owl" rookery "$tools" tools)"
+check "the vault refuses a falconer who holds no key" 403 "$(status "$owl" /zones/vault/enter)"
+check "the Rookery allows open_vault, and the Oracle adds keyholders" yes \
+  "$(perch "$owl" rookery "$(call open_vault)" | field outcome.text | grep -q "\"granted\": \"$GROUP_KEYHOLDERS\"" && echo yes || echo no)"
+check "the Aviary still refuses open_vault, even for a falconer" refused "$(perch "$owl" aviary "$(call open_vault)" | field outcome.kind)"
+sign_in_again "$owl" "$falconer" >/dev/null
+check "the vault opens once the session carries keyholders" 200 "$(gate_until "$owl" /zones/vault/enter)"
+check "a restart takes falconers and keyholders back too" 200 "$(status "$owl" /zones/oracle/reset POST)"
+
 echo "Taking the claims back"
 deed_before="$(curl -s -b "$citizen" -H "$JSON" "${GAME}/zones/oracle/" | grep -o '"deed":"[^"]*"')"
 check "a restart takes the claims back at the Oracle" 200 "$(status "$citizen" /zones/oracle/reset POST)"
@@ -164,7 +223,6 @@ builder_status() {
   curl -s -o /dev/null -w '%{http_code}' -b "$1" -H "$JSON" -H 'content-type: application/json' -X POST \
     "${GAME}/zones/builder/$2" -d "$3"
 }
-field() { node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{console.log(JSON.parse(s)[process.argv[1]])}catch{console.log("")}})' "$1"; }
 knock() { builder "$1" knock "{\"knocker\":\"$2\",\"method\":\"${3:-GET}\"}" | field status; }
 rules() { printf '{"rules":%s}' "$1"; }
 # Asks the builders once a second until Pomerium has taken up the house's latest rules; prints true or false.

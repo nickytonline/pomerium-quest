@@ -1,12 +1,14 @@
 import { Effect, Schema } from 'effect'
 import { GROUPS } from '../game/groups.ts'
 import { turnsAwayOwner, type HouseRule } from '../game/house.ts'
+import { OWL_TOOLS, ROOSTS } from '../game/owl.ts'
 import { SIGNED_IN_MESSAGE, ZONES } from '../game/zones.ts'
 import { QuestConfig } from './config.ts'
 import { InvalidRules } from './errors.ts'
 import { HouseRules, Houses } from './houses.ts'
 import { Visitors } from './visitors.ts'
 import { PomeriumIdentity, type Player } from './identity.ts'
+import { fly } from './perch.ts'
 import { OracleAdmin } from './oracle-admin.ts'
 import { json } from './runtime.ts'
 
@@ -53,7 +55,14 @@ const readBody =
       ),
     )
 
+/** What the perch sends: list the roost's tools, or call one of them. */
+const OwlRequest = Schema.Union([
+  Schema.Struct({ method: Schema.Literal('tools/list') }),
+  Schema.Struct({ method: Schema.Literal('tools/call'), tool: Schema.Literals(Object.values(OWL_TOOLS)) }),
+])
+
 const readKnock = readBody(KnockRequest)
+const readOwl = readBody(OwlRequest)
 const readRules = readBody(HouseRequest)
 
 /** Refuses rules whose deny would lock the owner out of their own door, whatever the editor allowed. */
@@ -88,9 +97,10 @@ const answerHouse = (request: Request, id: string) => {
 
 /** The zone whose route Pomerium matched: the longest prefix, so the scriptorium wins over the library. */
 const zoneAt = (path: string) =>
-  ZONES.filter((zone) => path === zone.prefix || path.startsWith(`${zone.prefix}/`)).sort(
-    (a, b) => b.prefix.length - a.prefix.length,
-  )[0]
+  ZONES.filter(
+    // A zone with a host of its own (an MCP server) isn't served here.
+    (zone) => !zone.host && (path === zone.prefix || path.startsWith(`${zone.prefix}/`)),
+  ).sort((a, b) => b.prefix.length - a.prefix.length)[0]
 
 export const handleZone = (request: Request, splat: string) =>
   Effect.gen(function* () {
@@ -191,6 +201,14 @@ export const handleZone = (request: Request, splat: string) =>
         return json(200, yield* visitors.knock(house.path, knocker, method, house.version))
       }
 
+      // The owl flies to the roost the path names. Pomerium decides what it may do there.
+      case 'POST perch/aviary':
+      case 'POST perch/rookery': {
+        const roost = ROOSTS.find((candidate) => candidate === action) ?? 'aviary'
+
+        return json(200, yield* fly(request, roost, yield* readOwl(request)))
+      }
+
       default:
         return json(200, {
           zone: zone.id,
@@ -208,8 +226,7 @@ export const handleZone = (request: Request, splat: string) =>
         Effect.succeed(json(401, { error: 'invalid Pomerium JWT', reason: error.reason })),
       OracleUnavailable: (error) =>
         Effect.succeed(json(502, { error: 'the Oracle is unreachable', reason: error.reason })),
-      InvalidRules: (error) =>
-        Effect.succeed(json(400, { error: 'invalid door rules', reason: error.reason })),
+      InvalidRules: (error) => Effect.succeed(json(400, { error: 'invalid request', reason: error.reason })),
       BuildersBusy: (error) =>
         Effect.succeed(
           Response.json(
