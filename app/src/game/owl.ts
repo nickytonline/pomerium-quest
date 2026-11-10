@@ -11,12 +11,15 @@ export const OWL_TOOLS = {
   scoutGrounds: 'scout_grounds',
   deliverLetter: 'deliver_letter',
   openVault: 'open_vault',
-  openCages: 'open_cages',
+  openCage: 'open_cage',
 } as const
 
 export type OwlTool = (typeof OWL_TOOLS)[keyof typeof OWL_TOOLS]
 
-/** Every tool whose name starts with this is forbidden to every owl: the Aviary's deny rule names the prefix. */
+/**
+ * Every tool whose name starts with this is kept for the owls of distinguished falconers, and so forbidden to
+ * the player's: the Aviary's deny rule names the prefix.
+ */
 export const FORBIDDEN_PREFIX = 'open_'
 
 export const isForbidden = (tool: string) => tool.startsWith(FORBIDDEN_PREFIX)
@@ -41,11 +44,12 @@ export const OWL_ERRANDS: Record<OwlTool, { readonly title: string; readonly des
   },
   [OWL_TOOLS.openVault]: {
     title: 'Open the vault',
-    description: "Unlocks the Royal Vault. The Aviary's orders forbid it to every owl.",
+    description: "Unlocks the Royal Vault. The Aviary's orders keep it for a distinguished falconer's owl.",
   },
-  [OWL_TOOLS.openCages]: {
-    title: 'Open the cages',
-    description: "Lets every bird in the Aviary loose. The Aviary's orders forbid it to every owl.",
+  [OWL_TOOLS.openCage]: {
+    title: 'Open the cage',
+    description:
+      "Unlocks the cage a stray owl is kept in. The Aviary's orders keep it for a distinguished falconer's owl.",
   },
 }
 

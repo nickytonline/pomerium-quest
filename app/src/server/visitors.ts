@@ -5,14 +5,25 @@ import {
   visitorPassword,
   type Knock,
   type Knocker,
+  type Visitor,
   type VisitorId,
 } from '../game/house.ts'
+import { FALCONER, type OwlCall, type OwlFlight } from '../game/perch.ts'
 import { QuestConfig } from './config.ts'
 import { VisitorLost } from './errors.ts'
 
 // The townsfolk who knock on players' houses. Each has a real account at the Oracle (./quest imports
 // them at deploy) and signs in through Pomerium like a player, so every knock is a real request that
-// Pomerium allows or refuses. A slime bot is the same request with no session at all.
+// Pomerium allows or refuses. A slime bot is the same request with no session at all. The Falconer has an
+// account too, and sends an owl of their own from the perch.
+
+/** Who can sign in from here: a house's visitor, or the Falconer. */
+type TownspersonId = VisitorId | 'falconer'
+
+const TOWNSFOLK: Record<TownspersonId, Visitor> = { ...VISITORS, falconer: FALCONER }
+
+/** The perch's own address on the game's host: a request there gets a token for whoever is signed in. */
+const PERCH_PATH = '/zones/perch/aviary'
 
 /** How long to wait for Pomerium to start enforcing a house's latest rules. */
 const PICKUP_MS = 45_000
@@ -54,6 +65,8 @@ export class Visitors extends Context.Service<
       method: 'GET' | 'POST',
       version: string,
     ) => Effect.Effect<Knock, VisitorLost>
+    /** Sends the Falconer's owl from the perch, on the Falconer's behalf: the same route a player's owl takes. */
+    readonly sendFalconersOwl: (call: OwlCall) => Effect.Effect<OwlFlight, VisitorLost>
   }
 >()('Visitors') {}
 
@@ -62,7 +75,7 @@ export const VisitorsLive = Layer.effect(
   Effect.gen(function* () {
     const config = yield* QuestConfig
     const origin = new URL(config.publicOrigin)
-    const jars = new Map<VisitorId, CookieJar>()
+    const jars = new Map<TownspersonId, CookieJar>()
 
     /** Follows redirects by hand, as a browser would, keeping cookies along the way. */
     const visit = (jar: CookieJar, start: URL, init: { method?: string; body?: URLSearchParams } = {}) =>
@@ -97,9 +110,9 @@ export const VisitorsLive = Layer.effect(
       })
 
     /** Signs a townsperson in through Pomerium and the Oracle, the way a browser does. */
-    const signIn = (id: VisitorId) =>
+    const signIn = (id: TownspersonId) =>
       Effect.gen(function* () {
-        const visitor = VISITORS[id]
+        const visitor = TOWNSFOLK[id]
         const password = visitorPassword(Redacted.value(config.visitorPassword), id)
 
         const jar = new CookieJar()
@@ -118,7 +131,7 @@ export const VisitorsLive = Layer.effect(
         return jar
       })
 
-    const sessionOf = (id: VisitorId) => {
+    const sessionOf = (id: TownspersonId) => {
       const jar = jars.get(id)
 
       return jar ? Effect.succeed(jar) : signIn(id)
@@ -171,12 +184,51 @@ export const VisitorsLive = Layer.effect(
         }
       })
 
+    /** One request to the perch as the Falconer: the status, and the flight the game's server reports. */
+    const perch = (jar: CookieJar, call: OwlCall) => {
+      const url = new URL(PERCH_PATH, origin)
+
+      return Effect.tryPromise({
+        try: async () => {
+          const response = await fetch(url, {
+            method: 'POST',
+            redirect: 'manual',
+            headers: {
+              cookie: jar.header(url),
+              accept: 'application/json',
+              'content-type': 'application/json',
+            },
+            body: JSON.stringify(call),
+          })
+
+          // SAFETY: a 200 from the perch's route is this server's own answer there, which is always an OwlFlight.
+          const flight = response.status === 200 ? ((await response.json()) as OwlFlight) : null
+
+          return { status: response.status, flight }
+        },
+        catch: (cause) => new VisitorLost({ reason: String(cause) }),
+      })
+    }
+
+    const sendFalconersOwl = (call: OwlCall) =>
+      Effect.gen(function* () {
+        let sent = yield* perch(yield* sessionOf('falconer'), call)
+
+        // A lost session (Pomerium restarted, or it expired) means signing in again, once.
+        if (sent.status === 401) sent = yield* perch(yield* signIn('falconer'), call)
+
+        if (!sent.flight)
+          return yield* new VisitorLost({ reason: `the perch answered the Falconer with ${sent.status}` })
+
+        return sent.flight
+      })
+
     // Sign everyone in up front, so the first visit is quick. A failure here is retried on
     // the first knock.
-    yield* Effect.forEach(VISITOR_IDS, (id) => Effect.ignore(signIn(id)), { discard: true }).pipe(
-      Effect.forkDetach,
-    )
+    yield* Effect.forEach([...VISITOR_IDS, 'falconer' as const], (id) => Effect.ignore(signIn(id)), {
+      discard: true,
+    }).pipe(Effect.forkDetach)
 
-    return { knock }
+    return { knock, sendFalconersOwl }
   }),
 )

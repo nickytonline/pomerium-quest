@@ -13,6 +13,7 @@ import { parseAllDocuments, stringify } from 'yaml'
 import { BASE_GROUP, GRANTED_GROUPS } from '../app/src/game/groups.ts'
 import { VISITORS, VISITOR_IDS, visitorPassword } from '../app/src/game/house.ts'
 import { AVIARY_HOST } from '../app/src/game/owl.ts'
+import { FALCONER } from '../app/src/game/perch.ts'
 import { policyDocument } from '../app/src/game/ppl.ts'
 import { ZONES, type Zone } from '../app/src/game/zones.ts'
 
@@ -716,21 +717,27 @@ const secrets = loadSecrets()
 
 mkdirSync(OUT, { recursive: true })
 
+/** Everyone in the game with an account of their own at the Oracle: the houses' visitors and the Falconer. */
+const ACCOUNTS = [
+  ...VISITOR_IDS.map((id) => ({ id, ...VISITORS[id] })),
+  { id: 'falconer', ...FALCONER } as const,
+]
+
 /**
- * The townsfolk who visit players' houses, as a Keycloak partial import. ./quest imports it at every
- * deploy, overwriting them, so their passwords and groups always match.
+ * The townsfolk who visit players' houses, and the Falconer, as a Keycloak partial import. ./quest imports
+ * it at every deploy, overwriting them, so their passwords and groups always match.
  */
 const townsfolk = (secrets: Secrets) => ({
   ifResourceExists: 'OVERWRITE',
-  users: VISITOR_IDS.map((id) => ({
-    username: VISITORS[id].email,
-    email: VISITORS[id].email,
+  users: ACCOUNTS.map(({ id, email, groups }) => ({
+    username: email,
+    email,
     enabled: true,
     emailVerified: true,
     credentials: [
       { type: 'password', value: visitorPassword(secrets.visitorPassword, id), temporary: false },
     ],
-    groups: VISITORS[id].groups.map((group) => `/${group}`),
+    groups: groups.map((group) => `/${group}`),
   })),
 })
 

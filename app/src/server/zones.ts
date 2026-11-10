@@ -220,6 +220,14 @@ export const handleZone = (request: Request, splat: string) =>
       case 'POST perch/aviary':
         return json(200, yield* fly(request, yield* readOwl(request)))
 
+      // The Falconer sends their own owl to open the cage, since the player's may not. It is a real call, made
+      // with the Falconer's session, so Pomerium decides it on the Falconer's behalf, not the player's.
+      case 'POST perch/falconer': {
+        const visitors = yield* Visitors
+
+        return json(200, yield* visitors.sendFalconersOwl({ method: 'tools/call', tool: OWL_TOOLS.openCage }))
+      }
+
       default:
         return json(200, {
           zone: zone.id,

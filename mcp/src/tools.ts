@@ -22,6 +22,9 @@ const failure = (error: string): CallToolResult => ({ ...answer({ error }), isEr
 /** The errand that ends in a letter to the Oracle, and the group it asks him for. */
 const LETTERS = { [OWL_TOOLS.deliverLetter]: GROUPS.keyholders } as const
 
+/** The errands that change something, so a client knows they are more than a look. */
+const CHANGES: ReadonlySet<OwlTool> = new Set([OWL_TOOLS.deliverLetter, OWL_TOOLS.openCage])
+
 /**
  * Registers the owl's tools for one request. `verified` is who Pomerium says is calling; without it every
  * tool refuses, since a call that skipped Pomerium has no one to act for.
@@ -29,7 +32,7 @@ const LETTERS = { [OWL_TOOLS.deliverLetter]: GROUPS.keyholders } as const
 export function registerTools(server: McpServer, verified: Verified, grant: Grant): void {
   const annotated = (tool: OwlTool) => ({
     ...OWL_ERRANDS[tool],
-    annotations: { readOnlyHint: !(tool in LETTERS), idempotentHint: true, openWorldHint: false },
+    annotations: { readOnlyHint: !CHANGES.has(tool), idempotentHint: true, openWorldHint: false },
   })
 
   const act = async (tool: OwlTool, errand: (caller: Caller) => Promise<Answer> | Answer) => {
@@ -77,8 +80,8 @@ export function registerTools(server: McpServer, verified: Verified, grant: Gran
     return { granted: group, to: caller.email, refreshRequired: true }
   })
 
-  // The Aviary's route denies every open_ tool, so these only answer a caller that skipped its policy.
-  // They do nothing either way.
+  // The Aviary's route denies every open_ tool to all but a distinguished falconer's owl, so only such an
+  // owl's call gets here. The cage holds the stray owl the keeper took in; the vault opens for no owl at all.
   run(OWL_TOOLS.openVault, () => ({ opened: false, reason: 'the vault has no lock an owl can turn' }))
-  run(OWL_TOOLS.openCages, () => ({ opened: false, reason: 'the cages stay shut' }))
+  run(OWL_TOOLS.openCage, (caller) => ({ opened: true, openedFor: caller.email, freed: 'a white owl' }))
 }

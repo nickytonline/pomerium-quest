@@ -430,7 +430,7 @@ export function buildWorld(): World {
     { x: 31, y: 40, tool: OWL_TOOLS.deliverLetter },
     // Beside the vault it would open, if any policy allowed it.
     { x: 35, y: 38, tool: OWL_TOOLS.openVault },
-    { x: 19, y: 41, tool: OWL_TOOLS.openCages },
+    { x: 19, y: 41, tool: OWL_TOOLS.openCage },
   ]
 
   // Only the Aviary has a sign. A perch needs none: walking into it already names its errand.

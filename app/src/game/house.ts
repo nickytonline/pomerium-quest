@@ -43,7 +43,9 @@ export function turnsAwayOwner(rules: readonly HouseRule[], owner: Identity) {
 }
 
 /** The checks the editor offers. All of them work in open-source Pomerium. */
-export type HouseCriterion = Exclude<Criterion, { readonly kind: 'claim' | 'mcp_tool' }> | HouseClaimCriterion
+export type HouseCriterion =
+  | Exclude<Criterion, { readonly kind: 'claim' | 'claim_exclude' | 'mcp_tool' }>
+  | HouseClaimCriterion
 
 /** The deed claim is the house's own door; the editor offers the groups claim only, as the server allows. */
 type HouseClaimCriterion = Extract<Criterion, { readonly kind: 'claim' }> & { readonly claim: 'groups' }
@@ -84,8 +86,8 @@ export const VISITORS: Record<VisitorId, Visitor> = {
 
 export const VISITOR_IDS: readonly VisitorId[] = ['baker', 'traveler', 'captain', 'librarian']
 
-/** Each visitor's password at the Oracle: the deploy's shared secret and their name. */
-export const visitorPassword = (secret: string, id: VisitorId) => `${secret}-${id}`
+/** Each townsperson's password at the Oracle: the deploy's shared secret and their name. */
+export const visitorPassword = (secret: string, id: VisitorId | 'falconer') => `${secret}-${id}`
 
 /** A slime bot is a request with no session at all. */
 export type Knocker = VisitorId | 'slime'

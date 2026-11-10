@@ -3,6 +3,7 @@
  * set of players; the stages (citizen, knight) are singular, since they describe one player. The Oracle keeps
  * every group but scribes, which no one can hold, so the scriptorium stays shut. Falconers and keyholders
  * are chapter two's: the Falconer vouches for the first, and one of the owl's errands earns the second (see owl.ts).
+ * Distinguished falconers are the few whose owls may open things. The Falconer is one, and no player ever is.
  */
 export const GROUPS = {
   citizens: 'citizens',
@@ -11,6 +12,7 @@ export const GROUPS = {
   scribes: 'scribes',
   falconers: 'falconers',
   keyholders: 'keyholders',
+  distinguishedFalconers: 'distinguished-falconers',
 } as const
 
 /** Every group the Oracle can grant a player, and so takes back when they start over. */

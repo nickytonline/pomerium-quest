@@ -53,6 +53,8 @@ function criterionYaml(node: Criterion): readonly string[] {
       return ['authenticated_user: true']
     case 'claim':
       return [`claim/${node.claim}: ${claimValue(node.claim, node.value)}`]
+    case 'claim_exclude':
+      return [`claim/${node.claim}:`, `  exclude: ${claimValue(node.claim, node.value)}`]
     case 'mcp_tool':
       return ['mcp_tool:', `  starts_with: ${node.startsWith}`]
     case 'domain':
@@ -71,6 +73,8 @@ function criterionLabel(node: Criterion): string {
       return 'authenticated_user: true'
     case 'claim':
       return `claim/${node.claim}: ${claimValue(node.claim, node.value)}`
+    case 'claim_exclude':
+      return `claim/${node.claim}: { exclude: ${claimValue(node.claim, node.value)} }`
     case 'mcp_tool':
       return `mcp_tool: { starts_with: ${node.startsWith} }`
     case 'domain':
@@ -127,6 +131,12 @@ function check(node: Criterion, id: Identity, req: RequestInfo, whose: Viewpoint
 
       return { ok: values.includes(node.value), actual: `${whose} ${node.claim}: [${values.join(', ')}]` }
     }
+
+    case 'claim_exclude': {
+      const values = CLAIM_VALUES[node.claim](id)
+
+      return { ok: !values.includes(node.value), actual: `${whose} ${node.claim}: [${values.join(', ')}]` }
+    }
   }
 }
 
@@ -175,6 +185,8 @@ function criterionDocument(node: Criterion) {
       return { authenticated_user: true }
     case 'claim':
       return { [`claim/${node.claim}`]: node.value }
+    case 'claim_exclude':
+      return { [`claim/${node.claim}`]: { exclude: node.value } }
     case 'mcp_tool':
       return { mcp_tool: { starts_with: node.startsWith } }
     case 'domain':

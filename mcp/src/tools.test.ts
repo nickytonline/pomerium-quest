@@ -65,7 +65,7 @@ describe('the owl’s tools', () => {
 
     expect((await call(OWL_TOOLS.deliverLetter)).data).toMatchObject({ granted: GROUPS.keyholders })
 
-    for (const tool of [OWL_TOOLS.ringBell, OWL_TOOLS.scoutGrounds, OWL_TOOLS.openVault, OWL_TOOLS.openCages])
+    for (const tool of [OWL_TOOLS.ringBell, OWL_TOOLS.scoutGrounds, OWL_TOOLS.openVault, OWL_TOOLS.openCage])
       expect(await call(tool), tool).toMatchObject({ failed: false })
 
     expect(granted).toEqual([`nick@example.org -> ${GROUPS.keyholders}`])

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { parse } from 'yaml'
-import { GROUPS } from './groups.ts'
+import { GRANTED_GROUPS, GROUPS } from './groups.ts'
 import { OWL_TOOLS, isForbidden, type OwlTool } from './owl.ts'
+import { FALCONER } from './perch.ts'
 import { decide, policyDocument, policyYaml, type Identity } from './ppl.ts'
 import { ZONES, zoneById, type PolicyRule, type ZoneId } from './zones.ts'
 
@@ -47,33 +48,43 @@ describe('the owl is checked on the player’s behalf, one tool call at a time',
       expect(owlAllowed(falconer, tool), tool).toBe(true)
   })
 
-  it('forbids every open_ tool to every owl with one deny rule', () => {
+  it('forbids every open_ tool to a player’s owl with one deny rule, whatever groups a player can earn', () => {
     const forbidden = Object.values(OWL_TOOLS).filter(isForbidden)
 
-    expect(forbidden).toEqual([OWL_TOOLS.openVault, OWL_TOOLS.openCages])
+    expect(forbidden).toEqual([OWL_TOOLS.openVault, OWL_TOOLS.openCage])
 
     for (const tool of forbidden) {
       expect(owlAllowed(falconer, tool), tool).toBe(false)
-      expect(owlAllowed(person('k@example.org', Object.values(GROUPS)), tool), tool).toBe(false)
+      expect(owlAllowed(person('k@example.org', GRANTED_GROUPS), tool), tool).toBe(false)
     }
 
     expect(zoneById('aviary').policy.filter((rule) => rule.action === 'deny')).toHaveLength(1)
   })
 
-  it('never puts a tool check and a group check in the same rule', () => {
-    // Two criteria under one operator would read as "and" in the game, but a rule with two operators is
-    // joined with "or" in Pomerium, and open-source PPL can't negate a claim inside an and.
-    for (const rule of ZONES.flatMap((zone) => zone.policy)) {
-      const kinds = new Set(rule.criteria.map((criterion) => criterion.kind))
+  it('lets the Falconer’s owl call the open_ tools, and everything a player’s owl may', () => {
+    const distinguished = person(FALCONER.email, FALCONER.groups)
 
-      expect(kinds.has('mcp_tool') && kinds.size > 1).toBe(false)
-    }
+    expect(allowed('perch', distinguished, 'POST')).toBe(true)
+    expect(owlAllowed(distinguished)).toBe(true)
+
+    for (const tool of Object.values(OWL_TOOLS)) expect(owlAllowed(distinguished, tool), tool).toBe(true)
   })
 
-  it('writes the deny rule with starts_with, as Pomerium reads it', () => {
+  it('never grants a player the group that opens things', () => {
+    expect(GRANTED_GROUPS).not.toContain(GROUPS.distinguishedFalconers)
+  })
+
+  it('writes the deny rule with starts_with and exclude, as Pomerium reads it', () => {
     expect(policyDocument(zoneById('aviary').policy)).toEqual([
       { allow: { and: [{ 'claim/groups': GROUPS.falconers }] } },
-      { deny: { or: [{ mcp_tool: { starts_with: 'open_' } }] } },
+      {
+        deny: {
+          and: [
+            { mcp_tool: { starts_with: 'open_' } },
+            { 'claim/groups': { exclude: GROUPS.distinguishedFalconers } },
+          ],
+        },
+      },
     ])
   })
 

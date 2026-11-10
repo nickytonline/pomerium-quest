@@ -17,6 +17,8 @@ export type Criterion =
   | { readonly kind: 'email'; readonly is: string }
   | { readonly kind: 'http_method'; readonly is: 'GET' | 'POST' }
   | { readonly kind: 'claim'; readonly claim: ClaimName; readonly value: string }
+  /** Matches when the claim's list does not hold the value: `claim/groups: { exclude: knights }`. */
+  | { readonly kind: 'claim_exclude'; readonly claim: ClaimName; readonly value: string }
   /** Matches an MCP tools/call request for a tool whose name starts this way, and nothing else: not even a tools/list. */
   | { readonly kind: 'mcp_tool'; readonly startsWith: string }
 
@@ -67,7 +69,7 @@ export interface Zone {
 export const SIGNED_IN_MESSAGE = 'pomerium-quest/signed-in'
 
 const all = (...criteria: Criterion[]): PolicyRule => ({ action: 'allow', match: 'and', criteria })
-const denyAny = (...criteria: Criterion[]): PolicyRule => ({ action: 'deny', match: 'or', criteria })
+const denyAll = (...criteria: Criterion[]): PolicyRule => ({ action: 'deny', match: 'and', criteria })
 const signedIn: Criterion = { kind: 'authenticated_user' }
 const inGroup = (value: string): Criterion => ({ kind: 'claim', claim: 'groups', value })
 
@@ -116,13 +118,20 @@ export const ZONES: readonly Zone[] = [
   // server sends the owl's tool calls with it. Anyone the keep admits may send an owl.
   { id: 'perch', name: "The Owl's Perch", prefix: '/zones/perch', policy: [keepsRule], mcp: 'client' },
   // The Aviary is the MCP server, behind this one route. Only a falconer's owl gets in at all. One deny rule
-  // then forbids a class of tools to every owl, by the start of their names: a deny beats the allow.
+  // then keeps a class of tools, by the start of their names, for the owls of distinguished falconers: the
+  // rule matches a call to such a tool from anyone whose groups lack that one, and a deny beats the allow.
   {
     id: 'aviary',
     name: 'The Aviary',
     host: AVIARY_HOST,
     prefix: MCP_PATH,
-    policy: [all(inGroup(GROUPS.falconers)), denyAny({ kind: 'mcp_tool', startsWith: FORBIDDEN_PREFIX })],
+    policy: [
+      all(inGroup(GROUPS.falconers)),
+      denyAll(
+        { kind: 'mcp_tool', startsWith: FORBIDDEN_PREFIX },
+        { kind: 'claim_exclude', claim: 'groups', value: GROUPS.distinguishedFalconers },
+      ),
+    ],
     mcp: 'server',
   },
   // The end of chapter two, as the keep ends chapter one: one rule, asking for everything both chapters earn.

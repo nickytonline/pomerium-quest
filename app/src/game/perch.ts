@@ -1,7 +1,20 @@
 // What a perch sends and hears. Sending the owl from a perch is a tool call: the browser asks the game
 // server (through Pomerium's /zones/perch route), and the server makes the real MCP request to the
 // Aviary, through Pomerium again, with the token Pomerium gave it for the player.
+import { GROUPS } from './groups.ts'
+import { TOWNSFOLK_DOMAIN, type Visitor } from './house.ts'
 import type { MochisOwlAt, OwlTool } from './owl.ts'
+
+/**
+ * The Falconer has a real account at the Oracle, like the townsfolk who visit houses, so an errand their owl
+ * runs is a real tool call that Pomerium checks. They hold every group the perch and the Aviary ask for, and
+ * the one no player holds: distinguished falconers, whose owls may call the open_ tools.
+ */
+export const FALCONER: Visitor = {
+  name: 'the Falconer',
+  email: `falconer@${TOWNSFOLK_DOMAIN}`,
+  groups: [GROUPS.citizens, GROUPS.knights, GROUPS.scholars, GROUPS.falconers, GROUPS.distinguishedFalconers],
+}
 
 /** What a tool call carries besides the tool's name. Only the scouting errand takes anything. */
 export type OwlArgs = { readonly mochisOwl?: MochisOwlAt | undefined }
