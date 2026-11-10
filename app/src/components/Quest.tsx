@@ -10,12 +10,14 @@ import {
 import { probe } from '../game/access.ts'
 import { startOver } from '../game/restart.ts'
 import { SHEETS } from '../game/sheets.ts'
+import { ChapterTwoEnd, Perch } from './Aviary.tsx'
 import { Celebration } from './Celebration.tsx'
 import { HouseEditor } from './House.tsx'
 import { Phished } from './Phished.tsx'
 import { PolicyLines } from './PolicyLines.tsx'
 import { TAB_EVENT, TabbedScreen, switchTab, tabHint } from './TabbedScreen.tsx'
-import { INTRO, LESSONS, LESSON_ORDER, type Choice } from '../game/content.ts'
+import { CHAPTER_ONE_LESSONS, INTRO, LESSONS, LESSON_ORDER, type Choice } from '../game/content.ts'
+import { owlMachine, type OwlStage } from '../game/owl-machine.ts'
 import { KNIGHT_QUOTA, questMachine, type QuestStage } from '../game/quest-machine.ts'
 import { MAX_HP, SETTLE_MS, paused, quest, useQuest, type DenyView, type Dir } from '../game/store.ts'
 import { decide, type Identity } from '../game/ppl.ts'
@@ -37,6 +39,17 @@ const STAGE_LABEL: Record<QuestStage, string> = {
   knighted: 'Knighted (stale claims)',
   knight: 'Knight',
   armed: 'Armed knight',
+}
+
+const OWL_LABEL: Record<OwlStage, string> = {
+  afar: '',
+  arrived: 'Beyond the keep',
+  fledged: 'Owl keeper',
+  vouched: 'Falconer (stale claims)',
+  falconer: 'Falconer',
+  entrusted: 'Keyholder (stale claims)',
+  keyholder: 'Keyholder',
+  crowned: 'Keeper of the Royal Seal',
 }
 
 const TOAST_TONE: Record<'allow' | 'deny' | 'info', string> = {
@@ -68,6 +81,8 @@ const linkButton = 'mt-2.5 border-0 bg-transparent p-0 text-[0.8rem] text-muted 
 
 const stageDescription = (stage: QuestStage) =>
   questMachine.getStateNodeById(`quest.${stage}`).description ?? ''
+
+const owlDescription = (stage: OwlStage) => owlMachine.getStateNodeById(`owl.${stage}`).description ?? ''
 
 function useMedia(query: string) {
   return useSyncExternalStore(
@@ -139,8 +154,13 @@ function useDialogKeys() {
       const { celebrating, deny, dialog, finale, houseEditor, journalOpen, menuOpen, phished, signIn } =
         quest.get()
 
-      // The celebration and phished screens, and the house's desk, handle their own keys.
-      if (celebrating || phished || houseEditor) return
+      const { chapterTwoDone, perch } = quest.get()
+
+      // The celebration and phished screens, the house's desk, and chapter two's ending handle their own keys.
+      // So does the owl's perch, unless a dialog, a refusal or a sign-in is in front of it.
+      if (celebrating || phished || houseEditor || (chapterTwoDone && !dialog)) return
+
+      if (perch && !dialog && !deny && !signIn) return
       const journalKey = event.key === 'i' || event.key === 'I'
       const confirm = event.key === 'Enter' || event.key === ' ' || event.key === 'e' || event.key === 'E'
 
@@ -405,7 +425,7 @@ function Kingdom() {
           Pomerium Quest
         </h1>
         <p className="m-0 text-xs tracking-[0.04em] text-muted uppercase max-sm:hidden">
-          Chapter one · Identity and access
+          <ChapterTitle />
         </p>
         <div className="ml-auto flex gap-2">
           {!wide && <JournalButton />}
@@ -427,6 +447,7 @@ function Kingdom() {
               <GameCanvas view={board?.view} />
               <Toast />
               <DialogBox />
+              <Perch />
               <DenyScreen />
               <HouseEditor />
               <PauseMenu />
@@ -445,10 +466,18 @@ function Kingdom() {
       </div>
       <SignInSheet />
       <Finale />
+      <ChapterTwoEnd />
       <Celebration />
       <Phished />
     </div>
   )
+}
+
+/** Chapter two starts on the far side of the Royal Keep. */
+function ChapterTitle() {
+  const beyondKeep = useQuest((s) => s.owlStage !== 'afar')
+
+  return beyondKeep ? 'Chapter two · Agents and MCP' : 'Chapter one · Identity and access'
 }
 
 function JournalButton() {
@@ -1035,10 +1064,11 @@ function FinalePomerium({ identity }: { readonly identity: Identity }) {
         the request to the app behind the route. Every guard you passed worked the same way.
       </p>
       <p className="mt-3 mb-1 text-[0.72rem] tracking-[0.08em] text-paper-muted uppercase">
-        Lessons learned · {LESSON_ORDER.filter((id) => learned.includes(id)).length} of {LESSON_ORDER.length}
+        Lessons learned · {CHAPTER_ONE_LESSONS.filter((id) => learned.includes(id)).length} of{' '}
+        {CHAPTER_ONE_LESSONS.length}
       </p>
       <ol className="m-0 grid list-decimal gap-x-6 gap-y-[3px] pl-[1.4em] text-[0.82rem] sm:grid-cols-2">
-        {LESSON_ORDER.map((id) =>
+        {CHAPTER_ONE_LESSONS.map((id) =>
           learned.includes(id) ? (
             <li key={id}>
               <a href={LESSONS[id].link.href} target="_blank" rel="noreferrer">
@@ -1259,6 +1289,11 @@ function DPad() {
 function IdentityPanel() {
   const identity = useQuest((s) => s.identity)
   const stage = useQuest((s) => s.stage)
+  const owl = useQuest((s) => s.owlStage)
+
+  // Beyond the keep, the owl's errands are the story the panel tells.
+  const [label, description] =
+    owl === 'afar' ? [STAGE_LABEL[stage], stageDescription(stage)] : [OWL_LABEL[owl], owlDescription(owl)]
 
   const claims = identity.authenticated
     ? JSON.stringify({ email: identity.email, groups: identity.groups, deed: identity.deed }, null, 2)
@@ -1273,8 +1308,8 @@ function IdentityPanel() {
         <p className={`my-[15px] ${panelMuted}`}>No session. Visit the Oracle to sign in.</p>
       )}
       <p className="mt-2.5 grid gap-0.5">
-        <span className="font-semibold">{STAGE_LABEL[stage]}</span>
-        <span className={panelMuted}>{stageDescription(stage)}</span>
+        <span className="font-semibold">{label}</span>
+        <span className={panelMuted}>{description}</span>
       </p>
     </section>
   )
