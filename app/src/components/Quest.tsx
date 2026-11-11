@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from 'react'
 import { probe } from '../game/access.ts'
-import { settleRestart, startOver, wasRestarted } from '../game/restart.ts'
+import { endSession, settleRestart, startOver, wasRestarted } from '../game/restart.ts'
 import { SHEETS } from '../game/sheets.ts'
 import { ChapterTwoEnd, FalconersErrand, Perch } from './Aviary.tsx'
 import { Celebration } from './Celebration.tsx'
@@ -133,14 +133,25 @@ function useBoot() {
     const returning = url.searchParams.has('signedin')
 
     if (returning) history.replaceState(null, '', url.pathname)
-    void probe().then(async ({ mode, identity: seen }) => {
+    void probe().then(async (first) => {
+      const restarted = wasRestarted()
+      let { mode, identity: seen } = first
+
+      // A start over ends the session, so one that is still here missed the sign-out: end it again, so the
+      // player logs in fresh rather than waiting on the last game's claims. Not when they just logged in.
+      if (restarted && seen.authenticated && !returning) {
+        ;({ mode, identity: seen } = await endSession())
+      }
+
       quest.setMode(mode, seen)
 
-      // After a start over, a session that outlived the sign-out still carries the last game's claims.
-      const restarted = wasRestarted()
-      const identity = restarted ? await clearLeftoverClaims(seen, true) : seen
+      // A session that survives even that still carries the last game's claims.
+      const { identity, clean } = restarted
+        ? await clearLeftoverClaims(seen, true)
+        : { identity: seen, clean: true }
 
-      if (seen.authenticated) settleRestart()
+      // Until the session is known to be clean, a reload must find the marker and deal with it again.
+      if (seen.authenticated && clean) settleRestart()
 
       if (identity !== seen) quest.setIdentity(identity)
 
@@ -276,6 +287,9 @@ const begin = () => {
 
   quest.progress({ playedBefore: true })
   quest.start()
+
+  // Continuing after a quit: a night that was left behind is picked up again, if claims are still pending.
+  void startNight()
 
   // Open the intro after this keypress finishes, so the same Enter doesn't also advance it.
   if (firstTime) setTimeout(() => quest.say(INTRO), 0)

@@ -362,8 +362,8 @@ function signInWithPomerium(url: string, onSignedIn: (next: Identity) => void, o
           return
         }
 
-        void clearLeftoverClaims(next, wasRestarted()).then((fresh) => {
-          settleRestart()
+        void clearLeftoverClaims(next, wasRestarted()).then(({ identity: fresh, clean }) => {
+          if (clean) settleRestart()
           groupsBeforeSignIn = identity().authenticated ? identity().groups : null
           quest.setIdentity(fresh)
           quest.signedIn(fresh)
@@ -379,27 +379,38 @@ function signInWithPomerium(url: string, onSignedIn: (next: Identity) => void, o
  * A newcomer's save is empty, so any claims their sign-in carries belong to an earlier game that was never taken
  * back (a restart while the session had lapsed can't reach the Oracle). The Oracle takes them back now, and the
  * game waits for Pomerium's refresh to drop them, so a new game never starts with the old one's claims.
+ * `clean` says the session is known to be free of them, so a restart's marker can go. Otherwise it stays, and
+ * the next boot deals with the session again.
  */
-export async function clearLeftoverClaims(next: Identity, restarted = false): Promise<Identity> {
+export async function clearLeftoverClaims(
+  next: Identity,
+  restarted = false,
+): Promise<{ identity: Identity; clean: boolean }> {
   // The quest is still anonymous before the first sign-in is applied, so a restart is told apart by its flag.
   const fresh = stage() === 'newcomer' || (restarted && stage() === 'anonymous')
 
-  if (!next.authenticated || !fresh || (next.groups.length === 0 && !next.deed)) return next
+  if (!next.authenticated || !fresh || (next.groups.length === 0 && !next.deed)) {
+    return { identity: next, clean: true }
+  }
 
   const outcome = await requestZone(zoneById('oracle'), 'POST', 'reset')
 
-  if (outcome.kind !== 'allow') return next
+  if (outcome.kind !== 'allow') return { identity: next, clean: false }
 
   quest.toast('The Oracle is taking back claims from your last game.', 'info')
 
-  // If Pomerium hasn't refreshed in time, the claims are still gone at the Oracle: never carry the old ones on.
-  return (
-    (await waitForClaims((id) => id.groups.length === 0 && !id.deed)) ?? {
-      ...next,
-      groups: [],
-      deed: undefined,
-    }
-  )
+  const refreshed = await waitForClaims((id) => id.groups.length === 0 && !id.deed)
+
+  if (refreshed) return { identity: refreshed, clean: true }
+
+  // Pomerium hasn't refreshed in time. The session may have ended meanwhile, and then there is nothing to
+  // carry: never restore a signed-in identity that is gone.
+  const { identity: now } = await probe()
+
+  if (!now.authenticated) return { identity: now, clean: true }
+
+  // The claims are gone at the Oracle, so never carry the old ones on, but the session still holds them.
+  return { identity: { ...now, groups: [], deed: undefined }, clean: false }
 }
 
 /** What the Oracle says to a newcomer who has signed in: the sage has news. */
@@ -525,6 +536,9 @@ export const DAWN_MS = 2500
 /** True from nightfall until the session carries the new claims, so a second night can't start on top. */
 let nightFalling = false
 
+/** The game (epoch) that owns the night under way, so a night left behind can't end one that replaced it. */
+let nightEpoch = -1
+
 /** Whoever is asleep in a bed, to be woken when morning comes. */
 let asleep: Sleep | null = null
 
@@ -535,10 +549,12 @@ let asleep: Sleep | null = null
  * Oracle's letter, once the refreshed token carries the claims. The player may sleep in any bed or wander.
  */
 export async function startNight(): Promise<'fresh' | undefined> {
-  if (nightFalling || !claimsPending()) return undefined
-  nightFalling = true
-
   const epoch = quest.get().epoch
+
+  // A night left behind (the player quit) is still winding down: it doesn't block the one that replaces it.
+  if ((nightFalling && nightEpoch === epoch) || !claimsPending()) return undefined
+  nightFalling = true
+  nightEpoch = epoch
   const awarded = staleGroups()
   const ready = (id: Identity) => !claimsPendingFor(id)
 
@@ -547,7 +563,7 @@ export async function startNight(): Promise<'fresh' | undefined> {
   const { identity: now } = await probe()
 
   // The game was reset or left while the probe was out: its answer belongs to a game that is gone.
-  if (quest.get().epoch !== epoch) return cancelNight()
+  if (quest.get().epoch !== epoch) return cancelNight(epoch)
 
   if (now.authenticated && ready(now)) {
     nightFalling = false
@@ -570,7 +586,7 @@ export async function startNight(): Promise<'fresh' | undefined> {
   const arrived = waitForClaims(ready)
 
   void Promise.all([arrived, lasted]).then(([next]) => {
-    if (quest.get().epoch !== epoch) return cancelNight()
+    if (quest.get().epoch !== epoch) return cancelNight(epoch)
 
     nightFalling = false
     quest.setNight(false)
@@ -591,17 +607,36 @@ export async function startNight(): Promise<'fresh' | undefined> {
     quest.setIdentity(next)
     quest.signedIn(next)
     const fades = matchMedia('(prefers-reduced-motion: no-preference)').matches
-    setTimeout(
-      () => {
-        if (quest.get().epoch === epoch) morningLetter(next, awarded)
-      },
-      fades ? DAWN_MS : 0,
-    )
+    setTimeout(() => whenQuiet(epoch, () => morningLetter(next, awarded)), fades ? DAWN_MS : 0)
+  })
+}
+
+/**
+ * Runs `deliver` once nothing is being said, so a letter never replaces a dialogue or a refusal and drops its
+ * completion callback. A game that was reset or left meanwhile gets no letter.
+ */
+function whenQuiet(epoch: number, deliver: () => void) {
+  const attempt = () => {
+    if (quest.get().epoch !== epoch) return true
+
+    if (quest.get().dialog || quest.get().deny) return false
+    deliver()
+
+    return true
+  }
+
+  if (attempt()) return
+
+  const stop = quest.subscribe(() => {
+    if (attempt()) stop()
   })
 }
 
 /** Drops a night that belongs to a game that was reset or left: it accepts no session and wakes no one late. */
-function cancelNight(): undefined {
+function cancelNight(epoch: number): undefined {
+  // The player came back and a new night took over: it owns the flag and the sleeper now.
+  if (nightEpoch !== epoch) return undefined
+
   nightFalling = false
   asleep?.wakeUp()
   asleep = null

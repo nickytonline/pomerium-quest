@@ -26,7 +26,7 @@ export async function startOver() {
   quest.resetProgress()
   markRestarted()
 
-  if (identity.authenticated) await signOut()
+  if (identity.authenticated) await endSession()
 
   location.reload()
 }
@@ -35,14 +35,30 @@ export async function startOver() {
  * Ends the Pomerium session without leaving the game. A page visit would stop on Pomerium's signed-out page,
  * and landing back in the game needs the open allow_any_sign_out_redirect_uri flag, which the game leaves off.
  * A fetch follows the redirect to the authenticate service, which ends the session, and a frame couldn't:
- * that service refuses to be framed. The response is opaque, which is fine, since only the effect matters.
+ * that service refuses to be framed. The response is opaque, so it can't say whether the session ended.
  */
 async function signOut() {
   try {
     await fetch('/.pomerium/sign_out', { mode: 'no-cors', credentials: 'include' })
   } catch {
-    // The reload below shows whether the session ended: a lapsed one asks for a login.
+    // The probe that follows shows whether the session ended: a lapsed one asks for a login.
   }
+}
+
+/**
+ * Signs out, then asks Pomerium whether the session is really gone, and tries once more if it is not. Returns
+ * the last answer. A session that survives both is dealt with at the next boot, which the restart marker keeps.
+ */
+export async function endSession() {
+  await signOut()
+
+  const first = await probe()
+
+  if (!first.identity.authenticated) return first
+
+  await signOut()
+
+  return probe()
 }
 
 const RESTARTED_KEY = 'quest:restarted'
