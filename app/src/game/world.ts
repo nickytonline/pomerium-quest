@@ -183,6 +183,32 @@ export const BEDS = {
   hut: { x: 33, y: 31 },
 } as const satisfies Record<string, Point>
 
+type BedId = keyof typeof BEDS
+
+const BED_IDS: readonly BedId[] = ['guest', 'home', 'inn', 'hut']
+
+/** Where each bed is, in the words a player is told. */
+const BED_PLACES: Record<BedId, string> = {
+  guest: "the sage's guest bed, in the house in Hearth Village",
+  home: 'your own bed, in your house',
+  inn: 'the inn just off the town square',
+  hut: "the falconer's hut in the Aviary",
+}
+
+/** The closest bed to a point, as a sentence: its place and which way to walk. Your own bed needs a house to go to. */
+export function nearestBed(from: Point, hasHouse: boolean): string {
+  const ids = BED_IDS.filter((id) => id !== 'home' || hasHouse)
+  const dist = (id: BedId) => Math.abs(BEDS[id].x - from.x) + Math.abs(BEDS[id].y - from.y)
+  const id = ids.reduce((best, next) => (dist(next) < dist(best) ? next : best), 'guest')
+  const dx = BEDS[id].x - from.x
+  const dy = BEDS[id].y - from.y
+  const ns = Math.abs(dy) < 3 ? '' : dy < 0 ? 'north' : 'south'
+  const ew = Math.abs(dx) < 3 ? '' : dx < 0 ? 'west' : 'east'
+  const way = `${ns}${ns && ew ? '-' : ''}${ew}`
+
+  return way ? `${BED_PLACES[id]}, to the ${way}` : `${BED_PLACES[id]}, right here`
+}
+
 export const inHouse = (point: Point) =>
   point.x >= HOUSE.inside.x0 &&
   point.x <= HOUSE.inside.x1 &&

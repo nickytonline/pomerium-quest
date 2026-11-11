@@ -515,7 +515,6 @@ export function startNight() {
   const awarded = staleGroups()
   const needsDeed = isAtLeast('granted')
   quest.setNight(true)
-  quest.toast('Night falls. Sleep in any bed, or wait until morning.', 'info')
 
   void waitForClaims((next) => missingGroups(next).length === 0 && (!needsDeed || Boolean(next.deed))).then(
     (next) => {

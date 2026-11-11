@@ -55,6 +55,7 @@ import {
   isFountain,
   buildWorld,
   inHouse,
+  nearestBed,
   regionAt,
   same,
   type Gate,
@@ -1729,6 +1730,11 @@ export class KingdomScene extends Phaser.Scene {
     const animated = matchMedia('(prefers-reduced-motion: no-preference)').matches
 
     if (night) {
+      quest.toast(
+        `Night falls. The nearest bed is ${nearestBed(this.pos, houseStage() !== 'unowned')}. Sleep there, or wait for morning.`,
+        'info',
+      )
+
       const added = this.add
         .rectangle(0, 0, this.scale.width * 4, this.scale.height * 4, 0x0b1026)
         .setScrollFactor(0)
