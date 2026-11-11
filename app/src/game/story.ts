@@ -567,12 +567,10 @@ const refreshPage = (): Page => ({
   links: [link('refresh')],
 })
 
-/** Rather than send the player back to his temple, the Oracle appears beside them with their new claim. */
-export function oracleArrives(letter: string) {
-  quest.summonOracle()
+/** The Oracle's letter says a claim was awarded; then night falls until Pomerium's token carries it. */
+export function claimAwarded(letter: string) {
   quest.say([{ who: 'Oracle', text: letter }, refreshPage()], () => {
     learn('refresh')
-    quest.dismissOracle()
     startNight()
   })
 }
@@ -694,12 +692,12 @@ async function captain() {
       },
       {
         who: 'Captain',
-        text: "One catch: your session still holds the claims from when you signed in, so your groups don't say knights yet. Pomerium catches up on its own in time. A night's wait makes that happen. Ah, here comes the Oracle.",
+        text: "One catch: your session still holds the claims from when you signed in, so your groups don't say knights yet. Pomerium catches up on its own in time. A night's wait makes that happen.",
       },
     ],
     () => {
       learn('claims')
-      oracleArrives("The Captain's letter arrived. I've added knights to your groups.")
+      claimAwarded("The Captain's letter arrived. I've added knights to your groups.")
     },
   )
 }
@@ -965,7 +963,7 @@ async function librarian() {
         links: [link('claims')],
       },
     ],
-    () => oracleArrives("The Librarian's letter arrived. I've added scholars to your groups."),
+    () => claimAwarded("The Librarian's letter arrived. I've added scholars to your groups."),
   )
 }
 

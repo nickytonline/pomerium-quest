@@ -19,7 +19,7 @@ import { CAGE_FLIGHT_MS, FALCONER, FLIGHT_MS, type OwlFlight, type OwlOutcome } 
 import { decide, type Identity } from './ppl.ts'
 import { sfx } from './sound.ts'
 import { quest, type DenyView } from './store.ts'
-import { attempt, groupsBefore, learn, oracleArrives, who, zoneRouteYaml } from './story.ts'
+import { attempt, groupsBefore, learn, claimAwarded, who, zoneRouteYaml } from './story.ts'
 import { zoneById } from './zones.ts'
 
 const identity = () => quest.get().identity
@@ -112,12 +112,12 @@ async function vouch() {
       },
       {
         who: 'Falconer',
-        text: 'One catch, and you know it by now: your session still holds the claims from when you signed in. Ah, here comes the Oracle.',
+        text: 'One catch, and you know it by now: your session still holds the claims from when you signed in.',
       },
     ],
     () => {
       learn('claims')
-      oracleArrives(`The Falconer's letter arrived. I've added ${GROUPS.falconers} to your groups.`)
+      claimAwarded(`The Falconer's letter arrived. I've added ${GROUPS.falconers} to your groups.`)
     },
   )
 }
@@ -182,10 +182,10 @@ export function falconer() {
       [
         {
           who: 'Falconer',
-          text: 'The Oracle has the letter, but your session still holds the claims from when you signed in. Ah, here he comes.',
+          text: 'The Oracle has the letter, but your session still holds the claims from when you signed in. Night will fall until it catches up.',
         },
       ],
-      () => oracleArrives(`The letter arrived. I've added ${group} to your groups.`),
+      () => claimAwarded(`The letter arrived. I've added ${group} to your groups.`),
     )
 
     return
@@ -458,12 +458,12 @@ const DONE: Partial<Record<OwlTool, () => void>> = {
           },
           {
             who: 'Owl',
-            text: 'And you know the catch by now: your session still holds the claims from when you signed in. Here comes the Oracle.',
+            text: 'And you know the catch by now: your session still holds the claims from when you signed in.',
           },
         ],
         () => {
           learn('claims')
-          oracleArrives(`The owl's letter arrived. I've added ${GROUPS.keyholders} to your groups.`)
+          claimAwarded(`The owl's letter arrived. I've added ${GROUPS.keyholders} to your groups.`)
         },
       )
   },

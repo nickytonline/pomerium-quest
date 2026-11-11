@@ -135,8 +135,6 @@ export interface QuestState {
   readonly menuOpen: boolean
   /** The Oracle's sign-in, running through Pomerium in a frame over the game. Pauses the game. */
   readonly signIn: { readonly url: string } | null
-  /** The Oracle has appeared beside the player to sign them in again with new claims. */
-  readonly oracleBeside: boolean
   /** It is night: the game waits for Pomerium's token to carry the Oracle's new claims, then morning comes. */
   readonly night: boolean
   /** The player is asleep in a bed during the night. */
@@ -235,7 +233,6 @@ let state: QuestState = {
   inputResumesAt: 0,
   menuOpen: false,
   signIn: null,
-  oracleBeside: false,
   night: false,
   sleeping: false,
   finale: false,
@@ -328,7 +325,6 @@ export const quest = {
       journalOpen: false,
       dialog: null,
       deny: null,
-      oracleBeside: false,
       night: false,
       sleeping: false,
       finale: false,
@@ -517,8 +513,6 @@ export const quest = {
     update({ signIn: null, inputResumesAt: performance.now() + 200 })
     cancelled?.()
   },
-  summonOracle: () => update({ oracleBeside: true }),
-  dismissOracle: () => update({ oracleBeside: false }),
   setNight: (night: boolean) => update({ night, sleeping: night && state.sleeping }),
   setSleeping: (sleeping: boolean) => update({ sleeping }),
   openFinale: () => update({ finale: true, menuOpen: false, journalOpen: false }),
