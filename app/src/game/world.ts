@@ -189,6 +189,12 @@ type BedId = keyof typeof BEDS
  * Where the townsfolk who keep a building sleep at night, in that building. They are not beds for the player:
  * nearestBed only looks at BEDS. Everyone else is game data and simply walks off, so has no bed.
  */
+/** Like the guards, the Oracle never sleeps: he is the identity provider, and sign-in must always be there. */
+export const ALWAYS_AWAKE: ReadonlySet<NpcId> = new Set(['oracle'])
+
+/** Whether someone leaves the map or goes to bed when night falls. */
+export const goesToBed = (npcId: NpcId) => !ALWAYS_AWAKE.has(npcId)
+
 const LIBRARIAN_BED = { x: 36, y: 26 } as const satisfies Point
 const CAPTAIN_BED = { x: 23, y: 3 } as const satisfies Point
 const SAGE_BED = { x: 13, y: 26 } as const satisfies Point

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { BEDS, NPC_BEDS, TILE, buildWorld, nearestBed, same } from './world.ts'
+import { ALWAYS_AWAKE, BEDS, NPC_BEDS, TILE, buildWorld, goesToBed, nearestBed, same } from './world.ts'
 
 const { tiles } = buildWorld()
 
@@ -44,5 +44,19 @@ describe("the keepers' beds", () => {
     const { tiles } = buildWorld()
 
     expect(nearestBed(tiles, { x: 34, y: 25 }, false) ?? '').not.toContain('library')
+  })
+})
+
+describe('who goes to bed at night', () => {
+  it('is everyone but the Oracle, who stays awake like a guard', () => {
+    const { npcs } = buildWorld()
+
+    expect([...ALWAYS_AWAKE]).toEqual(['oracle'])
+    expect(npcs.filter((npc) => !goesToBed(npc.npcId)).map((npc) => npc.npcId)).toEqual(['oracle'])
+    expect(npcs.filter((npc) => goesToBed(npc.npcId))).toHaveLength(npcs.length - 1)
+  })
+
+  it('gives nobody who stays awake a bed', () => {
+    for (const id of ALWAYS_AWAKE) expect(NPC_BEDS[id]).toBeUndefined()
   })
 })

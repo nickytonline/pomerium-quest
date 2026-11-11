@@ -55,6 +55,7 @@ import {
   isFountain,
   buildWorld,
   inHouse,
+  goesToBed,
   nearestBed,
   NPC_BEDS,
   regionAt,
@@ -1795,9 +1796,8 @@ export class KingdomScene extends Phaser.Scene {
 
   /** At night the guards stay, but the townsfolk go: the keepers into their own beds, the rest off the map. */
   private async townGoesToBed() {
-    // The Oracle is the identity provider: like a guard, it never sleeps, so you can always sign in.
     const busy = (npc: NpcSprite) =>
-      npc.npcId === 'oracle' ||
+      !goesToBed(npc.npcId) ||
       (npc.npcId === 'traveler' && (this.traveler.moving || this.traveler.plan !== 'roam')) ||
       (npc.npcId === 'captain' && this.captain !== 'guild')
 
