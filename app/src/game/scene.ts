@@ -1755,8 +1755,8 @@ export class KingdomScene extends Phaser.Scene {
 
       quest.toast(
         bed
-          ? `It's late and the townsfolk have gone to bed, but the guards stay at their gates. The nearest bed is ${bed}. Sleep there, or walk around until morning.`
-          : "It's late and the townsfolk have gone to bed, but the guards stay at their gates. There is no bed nearby, so walk around until morning.",
+          ? `It's late and the townsfolk have gone to bed, but the guards and the Oracle stay awake. The nearest bed is ${bed}. Sleep there, or walk around until morning.`
+          : "It's late and the townsfolk have gone to bed, but the guards and the Oracle stay awake. There is no bed nearby, so walk around until morning.",
         'info',
       )
 
@@ -1795,7 +1795,9 @@ export class KingdomScene extends Phaser.Scene {
 
   /** At night the guards stay, but the townsfolk go: the keepers into their own beds, the rest off the map. */
   private async townGoesToBed() {
+    // The Oracle is the identity provider: like a guard, it never sleeps, so you can always sign in.
     const busy = (npc: NpcSprite) =>
+      npc.npcId === 'oracle' ||
       (npc.npcId === 'traveler' && (this.traveler.moving || this.traveler.plan !== 'roam')) ||
       (npc.npcId === 'captain' && this.captain !== 'guild')
 

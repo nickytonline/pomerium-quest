@@ -534,7 +534,7 @@ request with the token Pomerium put on the perch's request.
 - **New claims take a moment.** After the Oracle changes a claim, Pomerium takes about a minute to refresh
   the session and use it. Until then the armory still answers 403. In the game, night falls when a claim is awarded and the screen
   dims while the game polls. Sleep in any guest bed (the sage's, the town inn's, the falconer's hut, or your own house) or
-  wander until morning (the townsfolk go to bed or walk off, but the guards stay at their gates, so Pomerium still checks every gate). Once Pomerium's refreshed token carries the claims, day fades back in with the Oracle's letter
+  wander until morning (the townsfolk go to bed or walk off, but the guards and the Oracle (your identity provider) stay awake, so Pomerium still checks every gate). Once Pomerium's refreshed token carries the claims, day fades back in with the Oracle's letter
   ("You are now a knight"). A bed with no news waiting is only a bed. A restart signs you out, so you log in again with no claims.
 - **`groups` vs `claim/groups`.** The `groups` PPL criterion is Pomerium Enterprise only (it needs
   directory sync). Open-source Pomerium checks the IdP's claim with `claim/groups`.
