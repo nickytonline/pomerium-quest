@@ -191,12 +191,14 @@ type BedId = keyof typeof BEDS
  */
 const LIBRARIAN_BED = { x: 36, y: 26 } as const satisfies Point
 const CAPTAIN_BED = { x: 23, y: 3 } as const satisfies Point
+const SAGE_BED = { x: 13, y: 26 } as const satisfies Point
 const FALCONER_BED = { x: 31, y: 31 } as const satisfies Point
 
 export const NPC_BEDS: Partial<Record<NpcId, Point>> = {
   captain: CAPTAIN_BED,
   librarian: LIBRARIAN_BED,
   falconer: FALCONER_BED,
+  sage: SAGE_BED,
 }
 
 const BED_IDS: readonly BedId[] = ['guest', 'home', 'inn', 'hut']
@@ -378,6 +380,7 @@ export function buildWorld(): World {
   room(10, 23, 14, 27)
   set(10, 25, TILE.floor)
   set(BEDS.guest.x, BEDS.guest.y, TILE.bed)
+  set(SAGE_BED.x, SAGE_BED.y, TILE.bed)
   fill(2, 25, 4, 27, TILE.water)
   fill(8, 18, 8, 26, TILE.path)
   fill(4, 23, 8, 23, TILE.path)

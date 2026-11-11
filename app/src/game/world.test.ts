@@ -36,8 +36,8 @@ describe("the keepers' beds", () => {
     }
   })
 
-  it('belong to the Captain, the librarian and the falconer, who keep buildings; everyone else just walks off', () => {
-    expect(Object.keys(NPC_BEDS).sort()).toEqual(['captain', 'falconer', 'librarian'])
+  it('belong to the Captain, the librarian, the falconer and the sage, who keep buildings; everyone else just walks off', () => {
+    expect(Object.keys(NPC_BEDS).sort()).toEqual(['captain', 'falconer', 'librarian', 'sage'])
   })
 
   it("never become the player's nearest bed", () => {
