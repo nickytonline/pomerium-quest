@@ -24,6 +24,7 @@ export async function startOver() {
   }
 
   quest.resetProgress()
+  markRestarted()
 
   if (identity.authenticated) await signOut()
 
@@ -41,5 +42,34 @@ async function signOut() {
     await fetch('/.pomerium/sign_out', { mode: 'no-cors', credentials: 'include' })
   } catch {
     // The reload below shows whether the session ended: a lapsed one asks for a login.
+  }
+}
+
+const RESTARTED_KEY = 'quest:restarted'
+
+/** Remembers across the reload that this game was just started over, so a session that outlives it is not trusted. */
+function markRestarted() {
+  try {
+    sessionStorage.setItem(RESTARTED_KEY, '1')
+  } catch {
+    // Without storage the restart still works: the sign-in only loses its check for leftover claims.
+  }
+}
+
+/** True from a restart until a session has been handled: any claims it carries belong to the game that ended. */
+export function wasRestarted() {
+  try {
+    return sessionStorage.getItem(RESTARTED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+/** Forgets the restart once its leftover claims have been dealt with. */
+export function settleRestart() {
+  try {
+    sessionStorage.removeItem(RESTARTED_KEY)
+  } catch {
+    // Nothing was stored.
   }
 }

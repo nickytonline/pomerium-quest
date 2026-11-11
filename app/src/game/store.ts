@@ -141,6 +141,8 @@ export interface QuestState {
   readonly night: boolean
   /** The player is asleep in a bed during the night. */
   readonly sleeping: boolean
+  /** Bumped when the game is left or reset, so work started before it can tell it is out of date. */
+  readonly epoch: number
   /** The Royal Keep let the player in: chapter one is complete. */
   readonly finale: boolean
   /** After chapter two's ending: fireworks, a happy Pomeranian and the cast. */
@@ -238,6 +240,7 @@ let state: QuestState = {
   oracleBeside: false,
   night: false,
   sleeping: false,
+  epoch: 0,
   finale: false,
   celebrating: false,
   phished: false,
@@ -323,6 +326,7 @@ export const quest = {
   quit: () => {
     quest.save()
     update({
+      epoch: state.epoch + 1,
       started: false,
       menuOpen: false,
       journalOpen: false,
@@ -436,6 +440,7 @@ export const quest = {
     resetHouse()
     resetOwl()
     update({
+      epoch: state.epoch + 1,
       progress,
       owlStage: owlActor.getSnapshot().value,
       houseStage: houseActor.getSnapshot().value,

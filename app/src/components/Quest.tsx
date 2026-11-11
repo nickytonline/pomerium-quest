@@ -1,4 +1,4 @@
-import { startNight } from '../game/story.ts'
+import { clearLeftoverClaims, startNight } from '../game/story.ts'
 import {
   useEffect,
   useRef,
@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from 'react'
 import { probe } from '../game/access.ts'
-import { startOver } from '../game/restart.ts'
+import { settleRestart, startOver, wasRestarted } from '../game/restart.ts'
 import { SHEETS } from '../game/sheets.ts'
 import { ChapterTwoEnd, FalconersErrand, Perch } from './Aviary.tsx'
 import { Celebration } from './Celebration.tsx'
@@ -133,8 +133,16 @@ function useBoot() {
     const returning = url.searchParams.has('signedin')
 
     if (returning) history.replaceState(null, '', url.pathname)
-    void probe().then(({ mode, identity }) => {
-      quest.setMode(mode, identity)
+    void probe().then(async ({ mode, identity: seen }) => {
+      quest.setMode(mode, seen)
+
+      // After a start over, a session that outlived the sign-out still carries the last game's claims.
+      const restarted = wasRestarted()
+      const identity = restarted ? await clearLeftoverClaims(seen, true) : seen
+
+      if (seen.authenticated) settleRestart()
+
+      if (identity !== seen) quest.setIdentity(identity)
 
       if (identity.authenticated) {
         quest.signedIn(identity)

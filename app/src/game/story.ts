@@ -16,7 +16,7 @@ import {
 } from './content.ts'
 import { GROUPS } from './groups.ts'
 import { decide, routeYaml, type Identity } from './ppl.ts'
-import { startOver } from './restart.ts'
+import { settleRestart, startOver, wasRestarted } from './restart.ts'
 import { VISITORS, type VisitorId } from './house.ts'
 import { addDeed, citizenshipPages } from './house-story.ts'
 import { owlAtLeast, owlStage } from './owl-machine.ts'
@@ -102,14 +102,18 @@ function eyrieRefusal(id: Identity): Refusal {
   if (!id.groups.includes(GROUPS.falconers))
     missing.push(
       owlAtLeast('vouched')
-        ? "carrying your falconer's papers (sign in with the Oracle again)"
+        ? claimsPending()
+          ? "carrying your falconer's papers (wait through the night, until your session refreshes)"
+          : "carrying your falconer's papers (sign in with the Oracle again)"
         : 'a falconer (catch your owl, and the Falconer will vouch for you)',
     )
 
   if (!id.groups.includes(GROUPS.keyholders))
     missing.push(
       owlAtLeast('entrusted')
-        ? 'carrying your key (sign in with the Oracle again)'
+        ? claimsPending()
+          ? 'carrying your key (wait through the night, until your session refreshes)'
+          : 'carrying your key (sign in with the Oracle again)'
         : "a keyholder (send your owl to the letter's perch, and the Oracle will make you one)",
     )
 
@@ -358,7 +362,8 @@ function signInWithPomerium(url: string, onSignedIn: (next: Identity) => void, o
           return
         }
 
-        void clearLeftoverClaims(next).then((fresh) => {
+        void clearLeftoverClaims(next, wasRestarted()).then((fresh) => {
+          settleRestart()
           groupsBeforeSignIn = identity().authenticated ? identity().groups : null
           quest.setIdentity(fresh)
           quest.signedIn(fresh)
@@ -375,8 +380,11 @@ function signInWithPomerium(url: string, onSignedIn: (next: Identity) => void, o
  * back (a restart while the session had lapsed can't reach the Oracle). The Oracle takes them back now, and the
  * game waits for Pomerium's refresh to drop them, so a new game never starts with the old one's claims.
  */
-async function clearLeftoverClaims(next: Identity): Promise<Identity> {
-  if (!next.authenticated || stage() !== 'newcomer' || (next.groups.length === 0 && !next.deed)) return next
+export async function clearLeftoverClaims(next: Identity, restarted = false): Promise<Identity> {
+  // The quest is still anonymous before the first sign-in is applied, so a restart is told apart by its flag.
+  const fresh = stage() === 'newcomer' || (restarted && stage() === 'anonymous')
+
+  if (!next.authenticated || !fresh || (next.groups.length === 0 && !next.deed)) return next
 
   const outcome = await requestZone(zoneById('oracle'), 'POST', 'reset')
 
@@ -523,6 +531,7 @@ export async function startNight(): Promise<'fresh' | undefined> {
   if (nightFalling || !claimsPending()) return undefined
   nightFalling = true
 
+  const epoch = quest.get().epoch
   const awarded = staleGroups()
   const ready = (id: Identity) => !claimsPendingFor(id)
 
@@ -530,8 +539,14 @@ export async function startNight(): Promise<'fresh' | undefined> {
   // nothing to wait out: no night, just the news.
   const { identity: now } = await probe()
 
+  // The game was reset or left while the probe was out: its answer belongs to a game that is gone.
+  if (quest.get().epoch !== epoch) return cancelNight()
+
   if (now.authenticated && ready(now)) {
     nightFalling = false
+    quest.setNight(false)
+    asleep?.wakeUp()
+    asleep = null
     groupsBeforeSignIn = identity().authenticated ? identity().groups : null
     quest.setIdentity(now)
     quest.signedIn(now)
@@ -548,6 +563,8 @@ export async function startNight(): Promise<'fresh' | undefined> {
   const arrived = waitForClaims(ready)
 
   void Promise.all([arrived, lasted]).then(([next]) => {
+    if (quest.get().epoch !== epoch) return cancelNight()
+
     nightFalling = false
     quest.setNight(false)
     asleep?.wakeUp()
@@ -567,8 +584,22 @@ export async function startNight(): Promise<'fresh' | undefined> {
     quest.setIdentity(next)
     quest.signedIn(next)
     const fades = matchMedia('(prefers-reduced-motion: no-preference)').matches
-    setTimeout(() => morningLetter(next, awarded), fades ? DAWN_MS : 0)
+    setTimeout(
+      () => {
+        if (quest.get().epoch === epoch) morningLetter(next, awarded)
+      },
+      fades ? DAWN_MS : 0,
+    )
   })
+}
+
+/** Drops a night that belongs to a game that was reset or left: it accepts no session and wakes no one late. */
+function cancelNight(): undefined {
+  nightFalling = false
+  asleep?.wakeUp()
+  asleep = null
+
+  return undefined
 }
 
 /** A bed: sleeping through the night, if there is one. A bed with no news waiting is only a bed. */
