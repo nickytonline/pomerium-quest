@@ -392,7 +392,14 @@ export async function clearLeftoverClaims(next: Identity, restarted = false): Pr
 
   quest.toast('The Oracle is taking back claims from your last game.', 'info')
 
-  return (await waitForClaims((id) => id.groups.length === 0 && !id.deed)) ?? next
+  // If Pomerium hasn't refreshed in time, the claims are still gone at the Oracle: never carry the old ones on.
+  return (
+    (await waitForClaims((id) => id.groups.length === 0 && !id.deed)) ?? {
+      ...next,
+      groups: [],
+      deed: undefined,
+    }
+  )
 }
 
 /** What the Oracle says to a newcomer who has signed in: the sage has news. */
