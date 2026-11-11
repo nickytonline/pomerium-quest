@@ -131,8 +131,8 @@ ID.
 ### Earn the steel sword
 
 The Captain knights you, but the armory still says no: your session holds the claims you had when you
-signed in. Sign in with the Oracle again, and the armory's guard lets you through to the chest. The
-steel sword splits the cracked rocks that block the road to the library.
+signed in. Night falls while Pomerium refreshes your session, which takes about a minute. When
+morning comes, the armory's guard lets you through to the chest. The steel sword splits the cracked rocks that block the road to the library.
 
 | Opening the armory's chest                                                                                  | Splitting the rocks                                                                                            |
 | ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
