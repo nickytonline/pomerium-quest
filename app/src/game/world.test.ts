@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildWorld, nearestBed } from './world.ts'
+import { BEDS, NPC_BEDS, TILE, buildWorld, nearestBed, same } from './world.ts'
 
 const { tiles } = buildWorld()
 
@@ -23,5 +23,26 @@ describe('nearestBed', () => {
 
   it('walks through a gate when no bed is reachable without one', () => {
     expect(nearestBed(tiles, { x: 10, y: 4 }, false)).not.toBeNull()
+  })
+})
+
+describe("the keepers' beds", () => {
+  it('are bed tiles in the keepers own buildings, apart from the beds the player is told about', () => {
+    const { tiles } = buildWorld()
+
+    for (const bed of Object.values(NPC_BEDS)) {
+      expect(tiles[bed.y]?.[bed.x]).toBe(TILE.bed)
+      expect(Object.values(BEDS).some((own) => same(own, bed))).toBe(false)
+    }
+  })
+
+  it('belong to the librarian and the falconer, who keep buildings; everyone else just walks off', () => {
+    expect(Object.keys(NPC_BEDS).sort()).toEqual(['falconer', 'librarian'])
+  })
+
+  it("never become the player's nearest bed", () => {
+    const { tiles } = buildWorld()
+
+    expect(nearestBed(tiles, { x: 34, y: 25 }, false) ?? '').not.toContain('library')
   })
 })

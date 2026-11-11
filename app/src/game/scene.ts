@@ -56,6 +56,7 @@ import {
   buildWorld,
   inHouse,
   nearestBed,
+  NPC_BEDS,
   regionAt,
   same,
   type Gate,
@@ -403,6 +404,10 @@ interface NpcSprite {
   readonly npcId: NpcId
   x: number
   y: number
+  /** Gone from the map for the night: they are game data, so they walked off rather than going home. */
+  away?: boolean
+  /** Asleep in their own bed in their building for the night. */
+  inBed?: boolean
   readonly sprite: Phaser.GameObjects.Sprite
 }
 
@@ -1209,7 +1214,7 @@ export class KingdomScene extends Phaser.Scene {
 
   private occupied(p: Point) {
     return (
-      this.npcs.some((npc) => same(npc, p)) ||
+      this.standing().some((npc) => same(npc, p)) ||
       this.monsters.some((monster) => same(monster, p)) ||
       this.guards.some((guard) => same(guard.spot, p)) ||
       this.fish.some((fish) => same(fish, p)) ||
@@ -1236,7 +1241,10 @@ export class KingdomScene extends Phaser.Scene {
     this.face(dir)
     const target = this.front()
 
-    if (this.npcs.some((npc) => same(npc, target)) || (this.houseGuard && same(this.houseGuard, target)))
+    if (
+      this.standing().some((npc) => same(npc, target)) ||
+      (this.houseGuard && same(this.houseGuard, target))
+    )
       return
 
     if (this.phish.some((phish) => same(phish, target)) || this.birdAt(target)) return
@@ -1402,20 +1410,8 @@ export class KingdomScene extends Phaser.Scene {
   }
 
   /** Asks Pomerium on the player's behalf; if it allows them, the guard steps aside and they walk on. */
-  /** At night the guards and townsfolk have gone home: say so, and the caller does nothing. */
-  private closedForNight(): boolean {
-    if (!quest.get().night) return false
-
-    if (performance.now() - this.lastRockHint > 2000) {
-      this.lastRockHint = performance.now()
-      quest.toast("It's late and everything is closed. Sleep in a bed or walk around until morning.", 'info')
-    }
-
-    return true
-  }
-
+  /** Asks Pomerium on the player's behalf; if it allows them, the guard steps aside and they walk on. */
   private askGuard(guard: Guard, target: Point, request: GateRequest, leaving = false) {
-    if (this.closedForNight()) return
     this.mode.send({ type: 'GATE' })
     void enterGate(request, leaving).then((outcome) => {
       if (outcome !== 'allow') {
@@ -1494,10 +1490,11 @@ export class KingdomScene extends Phaser.Scene {
 
   private interact() {
     const target = this.front()
-    const npc = this.npcs.find((candidate) => same(candidate, target))
+    const npc = this.standing().find((candidate) => same(candidate, target))
 
     if (npc) {
-      if (!this.closedForNight()) talk(npc.npcId)
+      if (npc.inBed) quest.toast("Zzz. They're fast asleep. Come back in the morning.", 'info')
+      else talk(npc.npcId)
 
       return
     }
@@ -1750,8 +1747,8 @@ export class KingdomScene extends Phaser.Scene {
 
       quest.toast(
         bed
-          ? `It's late and everything is closed. The nearest bed is ${bed}. Sleep there, or walk around until morning.`
-          : "It's late and everything is closed. There is no bed nearby, so walk around until morning.",
+          ? `It's late and the townsfolk have gone to bed, but the guards stay at their gates. The nearest bed is ${bed}. Sleep there, or walk around until morning.`
+          : "It's late and the townsfolk have gone to bed, but the guards stay at their gates. There is no bed nearby, so walk around until morning.",
         'info',
       )
 
@@ -1762,6 +1759,7 @@ export class KingdomScene extends Phaser.Scene {
         .setAlpha(animated ? 0 : 0.5)
 
       this.nightDim = added
+      void this.townGoesToBed()
 
       if (animated) this.tweens.add({ targets: added, alpha: 0.5, duration: 1500 })
 
@@ -1769,6 +1767,7 @@ export class KingdomScene extends Phaser.Scene {
     }
 
     this.nightDim = undefined
+    void this.townWakes()
 
     if (!dim) return
 
@@ -1779,6 +1778,77 @@ export class KingdomScene extends Phaser.Scene {
     }
 
     this.tweens.add({ targets: dim, alpha: 0, duration: DAWN_MS, onComplete: () => dim.destroy() })
+  }
+
+  /** Everyone who is not in the middle of something. */
+  private standing() {
+    return this.npcs.filter((npc) => !npc.away)
+  }
+
+  /** At night the guards stay, but the townsfolk go: the keepers into their own beds, the rest off the map. */
+  private async townGoesToBed() {
+    const busy = (npc: NpcSprite) =>
+      (npc.npcId === 'traveler' && (this.traveler.moving || this.traveler.plan !== 'roam')) ||
+      (npc.npcId === 'captain' && this.captain !== 'guild')
+
+    await Promise.all(
+      this.npcs.filter((npc) => !npc.away && !npc.inBed && !busy(npc)).map((npc) => this.retire(npc)),
+    )
+  }
+
+  private async retire(npc: NpcSprite) {
+    const bed = NPC_BEDS[npc.npcId]
+
+    if (bed) {
+      await this.vanish(npc)
+      npc.x = bed.x
+      npc.y = bed.y
+      npc.sprite.setPosition(center(bed.x), center(bed.y)).setAngle(90)
+      npc.inBed = true
+      await this.appear(npc)
+
+      return
+    }
+
+    // They walk off away from the player, then are gone from the map until morning.
+    const dx = Math.sign(npc.x - this.pos.x) || 1
+    const far = { x: center(npc.x + dx * 12), y: center(npc.y) }
+    npc.away = true
+
+    if (matchMedia('(prefers-reduced-motion: no-preference)').matches) {
+      await new Promise<void>((resolve) =>
+        this.tweens.add({
+          targets: npc.sprite,
+          x: far.x,
+          y: far.y,
+          alpha: 0,
+          duration: 2500,
+          onComplete: () => resolve(),
+        }),
+      )
+    }
+
+    npc.sprite.setVisible(false)
+  }
+
+  /** Morning: everyone is back at their post. */
+  private async townWakes() {
+    await Promise.all(
+      this.npcs
+        .filter((npc) => npc.away || npc.inBed)
+        .map(async (npc) => {
+          const home = this.world.npcs.find((candidate) => candidate.npcId === npc.npcId)
+
+          if (!home) return
+          npc.sprite.setAngle(0).setAlpha(0).setVisible(true)
+          npc.x = home.x
+          npc.y = home.y
+          npc.away = false
+          npc.inBed = false
+          npc.sprite.setPosition(center(home.x), center(home.y))
+          await this.appear(npc)
+        }),
+    )
   }
 
   /** Fades the Oracle in beside the player when the store asks for him, and out again after. */
@@ -2071,7 +2141,7 @@ export class KingdomScene extends Phaser.Scene {
     const traveler = this.travelerNpc()
     const plan = this.traveler
 
-    if (!traveler || plan.moving || plan.plan === 'knock' || plan.plan === 'escorted') return
+    if (!traveler || traveler.away || plan.moving || plan.plan === 'knock' || plan.plan === 'escorted') return
     plan.nextVisitAt ??= time + TRAVELER.firstVisitMs
 
     if (plan.plan === 'eat') {

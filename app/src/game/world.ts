@@ -185,6 +185,15 @@ export const BEDS = {
 
 type BedId = keyof typeof BEDS
 
+/**
+ * Where the townsfolk who keep a building sleep at night, in that building. They are not beds for the player:
+ * nearestBed only looks at BEDS. Everyone else is game data and simply walks off, so has no bed.
+ */
+const LIBRARIAN_BED = { x: 36, y: 26 } as const satisfies Point
+const FALCONER_BED = { x: 31, y: 31 } as const satisfies Point
+
+export const NPC_BEDS: Partial<Record<NpcId, Point>> = { librarian: LIBRARIAN_BED, falconer: FALCONER_BED }
+
 const BED_IDS: readonly BedId[] = ['guest', 'home', 'inn', 'hut']
 
 /** Where each bed is, in the words a player is told. */
@@ -207,7 +216,7 @@ const DIRECTIONS: readonly Point[] = [
 
 /**
  * The fewest steps on foot to a bed on the player's level, or null if none can be reached. Walls block, so a
- * bed in another room needs its door. Gates are shut at night, so the first search goes round them; only
+ * bed in another room needs its door. Gates stay policy-checked at night, so the first search goes round them; only
  * when no bed is reachable that way does a second search walk through them (staying on the level).
  */
 function walkToBed(
@@ -466,6 +475,7 @@ export function buildWorld(): World {
   fill(29, 21, 29, 26, TILE.wall)
   fill(30, 22, 32, 22, TILE.shelf)
   fill(34, 22, 36, 22, TILE.shelf)
+  set(LIBRARIAN_BED.x, LIBRARIAN_BED.y, TILE.bed)
   each(
     [
       [18, 24],
@@ -536,6 +546,7 @@ export function buildWorld(): World {
   room(30, 30, 34, 32)
   set(32, 32, TILE.floor)
   set(BEDS.hut.x, BEDS.hut.y, TILE.bed)
+  set(FALCONER_BED.x, FALCONER_BED.y, TILE.bed)
 
   const perches: Perch[] = [
     { x: 24, y: 35, tool: OWL_TOOLS.whoami },
