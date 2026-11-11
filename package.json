@@ -9,7 +9,8 @@
     "url": "git+https://github.com/nickytonline/pomerium-quest.git"
   },
   "workspaces": [
-    "app"
+    "app",
+    "mcp"
   ],
   "type": "module",
   "scripts": {

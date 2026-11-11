@@ -189,7 +189,7 @@ export const NPCS = SHEETS.npcs
 const ITEMS = SHEETS.items
 const DOG = SHEETS.dog
 
-/** Who played whom. The slime's and dog's frames match the item and dog sheets. */
+/** Who played whom. The slime's, both owls' and the dog's frames match the item and dog sheets. */
 const CAST: readonly {
   readonly name: string
   readonly role: string
@@ -224,6 +224,26 @@ const CAST: readonly {
     sheet: NPCS,
     frame: NPC_FRAME.armorer,
   },
+  {
+    name: 'The Falconer',
+    role: 'the admin who adds you to the falconers group',
+    sheet: NPCS,
+    frame: NPC_FRAME.falconer,
+  },
+  { name: 'The Owl', role: 'your agent, acting on your behalf', sheet: ITEMS, frame: 7 },
+  {
+    name: 'Mochi',
+    role: 'another user: the same route and policy, checked just the same',
+    sheet: NPCS,
+    frame: NPC_FRAME.friend,
+  },
+  { name: "Mochi's owl", role: 'another agent, acting on Mochi’s behalf', sheet: ITEMS, frame: 9 },
+  {
+    name: 'The Keeper',
+    role: 'a tool that runs only for callers the policy allows',
+    sheet: NPCS,
+    frame: NPC_FRAME.keeper,
+  },
   { name: 'Bot slimes', role: 'automated bots hammering every gate', sheet: ITEMS, frame: 3 },
   { name: 'Phish', role: 'phishing: a fake Oracle after your sign-in', sheet: NPCS, frame: PHISH_FRAME },
 ]
@@ -247,7 +267,7 @@ function CastList({ hidden = false }: { readonly hidden?: boolean }) {
   )
 }
 
-/** The final screen, after the Royal Keep's Quest complete. */
+/** The final screen, after the player finds their friend at the end of chapter two. */
 export function Celebration() {
   const open = useQuest((s) => s.celebrating)
   const defeated = useQuest((s) => s.defeated)
@@ -300,7 +320,8 @@ function CelebrationScreen({ stats }: { readonly stats: string }) {
             The kingdom is secure!
           </h2>
           <p className="m-0 max-w-[48ch] text-muted">
-            Every guard checked you, every time, and you made it all the way to the Royal Keep.
+            Every guard checked you, every time, and checked your owl on every errand it ran. You made it all
+            the way to the Eyrie, and brought Mochi their owl.
           </p>
           <p className="m-0 font-display text-[0.9rem] text-lime">{stats}</p>
         </div>

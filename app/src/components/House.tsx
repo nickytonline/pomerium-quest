@@ -15,7 +15,7 @@ import {
 } from '../game/house.ts'
 import { currentLetter, houseRouteYaml, saveDoorRules } from '../game/house-story.ts'
 import { quest, useQuest } from '../game/store.ts'
-import { TabbedScreen, switchTab } from './TabbedScreen.tsx'
+import { TabPane, TabbedScreen, switchTab } from './TabbedScreen.tsx'
 
 type Kind = HouseCriterion['kind']
 
@@ -106,8 +106,7 @@ const field =
 const smallButton =
   'rounded border-2 border-panel-edge bg-panel px-2.5 py-1 font-display text-[0.85rem] text-ink hover:border-sun disabled:opacity-50'
 
-const overlay =
-  'absolute inset-0 grid items-start justify-items-center overflow-auto bg-[rgb(10_7_22/0.9)] p-3.5'
+const overlay = 'absolute inset-0 flex items-center justify-center bg-[rgb(10_7_22/0.9)] p-3.5'
 
 /** What the desk's Pomerium tab links to: writing a policy, and the open door it replaces. */
 const DESK_DOCS: readonly LessonId[] = ['writePolicy', 'publicRoute']
@@ -168,7 +167,7 @@ function Editor() {
   }
 
   const actions = (
-    <div className="mt-auto flex flex-wrap justify-end gap-2 pt-1">
+    <div className="flex flex-wrap justify-end gap-2 pt-1">
       <button className={smallButton} type="button" onClick={() => quest.closeHouseEditor()}>
         Close
       </button>
@@ -204,7 +203,11 @@ function Editor() {
   )
 
   const kingdom = (
-    <div className="flex flex-col gap-3 rounded-tr-lg rounded-b-lg border-3 border-ink bg-night-deep px-4 py-3.5">
+    <TabPane
+      className="rounded-tr-lg rounded-b-lg border-3 border-ink bg-night-deep"
+      body="gap-3"
+      actions={actions}
+    >
       <h2 className="m-0 font-display text-[1.4rem] text-sun" id="desk-title-kingdom">
         Your door rules
       </h2>
@@ -263,12 +266,15 @@ function Editor() {
         </button>{' '}
         tab.
       </p>
-      {actions}
-    </div>
+    </TabPane>
   )
 
   const pomerium = (
-    <div className="flex flex-col gap-2.5 rounded-tr-lg rounded-b-lg border-t-6 border-lens bg-paper px-5 py-[18px] text-paper-ink [&_a]:text-paper-link [&_:focus-visible]:outline-paper-focus">
+    <TabPane
+      className="rounded-tr-lg rounded-b-lg border-t-6 border-lens bg-paper text-paper-ink [&_a]:text-paper-link [&_:focus-visible]:outline-paper-focus"
+      body="gap-2.5"
+      actions={actions}
+    >
       <h2 className="m-0 text-[1.25rem] font-bold" id="desk-title-pomerium">
         Your house is a route
       </h2>
@@ -310,8 +316,7 @@ function Editor() {
           </li>
         ))}
       </ul>
-      {actions}
-    </div>
+    </TabPane>
   )
 
   return (

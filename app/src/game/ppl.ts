@@ -14,6 +14,8 @@ export interface Identity {
 export interface RequestInfo {
   readonly method: 'GET' | 'POST'
   readonly path: string
+  /** The tool an MCP tools/call request names. Any other request, a tools/list included, has none. */
+  readonly tool?: string | undefined
 }
 
 export interface EvalLine {
@@ -51,6 +53,10 @@ function criterionYaml(node: Criterion): readonly string[] {
       return ['authenticated_user: true']
     case 'claim':
       return [`claim/${node.claim}: ${claimValue(node.claim, node.value)}`]
+    case 'claim_exclude':
+      return [`claim/${node.claim}:`, `  exclude: ${claimValue(node.claim, node.value)}`]
+    case 'mcp_tool':
+      return ['mcp_tool:', `  starts_with: ${node.startsWith}`]
     case 'domain':
     case 'email':
     case 'http_method':
@@ -67,6 +73,10 @@ function criterionLabel(node: Criterion): string {
       return 'authenticated_user: true'
     case 'claim':
       return `claim/${node.claim}: ${claimValue(node.claim, node.value)}`
+    case 'claim_exclude':
+      return `claim/${node.claim}: { exclude: ${claimValue(node.claim, node.value)} }`
+    case 'mcp_tool':
+      return `mcp_tool: { starts_with: ${node.startsWith} }`
     case 'domain':
     case 'email':
     case 'http_method':
@@ -111,10 +121,21 @@ function check(node: Criterion, id: Identity, req: RequestInfo, whose: Viewpoint
       return { ok: id.email === node.is, actual: `${whose} email: ${id.email || 'none'}` }
     case 'http_method':
       return { ok: req.method === node.is, actual: `this request: ${req.method}` }
+    case 'mcp_tool':
+      return {
+        ok: req.tool?.startsWith(node.startsWith) ?? false,
+        actual: req.tool ? `this call's tool: ${req.tool}` : 'this request calls no tool',
+      }
     case 'claim': {
       const values = CLAIM_VALUES[node.claim](id)
 
       return { ok: values.includes(node.value), actual: `${whose} ${node.claim}: [${values.join(', ')}]` }
+    }
+
+    case 'claim_exclude': {
+      const values = CLAIM_VALUES[node.claim](id)
+
+      return { ok: !values.includes(node.value), actual: `${whose} ${node.claim}: [${values.join(', ')}]` }
     }
   }
 }
@@ -164,6 +185,10 @@ function criterionDocument(node: Criterion) {
       return { authenticated_user: true }
     case 'claim':
       return { [`claim/${node.claim}`]: node.value }
+    case 'claim_exclude':
+      return { [`claim/${node.claim}`]: { exclude: node.value } }
+    case 'mcp_tool':
+      return { mcp_tool: { starts_with: node.startsWith } }
     case 'domain':
     case 'email':
     case 'http_method':
@@ -179,8 +204,10 @@ export const policyDocument = (rules: readonly PolicyRule[]) =>
 export function routeYaml(zone: Zone, host: string, upstream: string): string {
   return [
     `- from: https://${host}`,
-    `  prefix: ${zone.prefix}`,
+    // An MCP server has its whole host, so there is no prefix to match.
+    ...(zone.host ? [] : [`  prefix: ${zone.prefix}`]),
     `  to: ${upstream}`,
+    ...(zone.mcp ? [`  mcp:`, `    ${zone.mcp}: {}`] : []),
     `  pass_identity_headers: true`,
     `  policy:`,
     ...policyYaml(zone.policy, 4),

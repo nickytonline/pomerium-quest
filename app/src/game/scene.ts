@@ -6,6 +6,10 @@ import { SHEETS } from './sheets.ts'
 import { sfx } from './sound.ts'
 import { KNIGHT_QUOTA, defeated, hasSteel, type MonsterKind } from './quest-machine.ts'
 import { houseStage, type HouseStage } from './house-machine.ts'
+import { mochisOwlFound, owlAtLeast, owlStage } from './owl-machine.ts'
+import { catchOwl, readAviarySign, visitCage, visitPerch } from './owl-story.ts'
+import { OWL_TOOLS } from './owl.ts'
+import { CAGE_FLIGHT_MS, FLIGHT_MS, type PerchPhase } from './perch.ts'
 import {
   currentLetter,
   enterHouse,
@@ -34,6 +38,7 @@ import {
 } from './story.ts'
 import {
   BOARD_TILES,
+  FALCONER_BARE_FRAME,
   GUARD_FRAME,
   HOUSE,
   MAP_HEIGHT,
@@ -53,6 +58,7 @@ import {
   type Gate,
   type GateRequest,
   type NpcId,
+  type Perch,
   type Point,
 } from './world.ts'
 
@@ -105,7 +111,84 @@ const SWING = { from: 100, to: -50, ms: 160 }
 /** What a player hears when the game has lost their session somewhere they could only be with one. */
 const LOST_SESSION = 'Something went wrong and your session was lost, so you start again in Hearth Village.'
 
-const ITEM = { swordWood: 0, swordSteel: 1 }
+const ITEM = {
+  swordWood: 0,
+  swordSteel: 1,
+  owl: 7,
+  owlBlink: 8,
+  mochisOwl: 9,
+  owlWingsUp: 10,
+  owlWingsDown: 11,
+  mochisOwlWingsUp: 12,
+  mochisOwlWingsDown: 13,
+  cage: 14,
+  cageOpen: 15,
+  keeperNo: 16,
+  keeperYes: 17,
+}
+
+/** Each kind of owl's frames: sitting, and with its wings up and down, which a flight swaps to make it flap. */
+const OWL_FRAMES = {
+  brown: { rest: ITEM.owl, up: ITEM.owlWingsUp, down: ITEM.owlWingsDown },
+  white: { rest: ITEM.mochisOwl, up: ITEM.mochisOwlWingsUp, down: ITEM.mochisOwlWingsDown },
+} as const
+
+/** How long the owl's eyes stay shut, and the shortest and longest it waits between blinks. */
+const OWL_BLINK = { shut: 140, every: [2200, 6000] } as const
+
+/** Where the owl sits on the dog, from the dog's center, and how high above that its hop starts. */
+const OWL_SEAT = { x: 5, y: -8, hop: 14 }
+
+/** Mochi's owl rides on the dog's other side, and on the same shoulder of Mochi once it's back with them. */
+const MOCHIS_OWL_SEAT = { x: -5, y: -8 }
+
+/** Where an owl lands on the cage's roof, from the middle of the cage. */
+const CAGE_ROOF = { x: 0, y: -9 }
+
+/** The keeper's answer to an owl: where it shows above the keeper, and their nod or shake of the head. */
+const KEEPER_ANSWER = { lift: 14, nod: 3, shake: 2, ms: 90 }
+
+/** Where the Falconer's owl sits on their glove, from the middle of the Falconer. */
+const FALCONERS_GLOVE = { x: -6, y: 0 }
+
+/** Mochi's owl flies to Mochi once the dog carrying it is within this many tiles. */
+const MOCHIS_OWL_REACH = 2
+
+/** The owl hops away when the player comes within this many tiles of it, and how long and high a hop is. */
+const OWL_SHY = { tiles: 2, ms: 520, lift: 18 }
+
+/** The owl's feet meet a perch's crossbar this far below the tile's center. */
+const PERCH_BAR = { y: 1 }
+
+/**
+ * The owl's flights around a perch: how long it takes to hop on and to fly back to the dog's shoulder, how
+ * high it arcs, how far sideways it ends up and how wide it swoops on its way off the screen, and how many
+ * tiles the dog walks from the perch before the owl follows.
+ */
+const OWL_FLIGHT = { hopMs: 320, homeMs: 700, lift: 10, drift: 48, swoop: 46, leash: 2 }
+
+/**
+ * The point `t` of the way from one point to another, in whole pixels. The longer direction counts the
+ * steps and the shorter one keeps to its line, so the two never step on different frames.
+ */
+function stepAlong(
+  from: { readonly x: number; readonly y: number },
+  to: { readonly x: number; readonly y: number },
+  t: number,
+) {
+  const dx = Math.round(to.x) - from.x
+  const dy = Math.round(to.y) - from.y
+  const reach = Math.max(Math.abs(dx), Math.abs(dy))
+
+  if (reach === 0) return from
+
+  const steps = Math.round(reach * t)
+
+  return { x: from.x + Math.round((dx * steps) / reach), y: from.y + Math.round((dy * steps) / reach) }
+}
+
+/** How long each beat of the owl's wings lasts while it flies. */
+const WINGBEAT_MS = 90
 
 /** Rows of the dog's frame left above the waterline while swimming: head and collar. */
 const SWIM_DEPTH = 11
@@ -335,6 +418,40 @@ export class KingdomScene extends Phaser.Scene {
   private guards: Guard[] = []
   /** An item shown rising out of a chest until the player closes its dialog. */
   private shownItem: Phaser.GameObjects.Image | undefined
+  private owl: Phaser.GameObjects.Image | undefined
+  /** How far above its seat the owl is, while it hops onto the dog's shoulder. */
+  private owlHop = 0
+  /** Which of the world's owl spots the owl waits at, until it's caught. */
+  private owlAt = 0
+  /** The part of an errand the owl has been moved for, so each part starts once. */
+  private owlPhase: PerchPhase | null = null
+  /** The perch the owl is on, or flying an errand from, until it is back on the dog's shoulder. */
+  private owlPerch: Perch | undefined
+  /** Mochi's owl has flown from the dog to Mochi, where it stays. */
+  private mochisOwlHome = false
+  /** The perch the player last walked into, until they let go of the key or step away. */
+  private bumpedPerch: Perch | undefined
+  /** The owl is in the air, beating its wings, so it doesn't blink. */
+  private owlFlapping = false
+  /** The latest flight each bird was sent on, so an older one still under way gives up. */
+  private flights = new Map<Phaser.GameObjects.Image, number>()
+  /**
+   * What the view follows on its way to the cage and back. It isn't the bird, whose swoop and wingbeats
+   * would shake the whole map: it is a point on the straight line there, see `pan`.
+   */
+  private readonly lens = { x: 0, y: 0 }
+  private panning: Phaser.Tweens.Tween | undefined
+  /** The owl is off the dog's shoulder: flying an errand, or on a perch until the dog walks away. */
+  private owlAloft = false
+  private mochisOwl: Phaser.GameObjects.Image | undefined
+  /** Mochi's owl is flying from its cage to the dog, so it isn't on the dog's back yet. */
+  private mochisOwlAloft = false
+  /** The cage Mochi's owl is kept in: shut over the owl, then open and empty. */
+  private cage: Phaser.GameObjects.Image | undefined
+  /** The Falconer's owl in flight. On the glove it is part of the Falconer's own picture. */
+  private falconersOwl: Phaser.GameObjects.Image | undefined
+  /** How far the Falconer's owl's errand had got when the scene last looked. */
+  private cagePhase: 'out' | 'opening' | 'back' | 'done' | null = null
   private monsters: Monster[] = []
   private fish: Fish[] = []
   private phish: Phish[] = []
@@ -401,6 +518,13 @@ export class KingdomScene extends Phaser.Scene {
 
     if (hasSteel()) this.setTile(this.world.chest, TILE.chestOpen, false)
 
+    // A game saved where an older version of the Aviary's grounds had a room resumes just inside the keep.
+    if (regionAt(this.pos) === 'The Aviary' && !this.standable(this.pos)) {
+      this.pos = this.world.aviaryEntry
+      this.previous = this.pos
+      quest.progress({ x: this.pos.x, y: this.pos.y })
+    }
+
     const map = this.make.tilemap({ data: this.world.tiles, tileWidth: T, tileHeight: T })
     const tileset = map.addTilesetImage('tiles')
 
@@ -408,6 +532,7 @@ export class KingdomScene extends Phaser.Scene {
     map.createLayer(0, tileset, 0, 0)
     this.map = map
     this.animateFountain()
+    this.animateOwl()
 
     this.npcs = this.world.npcs.map((npc) => ({
       ...npc,
@@ -494,6 +619,20 @@ export class KingdomScene extends Phaser.Scene {
       .setDepth(10)
     this.swim(this.tileAt(this.pos) === TILE.water)
     this.sword = this.add.image(0, 0, 'items', ITEM.swordWood).setVisible(false).setDepth(9)
+    // Until it's caught, the owl waits out in the open; after that it rides on the dog's shoulder.
+    const [roost = this.pos] = this.world.owlSpots
+    this.owl = this.add.image(center(roost.x), center(roost.y), 'items', ITEM.owl).setDepth(12)
+
+    const lost = this.world.mochisOwl
+    this.mochisOwl = this.add.image(center(lost.x), center(lost.y), 'items', ITEM.mochisOwl).setDepth(12)
+    // The cage is drawn over the owl in it. Once the owl is out, the cage stands open and empty.
+    this.cage = this.add
+      .image(center(lost.x), center(lost.y), 'items', mochisOwlFound() ? ITEM.cageOpen : ITEM.cage)
+      .setDepth(13)
+    this.falconersOwl = this.add.image(0, 0, 'items', ITEM.owl).setDepth(14).setVisible(false)
+    this.perchOwl()
+    // A game saved beside Mochi, or after the quest's end, starts with their owl already back with them.
+    this.homeMochisOwl({ fly: false })
 
     this.cameras.main.setBounds(0, 0, MAP_WIDTH * T, MAP_HEIGHT * T)
     this.cameras.main.startFollow(this.player, true)
@@ -540,7 +679,396 @@ export class KingdomScene extends Phaser.Scene {
     })
   }
 
+  /** Once caught, the owl rides on the dog's shoulder, and Mochi's owl, once found, on the other side. */
+  private carryBirds() {
+    const { owl, mochisOwl, player } = this
+
+    if (!player) return
+
+    if (owl && owlAtLeast('fledged') && !this.owlAloft)
+      owl.setPosition(player.x + OWL_SEAT.x, player.y + OWL_SEAT.y - this.owlHop)
+
+    if (mochisOwl && mochisOwlFound() && !this.mochisOwlHome && !this.mochisOwlAloft)
+      mochisOwl.setPosition(player.x + MOCHIS_OWL_SEAT.x, player.y + MOCHIS_OWL_SEAT.y)
+  }
+
+  /**
+   * Mochi's owl knows its own: once the dog carrying it comes near Mochi, it flies over and settles on
+   * their shoulder. It stays there, since it only ever rode with the dog to get home.
+   */
+  private homeMochisOwl({ fly }: { readonly fly: boolean }) {
+    const { mochisOwl } = this
+    const mochi = this.world.npcs.find((npc) => npc.npcId === 'friend')
+
+    if (!mochisOwl || !mochi || this.mochisOwlHome || !mochisOwlFound()) return
+
+    const away = Math.max(Math.abs(mochi.x - this.pos.x), Math.abs(mochi.y - this.pos.y))
+
+    if (away > MOCHIS_OWL_REACH && owlStage() !== 'triumphant') return
+
+    const seat = { x: center(mochi.x) + MOCHIS_OWL_SEAT.x, y: center(mochi.y) + MOCHIS_OWL_SEAT.y }
+
+    this.mochisOwlHome = true
+
+    if (!fly) {
+      mochisOwl.setPosition(seat.x, seat.y)
+
+      return
+    }
+
+    sfx('flutter')
+    this.glide(mochisOwl, () => seat, OWL_FLIGHT.homeMs, { lift: OWL_FLIGHT.lift, sway: -OWL_FLIGHT.lift })
+  }
+
+  /** Where the owl waits while it's still to be caught: a tile the player can't walk onto. */
+  private owlSpot(): Point | undefined {
+    return owlAtLeast('fledged') ? undefined : this.world.owlSpots[this.owlAt]
+  }
+
+  /**
+   * Flies the Falconer's owl as its errand to the cage goes: off the glove and away to the cage with the
+   * request, then back to the glove once the cage is open, while Mochi's owl flies from the cage to the dog.
+   * The flights are motion, so they are opt-in: without it each bird is simply where it ends up.
+   */
+  private syncCageErrand() {
+    const phase = quest.get().falconersErrand?.phase ?? null
+
+    if (phase === this.cagePhase) return
+
+    const before = this.cagePhase
+    this.cagePhase = phase
+
+    const falconer = this.npcs.find((npc) => npc.npcId === 'falconer')
+    const { falconersOwl, mochisOwl, cage, player } = this
+
+    if (!falconer || !falconersOwl || !mochisOwl || !cage || !player) return
+
+    const glove = { x: falconer.sprite.x + FALCONERS_GLOVE.x, y: falconer.sprite.y + FALCONERS_GLOVE.y }
+    const curve = { lift: OWL_FLIGHT.lift, sway: OWL_FLIGHT.swoop }
+
+    const moving = matchMedia('(prefers-reduced-motion: no-preference)').matches
+
+    // Back on the glove, the owl is part of the Falconer's picture again, and the game looks at the dog.
+    const land = () => {
+      falconersOwl.setVisible(false)
+      falconer.sprite.setFrame(NPC_FRAME.falconer)
+      this.follow()
+    }
+
+    if (phase === 'out') {
+      falconer.sprite.setFrame(FALCONER_BARE_FRAME)
+      falconersOwl.setPosition(glove.x, glove.y).setVisible(true)
+
+      // The game follows the owl to the cage, to see the keeper answer it.
+      if (moving) this.pan(() => this.cageRoof(), CAGE_FLIGHT_MS.out)
+
+      this.glide(falconersOwl, () => this.cageRoof(), CAGE_FLIGHT_MS.out, curve)
+    } else if (phase === 'opening') {
+      cage.setFrame(ITEM.cageOpen)
+      this.keeperAnswers(true)
+    } else if (phase === 'back' || (phase === 'done' && before !== 'back')) {
+      // With motion off nothing waits between the owls setting off and landing, so a phase can go unseen.
+      cage.setFrame(ITEM.cageOpen)
+      this.mochisOwlAloft = true
+
+      if (moving) this.pan(() => player, CAGE_FLIGHT_MS.back)
+
+      this.glide(falconersOwl, () => glove, CAGE_FLIGHT_MS.back, curve, land)
+      this.glide(
+        mochisOwl,
+        () => ({ x: player.x + MOCHIS_OWL_SEAT.x, y: player.y + MOCHIS_OWL_SEAT.y }),
+        CAGE_FLIGHT_MS.back,
+        { lift: curve.lift, sway: -curve.sway },
+        () => {
+          this.mochisOwlAloft = false
+        },
+      )
+    } else if (phase === null && (before === 'out' || before === 'opening')) {
+      // The errand came to nothing, so the owl comes back to the glove alone.
+      if (moving) this.pan(() => player, OWL_FLIGHT.homeMs)
+
+      this.glide(falconersOwl, () => glove, OWL_FLIGHT.homeMs, curve, land)
+    }
+  }
+
+  /**
+   * Flies a bird to a point in the game's pixels. The path curves: it rises `lift` pixels and swings
+   * `sway` pixels to one side on the way, and the bird bobs with each wingbeat. The point is asked for on
+   * every frame, so a bird can fly to the dog while the dog walks. Motion is opt-in: without it the bird is
+   * simply there.
+   */
+  private glide(
+    bird: Phaser.GameObjects.Image,
+    to: () => { readonly x: number; readonly y: number },
+    ms: number,
+    { lift = 0, sway = 0 }: { readonly lift?: number; readonly sway?: number } = {},
+    onDone?: () => void,
+  ) {
+    // A newer flight takes over from one still under way, whose callbacks then do nothing.
+    const flight = (this.flights.get(bird) ?? 0) + 1
+    this.flights.set(bird, flight)
+
+    const current = () => this.flights.get(bird) === flight
+    const isOwl = bird === this.owl
+    const frames = bird === this.mochisOwl ? OWL_FRAMES.white : OWL_FRAMES.brown
+
+    const land = () => {
+      if (!current()) return
+      const end = to()
+
+      bird.setPosition(end.x, end.y)
+      bird.setFrame(frames.rest)
+
+      if (isOwl) this.owlFlapping = false
+
+      onDone?.()
+    }
+
+    if (!matchMedia('(prefers-reduced-motion: no-preference)').matches) {
+      land()
+
+      return
+    }
+
+    const from = { x: bird.x, y: bird.y }
+    const along = { t: 0 }
+    const started = this.time.now
+
+    if (isOwl) this.owlFlapping = true
+
+    this.tweens.add({
+      targets: along,
+      t: 1,
+      duration: ms,
+      ease: 'Sine.easeInOut',
+      onUpdate: () => {
+        if (!current()) return
+        const end = to()
+        const { t } = along
+        // A curve through a point above and to one side of the straight line, so the bird swoops.
+        const bend = 2 * (1 - t) * t
+        const beat = Math.floor((this.time.now - started) / WINGBEAT_MS)
+
+        bird.setPosition(
+          from.x + (end.x - from.x) * t + bend * sway,
+          from.y + (end.y - from.y) * t - bend * lift * 2 + (beat % 2 === 0 ? 0 : 1),
+        )
+
+        bird.setFrame(beat % 2 === 0 ? frames.up : frames.down)
+      },
+      onComplete: land,
+    })
+  }
+
+  /** The owl hops to its next spot when the player comes close, until it's too tired to. */
+  private startleOwl(poked = false) {
+    const spot = this.owlSpot()
+    const next = this.world.owlSpots[this.owlAt + 1]
+
+    if (owlStage() !== 'seeking' || !spot || !next || !this.owl) return
+
+    const far = Math.max(Math.abs(spot.x - this.pos.x), Math.abs(spot.y - this.pos.y)) > OWL_SHY.tiles
+
+    if (far && !poked) return
+
+    this.owlAt += 1
+    sfx('flutter')
+    this.glide(this.owl, () => ({ x: center(next.x), y: center(next.y) }), OWL_SHY.ms, { lift: OWL_SHY.lift })
+
+    quest.toast(
+      this.owlTired()
+        ? 'The owl lands, out of breath. It is too tired to hop again'
+        : 'The owl hops away before you can reach it',
+      'info',
+    )
+  }
+
+  /** The owl has hopped as far as it will: it waits at its last spot to be picked up. */
+  private owlTired() {
+    return this.owlAt >= this.world.owlSpots.length - 1
+  }
+
+  /**
+   * Moves the owl as an errand at a perch goes: off the screen with the request, away while it is
+   * answered, then back to the perch. The flight is motion, so it is opt-in: without it the owl stays put.
+   */
+  private syncFlight() {
+    const perch = quest.get().perch
+    const phase = perch?.phase ?? null
+
+    if (phase === this.owlPhase) return
+    this.owlPhase = phase
+
+    const owl = this.owl
+    const spot = this.world.perches.find((candidate) => candidate.tool === perch?.tool)
+
+    // Whatever became of a flight the game followed, it looks at the dog again once the errand is over.
+    if (phase === null || phase === 'done') this.follow()
+
+    if (!owl || !spot || !matchMedia('(prefers-reduced-motion: no-preference)').matches) return
+
+    const bar = this.barOf(spot)
+
+    if (spot.tool === OWL_TOOLS.openCage) {
+      this.flyToCage(phase, owl, bar)
+
+      return
+    }
+
+    if (phase === 'out') {
+      // Up and away, past the top of what the player can see.
+      const top = this.cameras.main.worldView.y - T
+      const away = { x: bar.x + OWL_FLIGHT.drift, y: Math.min(top, bar.y - T) }
+
+      // It swings out to one side as it climbs, and comes back in from the other.
+      this.glide(owl, () => away, FLIGHT_MS.out, { sway: -OWL_FLIGHT.swoop })
+    } else if (phase === 'back') {
+      this.glide(owl, () => bar, FLIGHT_MS.back, { sway: OWL_FLIGHT.swoop })
+    }
+  }
+
+  /**
+   * The cage is a place in the grounds, so the owl sent to open it is seen all the way: the game follows it
+   * to the cage's roof, the keeper shakes their head, and it flies back to its perch.
+   */
+  private flyToCage(phase: PerchPhase | null, owl: Phaser.GameObjects.Image, bar: { x: number; y: number }) {
+    const curve = { lift: OWL_FLIGHT.lift, sway: OWL_FLIGHT.swoop }
+
+    if (phase === 'out') {
+      this.pan(() => this.cageRoof(), CAGE_FLIGHT_MS.out)
+      this.glide(owl, () => this.cageRoof(), CAGE_FLIGHT_MS.out, { ...curve, sway: -curve.sway })
+    } else if (phase === 'turned') {
+      this.keeperAnswers(false)
+    } else if (phase === 'back') {
+      this.pan(() => this.player ?? bar, CAGE_FLIGHT_MS.back)
+      this.glide(owl, () => bar, CAGE_FLIGHT_MS.back, curve)
+    }
+  }
+
+  /** Where an owl lands on the cage, in the game's pixels. */
+  private cageRoof() {
+    const at = this.world.mochisOwl
+
+    return { x: center(at.x) + CAGE_ROOF.x, y: center(at.y) + CAGE_ROOF.y }
+  }
+
+  /** Points the game's view back at the dog, whatever it was watching. */
+  private follow() {
+    this.panning?.stop()
+    this.panning = undefined
+
+    if (this.player) this.cameras.main.startFollow(this.player, true)
+  }
+
+  /**
+   * Slides the game's view from where it is to a point in the game's pixels, and to the dog again once it
+   * gets there if that is where it was going. The view moves in a straight line and in whole pixels, with
+   * both directions stepping on the same frame: following a bird's swoop, or rounding each direction on
+   * its own, shakes the whole map.
+   */
+  private pan(to: () => { readonly x: number; readonly y: number }, ms: number) {
+    this.panning?.stop()
+
+    const view = this.cameras.main
+    const from = { x: Math.round(view.midPoint.x), y: Math.round(view.midPoint.y) }
+    const along = { t: 0 }
+
+    Object.assign(this.lens, from)
+    view.startFollow(this.lens, true)
+
+    const pan = this.tweens.add({
+      targets: along,
+      t: 1,
+      duration: ms,
+      ease: 'Sine.easeInOut',
+      onUpdate: () => Object.assign(this.lens, stepAlong(from, to(), along.t)),
+      onComplete: () => {
+        if (this.panning === pan && to() === this.player) this.follow()
+      },
+    })
+
+    this.panning = pan
+  }
+
+  /**
+   * The keeper answers an owl at the cage: a nod and a tick, or a shake of the head and a cross. It is
+   * motion, so it is only shown to players who have asked for motion.
+   */
+  private keeperAnswers(yes: boolean) {
+    const keeper = this.npcs.find((npc) => npc.npcId === 'keeper')
+
+    if (!keeper || !matchMedia('(prefers-reduced-motion: no-preference)').matches) return
+
+    const home = { x: center(keeper.x), y: center(keeper.y) }
+
+    const answer = this.add
+      .image(home.x, home.y - KEEPER_ANSWER.lift, 'items', yes ? ITEM.keeperYes : ITEM.keeperNo)
+      .setDepth(20)
+
+    this.time.delayedCall(CAGE_FLIGHT_MS.keeper, () => answer.destroy())
+
+    this.tweens.add({
+      targets: keeper.sprite,
+      ...(yes ? { y: home.y + KEEPER_ANSWER.nod } : { x: home.x + KEEPER_ANSWER.shake }),
+      duration: KEEPER_ANSWER.ms,
+      yoyo: true,
+      repeat: 2,
+      onComplete: () => keeper.sprite.setPosition(home.x, home.y),
+    })
+  }
+
+  /** Where the owl's feet meet a perch's crossbar, in the game's pixels. */
+  private barOf(perch: Point) {
+    return { x: center(perch.x), y: center(perch.y) + PERCH_BAR.y }
+  }
+
+  /** The perch the player is standing right beside, if any. */
+  private perchBeside(p: Point) {
+    return this.world.perches.find((perch) => Math.abs(perch.x - p.x) + Math.abs(perch.y - p.y) === 1)
+  }
+
+  /** Coming up beside a perch is enough: the owl hops onto it without being asked. */
+  private perchOwl() {
+    const perch = this.perchBeside(this.pos)
+
+    if (!perch || !this.owl || !owlAtLeast('fledged')) return
+
+    if (this.owlAloft && this.owlPerch === perch) return
+
+    this.owlAloft = true
+    this.owlPerch = perch
+    this.glide(this.owl, () => this.barOf(perch), OWL_FLIGHT.hopMs, { lift: OWL_FLIGHT.lift })
+  }
+
+  /**
+   * The owl waits on its perch until the dog is a couple of tiles away, then flies after it and lands on
+   * its shoulder, wherever the dog has got to by then.
+   */
+  private callOwl() {
+    const { owl, player, owlPerch } = this
+
+    if (!owl || !player || !owlPerch || quest.get().perch) return
+
+    const away = Math.max(Math.abs(owlPerch.x - this.pos.x), Math.abs(owlPerch.y - this.pos.y))
+
+    if (away < OWL_FLIGHT.leash) return
+
+    this.owlPerch = undefined
+    this.glide(
+      owl,
+      () => ({ x: player.x + OWL_SEAT.x, y: player.y + OWL_SEAT.y }),
+      OWL_FLIGHT.homeMs,
+      { lift: OWL_FLIGHT.lift, sway: OWL_FLIGHT.lift },
+      () => {
+        this.owlAloft = false
+      },
+    )
+  }
+
   override update(time: number) {
+    this.syncFlight()
+    this.syncCageErrand()
+    this.carryBirds()
     const { controls, inputResumesAt } = quest.get()
     const pending = this.pending
     this.pending = new Set()
@@ -585,7 +1113,10 @@ export class KingdomScene extends Phaser.Scene {
     const dir = this.heldDir() ?? tapped
 
     if (dir) this.tryMove(dir)
-    else this.idle()
+    else {
+      this.bumpedPerch = undefined
+      this.idle()
+    }
   }
 
   private heldDir(): Dir | undefined {
@@ -626,12 +1157,38 @@ export class KingdomScene extends Phaser.Scene {
     })
   }
 
+  /** The owl blinks now and then, unless the player prefers less motion. */
+  private animateOwl() {
+    // Motion is opt-in: the owl stares, unblinking, for anyone who hasn't said they want it.
+    if (!matchMedia('(prefers-reduced-motion: no-preference)').matches) return
+
+    const [soonest, latest] = OWL_BLINK.every
+
+    const wait = () =>
+      this.time.delayedCall(soonest + Math.random() * (latest - soonest), () => {
+        if (!this.owlFlapping) this.owl?.setFrame(ITEM.owlBlink)
+
+        this.time.delayedCall(OWL_BLINK.shut, () => {
+          if (!this.owlFlapping) this.owl?.setFrame(ITEM.owl)
+
+          wait()
+        })
+      })
+
+    wait()
+  }
+
   private setTile(p: Point, tile: number, draw = true) {
     const row = this.world.tiles[p.y]
 
     if (row) row[p.x] = tile
 
     if (draw) this.map?.putTileAt(tile, p.x, p.y)
+  }
+
+  /** Whether the player can stand on a tile: open ground, or a gate they may be passing through. */
+  private standable(p: Point) {
+    return PLAYER_TERRAIN.has(this.tileAt(p)) || this.world.gates.some((gate) => same(gate, p))
   }
 
   private front(): Point {
@@ -647,8 +1204,16 @@ export class KingdomScene extends Phaser.Scene {
       this.guards.some((guard) => same(guard.spot, p)) ||
       this.fish.some((fish) => same(fish, p)) ||
       this.phish.some((phish) => same(phish, p)) ||
+      this.birdAt(p) ||
       Boolean(this.houseGuard && same(this.houseGuard, p))
     )
+  }
+
+  /** Whether the owl, still to be caught, sits on a tile, or the cage stands on it. */
+  private birdAt(p: Point) {
+    const owl = this.owlSpot()
+
+    return Boolean(owl && same(owl, p)) || same(this.world.mochisOwl, p)
   }
 
   private face(dir: Dir) {
@@ -664,7 +1229,7 @@ export class KingdomScene extends Phaser.Scene {
     if (this.npcs.some((npc) => same(npc, target)) || (this.houseGuard && same(this.houseGuard, target)))
       return
 
-    if (this.phish.some((phish) => same(phish, target))) return
+    if (this.phish.some((phish) => same(phish, target)) || this.birdAt(target)) return
 
     const guard = this.guards.find((candidate) => same(candidate.spot, target))
 
@@ -690,6 +1255,20 @@ export class KingdomScene extends Phaser.Scene {
     }
 
     const tile = this.tileAt(target)
+
+    // Walking into a perch is how the player asks about its errand; no other key is needed.
+    const perch = this.world.perches.find((candidate) => same(candidate, target))
+
+    if (perch) {
+      // A key still held after the question was answered must not ask it again.
+      if (this.bumpedPerch !== perch) {
+        this.bumpedPerch = perch
+        this.perchOwl()
+        visitPerch(perch.tool)
+      }
+
+      return
+    }
 
     if (tile === TILE.gateClosed) {
       // From inside, the gate itself stands between the player and the guard outside. Walking out puts
@@ -739,6 +1318,7 @@ export class KingdomScene extends Phaser.Scene {
     if (!player) return
     this.mode.send({ type: 'WALK' })
     this.walkingTo = target
+    this.bumpedPerch = undefined
 
     if (this.tileAt(target) === TILE.water) sfx(this.tileAt(this.pos) === TILE.water ? 'paddle' : 'splash')
     this.swim(this.tileAt(target) === TILE.water)
@@ -772,6 +1352,10 @@ export class KingdomScene extends Phaser.Scene {
     this.previous = target
     quest.progress({ x: target.x, y: target.y, dir: this.dir })
     quest.setRegion(regionAt(target))
+    this.startleOwl()
+    this.callOwl()
+    this.perchOwl()
+    this.homeMochisOwl({ fly: true })
 
     if (cameIn) void this.cameHome()
   }
@@ -917,12 +1501,46 @@ export class KingdomScene extends Phaser.Scene {
       return
     }
 
-    // Every sign stands beside a gate, and shows the route that gate asks.
-    const sign = this.world.signs.find((candidate) => same(candidate, target))
-    const signGate = sign && this.world.gates.find((candidate) => candidate.signId === sign.signId)
+    const owl = this.owlSpot()
 
-    if (signGate) {
-      readSign(signGate)
+    if (owl && same(owl, target)) {
+      // A poke sends an owl with hops left in it on its way; a tired one lets itself be picked up.
+      if (owlStage() === 'seeking' && !this.owlTired()) this.startleOwl(true)
+      else if (catchOwl() && matchMedia('(prefers-reduced-motion: no-preference)').matches) {
+        this.owlHop = OWL_SEAT.hop
+        this.tweens.add({ targets: this, owlHop: 0, duration: 420, ease: 'Bounce.easeOut' })
+      }
+
+      return
+    }
+
+    if (same(this.world.mochisOwl, target)) {
+      visitCage()
+
+      return
+    }
+
+    // A sign beside a gate shows the route that gate asks. The Aviary's shows the MCP server's route and
+    // its list of tools.
+    const sign = this.world.signs.find((candidate) => same(candidate, target))
+
+    if (sign?.signId === 'aviary') {
+      void readAviarySign()
+
+      return
+    }
+
+    if (sign) {
+      const signGate = this.world.gates.find((candidate) => candidate.signId === sign.signId)
+      readSign(signGate ?? { signId: sign.signId, zoneId: sign.signId })
+
+      return
+    }
+
+    const perch = this.world.perches.find((candidate) => same(candidate, target))
+
+    if (perch) {
+      visitPerch(perch.tool)
 
       return
     }

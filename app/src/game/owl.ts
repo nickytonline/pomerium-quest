@@ -1,0 +1,88 @@
+// Chapter two's owl: an MCP client that runs errands on the player's behalf. The Aviary is the MCP server
+// (mcp/), behind one Pomerium route, and each of its tools has a perch in the Aviary's grounds. The tools
+// are named here so the server, the policy in zones.ts and the game can't drift apart.
+//
+// This file and groups.ts are also loaded by the MCP server, straight from Node, so they import nothing else.
+
+/** The tools the MCP server offers, by the names a tools/call request carries. */
+export const OWL_TOOLS = {
+  whoami: 'whoami',
+  ringBell: 'ring_bell',
+  scoutGrounds: 'scout_grounds',
+  deliverLetter: 'deliver_letter',
+  openCage: 'open_cage',
+} as const
+
+export type OwlTool = (typeof OWL_TOOLS)[keyof typeof OWL_TOOLS]
+
+/**
+ * Every tool whose name starts with this is kept for the owls of distinguished falconers, and so forbidden to
+ * the player's: the Aviary's deny rule names the prefix, not the one tool that has it today.
+ */
+export const FORBIDDEN_PREFIX = 'open_'
+
+export const isForbidden = (tool: string) => tool.startsWith(FORBIDDEN_PREFIX)
+
+/** What each tool is called and does, as the server's tools/list tells it and each perch's sign shows it. */
+export const OWL_ERRANDS: Record<OwlTool, { readonly title: string; readonly description: string }> = {
+  [OWL_TOOLS.whoami]: {
+    title: 'Who am I?',
+    description: 'Reads back who the owl is flying for: the email and groups in your Pomerium session.',
+  },
+  [OWL_TOOLS.ringBell]: {
+    title: 'Ring the bell',
+    description: 'Flies up to the bell tower, where no dog can climb, and rings the bell.',
+  },
+  [OWL_TOOLS.scoutGrounds]: {
+    title: 'Scout the grounds',
+    description: 'Circles high over the Aviary and reports what it sees from up there.',
+  },
+  [OWL_TOOLS.deliverLetter]: {
+    title: 'Deliver the letter',
+    description: "Carries the Falconer's letter to the Oracle, who adds you to the keyholders group.",
+  },
+  [OWL_TOOLS.openCage]: {
+    title: 'Open the cage',
+    description:
+      "Unlocks the cage a stray owl is kept in. The Aviary's orders keep it for a distinguished falconer's owl.",
+  },
+}
+
+/**
+ * Where Mochi's owl is: still in the keeper's cage (`lost`, as Mochi would say), riding with the player, or
+ * home. Only the game knows how far the player has got, so the scouting errand is told, as the tool call's
+ * one argument, and reports what there is to see from above.
+ */
+export const MOCHIS_OWL = { lost: 'lost', carried: 'carried', home: 'home' } as const
+
+export type MochisOwlAt = (typeof MOCHIS_OWL)[keyof typeof MOCHIS_OWL]
+
+/** What the scouting owl sees of Mochi's owl, wherever it is. */
+export const SIGHTINGS: Record<MochisOwlAt, { readonly spotted: string; readonly where: string }> = {
+  lost: {
+    spotted: 'a white owl, shut in a cage with a keeper standing by',
+    where: 'under the trees in the south-east corner of the grounds',
+  },
+  carried: {
+    spotted: 'a white owl with a teal ribbon on its leg',
+    where: 'riding on your own back, beside your owl',
+  },
+  home: {
+    spotted: 'a white owl, back with its owner',
+    where: "on Mochi's shoulder, in the Eyrie",
+  },
+}
+
+/** The first label of the Aviary's host: the MCP server has a host of its own, beside the game's. */
+export const AVIARY_HOST = 'aviary'
+
+/** The path of the MCP endpoint on the Aviary's host. */
+export const MCP_PATH = '/mcp'
+
+/** The Aviary's public origin, given the game's: the same domain and port, with the host's first label swapped. */
+export const aviaryOrigin = (gameOrigin: string) => {
+  const url = new URL(gameOrigin)
+  url.hostname = [AVIARY_HOST, ...url.hostname.split('.').slice(1)].join('.')
+
+  return url.origin
+}

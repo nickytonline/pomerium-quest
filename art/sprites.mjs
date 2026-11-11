@@ -183,6 +183,53 @@ const BOT_SLIME = [
   ],
 ]
 
+// The owl the player catches, small enough to ride on the dog's shoulder.
+const OWL = {
+  palette: { Q: '#9a6b3f', q: '#d9b98a', Y: '#ffd86b' },
+  rows: [
+    '................',
+    '................',
+    '................',
+    '....KK....KK....',
+    '....KQKKKKQK....',
+    '....KQQQQQQK....',
+    '....KYKQQKYK....',
+    '....KQQGGQQK....',
+    '....KQqqqqQK....',
+    '....KQqqqqQK....',
+    '.....KqqqqK.....',
+    '......KKKK......',
+    '................',
+    '................',
+    '................',
+    '................',
+  ],
+}
+
+// Mochi's owl, lost in the Aviary's grounds: the same owl in snowy white, so the two read apart on the
+// dog's back, with grey flecks on its chest and a ribbon on one leg in the teal of Mochi's jacket.
+const MOCHIS_OWL = {
+  palette: { Q: '#dfe5ee', q: '#ffffff', s: '#aab3c2', Y: '#ffd86b', H: '#3fc1b0' },
+  rows: [
+    '................',
+    '................',
+    '................',
+    '....KK....KK....',
+    '....KQKKKKQK....',
+    '....KQQQQQQK....',
+    '....KYKQQKYK....',
+    '....KQQGGQQK....',
+    '....KQqsqqQK....',
+    '....KQqqsqQK....',
+    '.....KqqqqK.....',
+    '......KHKK......',
+    '................',
+    '................',
+    '................',
+    '................',
+  ],
+}
+
 // A pond koi the dog can catch and eat; its tail flicks between the two frames.
 const FISH_COLORS = { g: '#f08a4b', s: '#ffd2a8' }
 
@@ -562,6 +609,108 @@ const NPCS = {
       '.............D..',
     ],
   },
+  // Keeps the Aviary beyond the Royal Keep: a green cap with a red feather, and an owl on a gloved fist.
+  falconer: {
+    palette: {
+      G: '#3f8f5a',
+      g: '#2c6a41',
+      R: '#e0413b',
+      F: '#e8b48a',
+      T: '#8a5a2b',
+      t: '#6b4226',
+      V: '#5b3a22',
+      Q: '#9a6b3f',
+      q: '#d9b98a',
+      Y: '#ffd86b',
+      C: '#2b2b45',
+    },
+    rows: [
+      '..........R.....',
+      '.....KKKKKRK....',
+      '....KGGGGGRGK...',
+      '...KGGgGGGGGGK..',
+      '..KKKKKKKKKKKKK.',
+      '....KFKFFFKFK...',
+      '.KK.KFFFFFFFK...',
+      'KQQK.KFFKFFK....',
+      'KYQYKTTKKKTTK...',
+      'KQqQKTTTTTTTTK..',
+      'KQqQKVTTTTTTTK..',
+      '.KKKVVKTTtTTFK..',
+      '....KKKTTtTTTK..',
+      '....KCCCKKCCCK..',
+      '....KKKK..KKKK..',
+      '................',
+    ],
+  },
+  // Keeps the cage in the Aviary's grounds, and its key: a leather cap, the Aviary's green, and a big gold
+  // key held out to one side. No spear: the keeper guards a lock, not a gateway.
+  keeper: {
+    palette: {
+      I: '#8a5a2b',
+      E: '#6b4226',
+      F: '#e8b48a',
+      P: '#3f8f5a',
+      p: '#2c6a41',
+      G: '#e9b44c',
+      C: '#2b2b45',
+    },
+    rows: [
+      '................',
+      '.....KKKKK......',
+      '....KIIIEEK.....',
+      '...KIIIIIEEK....',
+      '..KEEEEEEEEEK...',
+      '...KFKFFFKFK....',
+      '...KFFFFFFFK....',
+      '....KFFKFFK.KKK.',
+      '...KPPKKKPPKKGK.',
+      '..KPPPPpPPPPKGK.',
+      '..KPPPPpPPPPFGK.',
+      '..KFPPPpPPPPKGK.',
+      '...KPPPpPPPKGGK.',
+      '...KCCCKKCCCKGK.',
+      '...KKKK..KKKKKK.',
+      '................',
+    ],
+  },
+  // Mochi, the friend waiting in the Eyrie: the dog's own shape in white fur and a teal jacket,
+  // with bright eyes where the player's sunglasses are.
+  friend: {
+    palette: {
+      O: '#f3ead9',
+      U: '#ffffff',
+      S: '#cdbfa6',
+      L: '#fff8ec',
+      Y: '#e6d8c0',
+      J: '#1f6f73',
+      H: '#3fc1b0',
+    },
+    rows: withFeet(
+      HEAD_DOWN.map(
+        (row, y) => ({ 4: '.KOOOOOOOOOOOOK.', 5: '.KOOKWOOOOKWOOK.', 6: '.KOOOOLLLLOOOOK.' })[y] ?? row,
+      ),
+      FRONT_FEET.idle,
+    ),
+  },
+}
+
+// The Falconer once their owl has flown: the same figure with an empty glove. The game swaps to it while
+// the owl is away.
+NPCS.falconer_bare = {
+  ...NPCS.falconer,
+  rows: NPCS.falconer.rows.map(
+    (row, y) =>
+      ({
+        6: '....KFFFFFFFK...',
+        7: '.....KFFKFFK....',
+        8: '....KTTKKKTTK...',
+        9: '...KTTTTTTTTTK..',
+        10: '..KVVTTTTTTTTK..',
+        11: '..KVVKKTTtTTFK..',
+        12: '...KK.KTTtTTTK..',
+      })[y] ?? row,
+  ),
 }
 
 // Frame order is load-bearing: see NPC_FRAME in app/src/game/world.ts.
@@ -610,10 +759,143 @@ function sheet(file, cells, { scale = 1, checker = false } = {}) {
   writeFileSync(file, png(w, h, buf))
 }
 
+// The same owl mid-blink: lids down over both eyes.
+const OWL_BLINK = {
+  ...OWL,
+  rows: OWL.rows.map((row) => (row === '....KYKQQKYK....' ? '....KKKQQKKK....' : row)),
+}
+
+// The owl in flight, wings up and wings down: the game swaps the two to make it flap.
+const OWL_WINGS_UP = {
+  ...OWL,
+  rows: [
+    '................',
+    '................',
+    '.KK..........KK.',
+    '.KQKKK....KKKQK.',
+    '.KQQKQKKKKQKQQK.',
+    '..KQQQQQQQQQQK..',
+    '...KKYKQQKYKK...',
+    '....KQQGGQQK....',
+    '....KQqqqqQK....',
+    '....KQqqqqQK....',
+    '.....KqqqqK.....',
+    '......KKKK......',
+    '................',
+    '................',
+    '................',
+    '................',
+  ],
+}
+
+const OWL_WINGS_DOWN = {
+  ...OWL,
+  rows: [
+    '................',
+    '................',
+    '................',
+    '....KK....KK....',
+    '....KQKKKKQK....',
+    '....KQQQQQQK....',
+    '...KKYKQQKYKK...',
+    '..KQQQQGGQQQQK..',
+    '.KQQKQqqqqQKQQK.',
+    '.KQKKQqqqqQKKQK.',
+    '.KK..KqqqqK..KK.',
+    '......KKKK......',
+    '................',
+    '................',
+    '................',
+    '................',
+  ],
+}
+
+// The cage the keeper shut Mochi's owl in, drawn over the owl: steel bars with room to see the bird between
+// them, and a gold padlock on the sill. Open, the middle bars are gone and the padlock with them.
+const CAGE = [
+  '................',
+  '.......KK.......',
+  '...KKKKKKKKKK...',
+  '..KIIIIIIIIIIK..',
+  '..KKKKKKKKKKKK..',
+  '..E..E....E..E..',
+  '..E..E....E..E..',
+  '..E..E....E..E..',
+  '..E..E....E..E..',
+  '..E..E....E..E..',
+  '..E..E....E..E..',
+  '..E..E....E..E..',
+  '..KKKKKGGKKKKK..',
+  '..KIIIKGGKIIIK..',
+  '..KKKKKKKKKKKK..',
+  '................',
+]
+
+const CAGE_OPEN = CAGE.map(
+  (row, y) =>
+    ({ 12: '..KKKKKKKKKKKK..', 13: '..KIIIIIIIIIIK..' })[y] ??
+    (row === '..E..E....E..E..' ? '..E..........E..' : row),
+)
+
+// What the keeper answers an owl at the cage, shown over the keeper's head: no, or yes.
+const bubble = (mark) => ({
+  palette: { r: '#e0413b', g: '#2f9e55' },
+  rows: [
+    '................',
+    '...KKKKKKKKK....',
+    '..KWWWWWWWWWK...',
+    ...mark,
+    '..KWWWWWWWWWK...',
+    '...KKKKWKKKK....',
+    '......KWK.......',
+    '.......K........',
+    '................',
+    '................',
+  ],
+})
+
+const KEEPER_NO = bubble([
+  '..KWrWWWWWrWK...',
+  '..KWWrWWWrWWK...',
+  '..KWWWrWrWWWK...',
+  '..KWWWWrWWWWK...',
+  '..KWWWrWrWWWK...',
+  '..KWWrWWWrWWK...',
+  '..KWrWWWWWrWK...',
+])
+
+const KEEPER_YES = bubble([
+  '..KWWWWWWWWWK...',
+  '..KWWWWWWWgWK...',
+  '..KWWWWWWgWWK...',
+  '..KWgWWWgWWWK...',
+  '..KWWgWgWWWWK...',
+  '..KWWWgWWWWWK...',
+  '..KWWWWWWWWWK...',
+])
+
+// Mochi's owl in flight: the same wingbeats in its own white, with its flecks and its ribbon.
+const inMochisColors = (owl) => ({
+  ...MOCHIS_OWL,
+  rows: owl.rows.map(
+    (row, y) =>
+      ({ 8: row.replace('qqqq', 'qsqq'), 9: row.replace('qqqq', 'qqsq'), 11: row.replace('KKKK', 'KHKK') })[
+        y
+      ] ?? row,
+  ),
+})
+
+const MOCHIS_OWL_WINGS_UP = inMochisColors(OWL_WINGS_UP)
+const MOCHIS_OWL_WINGS_DOWN = inMochisColors(OWL_WINGS_DOWN)
+
 const grids = {
   ...dog,
   bot_slime: BOT_SLIME,
   fish: FISH.map((f) => f.rows),
+  owl: [OWL.rows, OWL_BLINK.rows, OWL_WINGS_UP.rows, OWL_WINGS_DOWN.rows],
+  mochis_owl: [MOCHIS_OWL.rows, MOCHIS_OWL_WINGS_UP.rows, MOCHIS_OWL_WINGS_DOWN.rows],
+  cage: [CAGE, CAGE_OPEN],
+  keeper_answer: [KEEPER_NO.rows, KEEPER_YES.rows],
   sword_wood: [SWORD_WOOD],
   sword_steel: [SWORD_STEEL],
   shield_wood: [SHIELD_WOOD],
@@ -632,7 +914,26 @@ const dogCells = [dog.down, dog.up, dog.right, dog.left]
 // Game sheets. Frame order is load-bearing: see app/src/game/sprites.ts.
 sheet(join(assets, 'dog.png'), [dogCells.flat()])
 
-sheet(join(assets, 'items.png'), [[SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, ...BOT_SLIME, ...FISH]])
+sheet(join(assets, 'items.png'), [
+  [
+    SWORD_WOOD,
+    SWORD_STEEL,
+    SHIELD_WOOD,
+    ...BOT_SLIME,
+    ...FISH,
+    OWL,
+    OWL_BLINK,
+    MOCHIS_OWL,
+    OWL_WINGS_UP,
+    OWL_WINGS_DOWN,
+    MOCHIS_OWL_WINGS_UP,
+    MOCHIS_OWL_WINGS_DOWN,
+    CAGE,
+    CAGE_OPEN,
+    KEEPER_NO,
+    KEEPER_YES,
+  ],
+])
 
 sheet(join(assets, 'npcs.png'), [npcs])
 
@@ -643,9 +944,27 @@ sheet(
   join(out, 'preview.png'),
   [
     ...dogCells.map((r) => [...r, null, null]),
-    [SWORD_WOOD, SWORD_STEEL, SHIELD_WOOD, ...BOT_SLIME, ...FISH],
+    [
+      SWORD_WOOD,
+      SWORD_STEEL,
+      SHIELD_WOOD,
+      ...BOT_SLIME,
+      ...FISH,
+      OWL,
+      OWL_BLINK,
+      MOCHIS_OWL,
+      OWL_WINGS_UP,
+      OWL_WINGS_DOWN,
+      MOCHIS_OWL_WINGS_UP,
+      MOCHIS_OWL_WINGS_DOWN,
+      CAGE,
+      CAGE_OPEN,
+      KEEPER_NO,
+      KEEPER_YES,
+    ],
     npcs.slice(0, 5),
-    [npcs[5], npcs[6], npcs[7], npcs[8], tiles[15]],
+    [npcs[5], npcs[6], npcs[7], npcs[8], npcs[9], tiles[15], tiles[42]],
+    [npcs[10], npcs[11], npcs[12]],
   ],
   { scale: 10, checker: true },
 )

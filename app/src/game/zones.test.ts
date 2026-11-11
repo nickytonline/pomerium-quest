@@ -25,6 +25,8 @@ describe('citizens', () => {
       'library',
       'builder',
       'keep',
+      'perch',
+      'eyrie',
     ])
   })
 
@@ -37,8 +39,16 @@ describe('citizens', () => {
 })
 
 describe('zone routes', () => {
-  it('have unique ids and prefixes, so Pomerium never has two routes for one path', () => {
+  it('have unique ids and addresses, so Pomerium never has two routes for one path', () => {
     expect(new Set(ZONES.map((zone) => zone.id)).size).toBe(ZONES.length)
-    expect(new Set(ZONES.map((zone) => zone.prefix)).size).toBe(ZONES.length)
+    expect(new Set(ZONES.map((zone) => `${zone.host ?? 'game'}${zone.prefix}`)).size).toBe(ZONES.length)
+  })
+
+  it('give every MCP server a host of its own, which Pomerium needs to sign MCP clients in', () => {
+    const servers = ZONES.filter((zone) => zone.mcp === 'server')
+
+    expect(servers.map((zone) => zone.id)).toEqual(['aviary'])
+    expect(servers.every((zone) => zone.host === zone.id)).toBe(true)
+    expect(ZONES.filter((zone) => zone.mcp !== 'server').every((zone) => !zone.host)).toBe(true)
   })
 })

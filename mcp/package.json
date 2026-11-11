@@ -1,0 +1,31 @@
+{
+  "name": "pomerium-quest-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The Aviary: the MCP server behind chapter two's owl",
+  "license": "Apache-2.0",
+  "author": "Nick Taylor <nick@nickyt.co>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nickytonline/pomerium-quest.git",
+    "directory": "mcp"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/index.ts",
+    "start": "node src/index.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/node": "2.1.2",
+    "@modelcontextprotocol/server": "2.4.0",
+    "express": "5.3.0",
+    "jose": "6.2.13",
+    "pino": "10.4.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "2.4.0",
+    "@types/express": "5.0.6",
+    "@types/node": "26.6.6"
+  }
+}

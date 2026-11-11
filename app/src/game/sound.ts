@@ -39,6 +39,9 @@ export type Effect =
   | 'doorOpen'
   | 'doorClose'
   | 'munch'
+  | 'bell'
+  | 'hoot'
+  | 'flutter'
 
 const STORAGE_KEY = 'pomerium-quest/sound/v1'
 
@@ -384,6 +387,20 @@ function laugh(mix: Mixer, out: AudioNode, at: number) {
   setTimeout(() => voice.disconnect(), 8000)
 }
 
+/** The bell's note (the G below middle C), and when each of its tolls starts, in seconds. */
+const BELL_HZ = 196
+const BELL_TOLLS = [0, 0.95, 1.9] as const
+
+/** A church bell's partials: each one's pitch as a multiple of the note, how long it rings and how loud. */
+const BELL_PARTIALS: readonly (readonly [ratio: number, dur: number, peak: number])[] = [
+  [0.5, 2.8, 0.12],
+  [1, 2.4, 0.2],
+  [1.19, 1.8, 0.09],
+  [1.5, 1.4, 0.05],
+  [2, 1.3, 0.11],
+  [3, 0.7, 0.04],
+]
+
 const EFFECTS: Record<Effect, (mix: Mixer, out: AudioNode, at: number) => void> = {
   swing: (mix, out, at) =>
     hiss(mix, out, at, { filter: 'bandpass', freq: 1800, to: 500, q: 1.6, dur: 0.14, peak: 0.55 }),
@@ -515,6 +532,30 @@ const EFFECTS: Record<Effect, (mix: Mixer, out: AudioNode, at: number) => void> 
     tone(out, at, { wave: 'triangle', freq: hz('C3'), dur: 0.68, peak: 0.3, hold: true })
     tone(out, at + 0.72, { wave: 'triangle', freq: hz('G3'), dur: 0.26, peak: 0.3, hold: true })
     tone(out, at + 1.0, { wave: 'triangle', freq: hz('C3'), dur: 1.3, peak: 0.3, hold: true })
+  },
+  /**
+   * The Aviary's bell, rung by the owl: three slow tolls of a church bell. Each strike sounds a bell's own
+   * partials at once (a hum an octave below the note, a minor third and a fifth above it, and the octave),
+   * the low ones ringing on long after the bright ones have gone.
+   */
+  bell: (_mix, out, at) => {
+    for (const strike of BELL_TOLLS) {
+      for (const [ratio, dur, peak] of BELL_PARTIALS)
+        tone(out, at + strike, { wave: 'sine', freq: BELL_HZ * ratio, dur, peak })
+
+      // The clapper: a short, bright knock at the start of each toll.
+      tone(out, at + strike, { wave: 'triangle', freq: BELL_HZ * 5.4, dur: 0.08, peak: 0.05 })
+    }
+  },
+  /** The owl setting off on an errand: a short hoot, then a longer one. */
+  hoot: (_mix, out, at) => {
+    tone(out, at, { wave: 'sine', freq: 392, to: 349, dur: 0.14, peak: 0.16, hold: true })
+    tone(out, at + 0.2, { wave: 'sine', freq: 392, to: 311, dur: 0.34, peak: 0.16, hold: true })
+  },
+  /** The owl hopping out of reach: three quick wingbeats, each a soft puff of air. */
+  flutter: (mix, out, at) => {
+    for (const beat of [0, 0.08, 0.16])
+      hiss(mix, out, at + beat, { filter: 'bandpass', freq: 700, to: 350, q: 0.8, dur: 0.06, peak: 0.22 })
   },
   /** A text box popping open: two quick rising blips. */
   dialogOpen: (_mix, out, at) => {

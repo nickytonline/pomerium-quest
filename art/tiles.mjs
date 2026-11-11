@@ -344,6 +344,16 @@ const signpost = (rect, ground) => {
   rect(4, 7, 6, 1, '#6b4a27')
 }
 
+/** A perch: a bare wooden T-post standing in the grass, waiting for an owl to land on it. */
+const perch = (rect) => {
+  grass(rect)
+  rect(7, 9, 2, 7, '#5b3a22')
+  rect(2, 9, 12, 2, '#7a5126')
+  rect(2, 9, 12, 1, '#a87a45')
+  rect(2, 8, 1, 1, '#5b3a22')
+  rect(13, 8, 1, 1, '#5b3a22')
+}
+
 /** The writing desk and its quill, with a sheet of paper on it or a sealed letter waiting. */
 const desk = (rect, top) => {
   floor(rect)
@@ -561,6 +571,8 @@ const painters = [
   (rect) => eatenLoaf(rect, 2),
   // 41 sign indoors, on the floor
   (rect) => signpost(rect, floor),
+  // 42 a perch: one of the Aviary's tools, out in the open
+  perch,
 ]
 
 export const tiles = painters.map((paint) => {

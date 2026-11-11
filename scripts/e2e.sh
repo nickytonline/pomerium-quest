@@ -11,12 +11,13 @@ PLAYERS=players.example
 SUFFIX=""
 [ "$PORT" = 443 ] || SUFFIX=":${PORT}"
 GAME="https://game.${DOMAIN}${SUFFIX}"
+AVIARY="https://aviary.${DOMAIN}${SUFFIX}"
 ORACLE="https://oracle.${DOMAIN}${SUFFIX}"
 JAR_DIR="$(mktemp -d)"
 JSON='accept: application/json'
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # The group names come from the game's own constants, so these checks can't drift from the policies.
-read -r GROUP_CITIZEN GROUP_KNIGHTS < <(node --input-type=module -e "import { GROUPS } from '$ROOT/app/src/game/groups.ts'; console.log(GROUPS.citizens, GROUPS.knights)")
+read -r GROUP_CITIZEN GROUP_KNIGHTS GROUP_FALCONERS GROUP_KEYHOLDERS < <(node --input-type=module -e "import { GROUPS } from '$ROOT/app/src/game/groups.ts'; console.log(GROUPS.citizens, GROUPS.knights, GROUPS.falconers, GROUPS.keyholders)")
 [ -n "$GROUP_KNIGHTS" ] || { echo 'could not read the group names from app/src/game/groups.ts'; exit 1; }
 # The process id keeps runs started in the same second (in parallel) from sharing accounts.
 RUN="$(date +%s)-$$"
@@ -33,6 +34,9 @@ check() {
 }
 
 status() { curl -s -o /dev/null -w '%{http_code}' -b "$1" -H "$JSON" -X "${3:-GET}" "${GAME}$2"; }
+
+# One field of a JSON object on stdin; a dotted name reaches into nested objects.
+field() { node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{console.log(process.argv[1].split(".").reduce((o,k)=>o[k],JSON.parse(s)))}catch{console.log("")}})' "$1"; }
 
 PASSWORD="e2e-${RUN}-pass"
 
@@ -88,6 +92,12 @@ become_citizen() {
   check "town opens once the session carries the citizens group" 200 "$town"
 }
 
+# The perch is where the game sends the owl from: Pomerium hands the game server a token for the player, and
+# the server calls the Aviary, the MCP server's route, with it. Each call's outcome is Pomerium's answer.
+perch() { curl -s -b "$1" -H "$JSON" -H 'content-type: application/json' -X POST "${GAME}/zones/perch/aviary" -d "$2"; }
+tools='{"method":"tools/list"}'
+call() { printf '{"method":"tools/call","tool":"%s"}' "$1"; }
+
 echo "Anonymous"
 anon="${JAR_DIR}/anon"
 check "game shell is public" 200 "$(curl -s -o /dev/null -w '%{http_code}' "${GAME}/")"
@@ -106,6 +116,8 @@ check "the Builders' Yard refuses a newcomer" 403 "$(status "$citizen" /zones/bu
 echo "Citizen"
 become_citizen "$citizen" "$email"
 check "armory without knights" 403 "$(status "$citizen" /zones/armory/enter)"
+check "the owl's perch refuses a citizen who hasn't finished chapter one" 403 \
+  "$(curl -s -o /dev/null -w '%{http_code}' -b "$citizen" -H "$JSON" -H 'content-type: application/json' -X POST "${GAME}/zones/perch/aviary" -d "$tools")"
 check "library read (GET)" 200 "$(status "$citizen" /zones/library/books/0)"
 check "library refuses a write (POST)" 403 "$(status "$citizen" /zones/library/books/0 POST)"
 # The library's rule would allow this GET; a 403 means Pomerium matched the scriptorium's own route.
@@ -134,6 +146,67 @@ for _ in $(seq 1 45); do
   sleep 2
 done
 check "keep opens for a citizen who is a knight and a scholar" 200 "$keep"
+
+echo "The Aviary (MCP)"
+# Asks the Aviary until Pomerium's answer is the one wanted, since new claims take a moment to reach it.
+perch_until() {
+  local got=""
+  for _ in $(seq 1 45); do
+    got="$(perch "$1" "$2" | field outcome.kind)"
+    [ "$got" = "$3" ] && break
+    sleep 2
+  done
+  echo "$got"
+}
+gate_until() {
+  local got=403
+  for _ in $(seq 1 45); do
+    got="$(status "$1" "$2")"
+    [ "$got" = 200 ] && break
+    sleep 2
+  done
+  echo "$got"
+}
+
+# The player the keep just admitted may walk into chapter two and send an owl, but is no falconer yet.
+owl="$citizen"
+falconer="$email"
+check "an MCP server route takes a token, not a browser session" 401 \
+  "$(curl -s -o /dev/null -w '%{http_code}' -b "$owl" -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' -X POST "${AVIARY}/mcp" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')"
+check "the Aviary refuses the owl of a player who is no falconer, before any tool is looked at" refused \
+  "$(perch "$owl" "$tools" | field outcome.kind)"
+check "and refuses its whoami call just the same" refused "$(perch "$owl" "$(call whoami)" | field outcome.kind)"
+check "the Eyrie refuses a player who is neither falconer nor keyholder" 403 "$(status "$owl" /zones/eyrie/enter)"
+check "the Falconer vouches for the player, and the Oracle adds falconers" yes \
+  "$(curl -s -b "$owl" -H "$JSON" -X POST "${GAME}/zones/keep/falconer" | grep -q "\"granted\":\"$GROUP_FALCONERS\"" && echo yes || echo no)"
+check "the Aviary still refuses (session holds old claims)" refused "$(perch "$owl" "$tools" | field outcome.kind)"
+sign_in_again "$owl" "$falconer" >/dev/null
+check "the Aviary lists its tools for a falconer's owl" tools "$(perch_until "$owl" "$tools" tools)"
+check "it lists all five, the forbidden one too" \
+  "whoami,ring_bell,scout_grounds,deliver_letter,open_cage" \
+  "$(perch "$owl" "$tools" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).outcome.tools.map(t=>t.name).join(",")))')"
+check "whoami: the owl flies on the player's behalf" yes \
+  "$(perch "$owl" "$(call whoami)" | field outcome.text | grep -q "$falconer" && echo yes || echo no)"
+check "ring_bell is allowed for a falconer's owl" result "$(perch "$owl" "$(call ring_bell)" | field outcome.kind)"
+check "scout_grounds is allowed too" result "$(perch "$owl" "$(call scout_grounds)" | field outcome.kind)"
+check "open_cage is refused for a falconer (deny: mcp_tool starts_with open_, groups exclude distinguished-falconers)" refused \
+  "$(perch "$owl" "$(call open_cage)" | field outcome.kind)"
+# The Falconer has an account of their own, in the distinguished-falconers group. The game sends their owl from
+# the same perch to the same tool, and Pomerium decides it on the Falconer's behalf.
+falconers_owl="$(curl -s -b "$owl" -H "$JSON" -X POST "${GAME}/zones/perch/falconer")"
+check "the Falconer's owl may call open_cage: same route, same tool, another identity" result \
+  "$(printf '%s' "$falconers_owl" | field outcome.kind)"
+check "and the Aviary ran it on the Falconer's behalf, not the player's" yes \
+  "$(printf '%s' "$falconers_owl" | field outcome.text | grep -q "falconer@${TOWNSFOLK}" && echo yes || echo no)"
+check "the Eyrie refuses a falconer who is no keyholder" 403 "$(status "$owl" /zones/eyrie/enter)"
+check "deliver_letter has the Oracle add keyholders" yes \
+  "$(perch "$owl" "$(call deliver_letter)" | field outcome.text | grep -q "\"granted\": \"$GROUP_KEYHOLDERS\"" && echo yes || echo no)"
+check "the Eyrie still refuses (session holds old claims)" 403 "$(status "$owl" /zones/eyrie/enter)"
+sign_in_again "$owl" "$falconer" >/dev/null
+check "the Eyrie opens to all five groups, ending chapter two" 200 "$(gate_until "$owl" /zones/eyrie/enter)"
+check "open_cage stays refused, even for a keyholder" refused \
+  "$(perch "$owl" "$(call open_cage)" | field outcome.kind)"
+check "a restart takes falconers and keyholders back too" 200 "$(status "$owl" /zones/oracle/reset POST)"
 
 echo "Taking the claims back"
 deed_before="$(curl -s -b "$citizen" -H "$JSON" "${GAME}/zones/oracle/" | grep -o '"deed":"[^"]*"')"
@@ -164,7 +237,6 @@ builder_status() {
   curl -s -o /dev/null -w '%{http_code}' -b "$1" -H "$JSON" -H 'content-type: application/json' -X POST \
     "${GAME}/zones/builder/$2" -d "$3"
 }
-field() { node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{console.log(JSON.parse(s)[process.argv[1]])}catch{console.log("")}})' "$1"; }
 knock() { builder "$1" knock "{\"knocker\":\"$2\",\"method\":\"${3:-GET}\"}" | field status; }
 rules() { printf '{"rules":%s}' "$1"; }
 # Asks the builders once a second until Pomerium has taken up the house's latest rules; prints true or false.

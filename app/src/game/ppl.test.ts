@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { parse } from 'yaml'
-import { GROUPS } from './groups.ts'
+import { GRANTED_GROUPS, GROUPS } from './groups.ts'
+import { OWL_TOOLS, isForbidden, type OwlTool } from './owl.ts'
+import { FALCONER } from './perch.ts'
 import { decide, policyDocument, policyYaml, type Identity } from './ppl.ts'
 import { ZONES, zoneById, type PolicyRule, type ZoneId } from './zones.ts'
 
@@ -19,6 +21,91 @@ const nobody: Identity = { authenticated: false, email: '', groups: [] }
 
 const allowed = (zone: ZoneId, who: Identity, method: 'GET' | 'POST' = 'GET') =>
   decide(zoneById(zone), who, { method, path: zoneById(zone).prefix }).allow
+
+const KEEP_GROUPS = [GROUPS.citizens, GROUPS.knights, GROUPS.scholars]
+const falconer = person('falconer@example.org', [...KEEP_GROUPS, GROUPS.falconers])
+
+/** An MCP request to the Aviary: a tools/call for `tool`, or with none, a tools/list. */
+const owlAllowed = (who: Identity, tool?: OwlTool) =>
+  decide(zoneById('aviary'), who, { method: 'POST', path: zoneById('aviary').prefix, tool }).allow
+
+describe('the owl is checked on the player’s behalf, one tool call at a time', () => {
+  it('lets anyone the keep admits send an owl from the perch', () => {
+    expect(allowed('perch', citizen, 'POST')).toBe(false)
+    expect(allowed('perch', knightAndScholar, 'POST')).toBe(true)
+  })
+
+  it('turns back the owl of anyone who is not a falconer, whatever it asks for', () => {
+    expect(owlAllowed(knightAndScholar)).toBe(false)
+    expect(owlAllowed(knightAndScholar, OWL_TOOLS.whoami)).toBe(false)
+    expect(owlAllowed(traveler, OWL_TOOLS.ringBell)).toBe(false)
+  })
+
+  it('lets a falconer’s owl list the tools and call the allowed ones', () => {
+    expect(owlAllowed(falconer)).toBe(true)
+
+    for (const tool of Object.values(OWL_TOOLS).filter((name) => !isForbidden(name)))
+      expect(owlAllowed(falconer, tool), tool).toBe(true)
+  })
+
+  it('forbids the open_ tools to a player’s owl with one deny rule, whatever groups a player can earn', () => {
+    const forbidden = Object.values(OWL_TOOLS).filter(isForbidden)
+
+    expect(forbidden).toEqual([OWL_TOOLS.openCage])
+
+    for (const tool of forbidden) {
+      expect(owlAllowed(falconer, tool), tool).toBe(false)
+      expect(owlAllowed(person('k@example.org', GRANTED_GROUPS), tool), tool).toBe(false)
+    }
+
+    expect(zoneById('aviary').policy.filter((rule) => rule.action === 'deny')).toHaveLength(1)
+  })
+
+  it('lets the Falconer’s owl call the open_ tools, and everything a player’s owl may', () => {
+    const distinguished = person(FALCONER.email, FALCONER.groups)
+
+    expect(allowed('perch', distinguished, 'POST')).toBe(true)
+    expect(owlAllowed(distinguished)).toBe(true)
+
+    for (const tool of Object.values(OWL_TOOLS)) expect(owlAllowed(distinguished, tool), tool).toBe(true)
+  })
+
+  it('never grants a player the group that opens things', () => {
+    expect(GRANTED_GROUPS).not.toContain(GROUPS.distinguishedFalconers)
+  })
+
+  it('writes the deny rule with starts_with and exclude, as Pomerium reads it', () => {
+    expect(policyDocument(zoneById('aviary').policy)).toEqual([
+      { allow: { and: [{ 'claim/groups': GROUPS.falconers }] } },
+      {
+        deny: {
+          and: [
+            { mcp_tool: { starts_with: 'open_' } },
+            { 'claim/groups': { exclude: GROUPS.distinguishedFalconers } },
+          ],
+        },
+      },
+    ])
+  })
+
+  it('opens the Eyrie only to someone who holds every group both chapters earn', () => {
+    const everything = [GROUPS.citizens, GROUPS.knights, GROUPS.scholars, GROUPS.falconers, GROUPS.keyholders]
+
+    expect(allowed('eyrie', person('k@example.org', everything))).toBe(true)
+    expect(allowed('eyrie', falconer)).toBe(false)
+
+    for (const missing of everything)
+      expect(
+        allowed(
+          'eyrie',
+          person(
+            'k@example.org',
+            everything.filter((group) => group !== missing),
+          ),
+        ),
+      ).toBe(false)
+  })
+})
 
 describe('the game explains the same decision Pomerium makes for every zone', () => {
   it('lets only signed-in players through the open gates', () => {

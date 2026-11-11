@@ -1,6 +1,6 @@
 import { Context, Effect, Layer, Redacted, Schema } from 'effect'
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from 'effect/http'
-import { BASE_GROUP, GROUPS, NO_DEED } from '../game/groups.ts'
+import { BASE_GROUP, GRANTED_GROUPS, GROUPS, NO_DEED } from '../game/groups.ts'
 import { QuestConfig } from './config.ts'
 import { OracleUnavailable } from './errors.ts'
 
@@ -25,9 +25,6 @@ export class OracleAdmin extends Context.Service<
     readonly deedOf: (email: string) => Effect.Effect<string | null, OracleUnavailable>
   }
 >()('OracleAdmin') {}
-
-// The groups the Oracle grants. Scribes are never granted, so there is nothing to take back from them.
-const GRANTED = [GROUPS.citizens, GROUPS.knights, GROUPS.scholars]
 
 const TokenResponse = Schema.Struct({ access_token: Schema.String })
 const Found = Schema.Array(Schema.Struct({ id: Schema.String, name: Schema.optional(Schema.String) }))
@@ -177,7 +174,8 @@ export const OracleAdminLive = Layer.effect(
         const base = yield* findGroup(BASE_GROUP, accessToken)
         yield* addToGroup(id, base.id, accessToken)
 
-        for (const name of GRANTED) {
+        // Scribes are never granted, so there is nothing to take back from them.
+        for (const name of GRANTED_GROUPS) {
           const group = yield* findGroup(name, accessToken)
 
           yield* HttpClientRequest.delete(`${adminUrl}/users/${id}/groups/${group.id}`).pipe(

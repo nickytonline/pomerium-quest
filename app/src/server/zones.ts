@@ -1,12 +1,14 @@
 import { Effect, Schema } from 'effect'
 import { GROUPS } from '../game/groups.ts'
 import { turnsAwayOwner, type HouseRule } from '../game/house.ts'
+import { MOCHIS_OWL, OWL_TOOLS } from '../game/owl.ts'
 import { SIGNED_IN_MESSAGE, ZONES } from '../game/zones.ts'
 import { QuestConfig } from './config.ts'
 import { InvalidRules } from './errors.ts'
 import { HouseRules, Houses } from './houses.ts'
 import { Visitors } from './visitors.ts'
 import { PomeriumIdentity, type Player } from './identity.ts'
+import { fly } from './perch.ts'
 import { OracleAdmin } from './oracle-admin.ts'
 import { json } from './runtime.ts'
 
@@ -53,7 +55,20 @@ const readBody =
       ),
     )
 
+/** What the perch sends: list the Aviary's tools, or call one of them. */
+const OwlRequest = Schema.Union([
+  Schema.Struct({ method: Schema.Literal('tools/list') }),
+  Schema.Struct({
+    method: Schema.Literal('tools/call'),
+    tool: Schema.Literals(Object.values(OWL_TOOLS)),
+    args: Schema.optional(
+      Schema.Struct({ mochisOwl: Schema.optional(Schema.Literals(Object.values(MOCHIS_OWL))) }),
+    ),
+  }),
+])
+
 const readKnock = readBody(KnockRequest)
+const readOwl = readBody(OwlRequest)
 const readRules = readBody(HouseRequest)
 
 /** Refuses rules whose deny would lock the owner out of their own door, whatever the editor allowed. */
@@ -88,9 +103,10 @@ const answerHouse = (request: Request, id: string) => {
 
 /** The zone whose route Pomerium matched: the longest prefix, so the scriptorium wins over the library. */
 const zoneAt = (path: string) =>
-  ZONES.filter((zone) => path === zone.prefix || path.startsWith(`${zone.prefix}/`)).sort(
-    (a, b) => b.prefix.length - a.prefix.length,
-  )[0]
+  ZONES.filter(
+    // A zone with a host of its own (an MCP server) isn't served here.
+    (zone) => !zone.host && (path === zone.prefix || path.startsWith(`${zone.prefix}/`)),
+  ).sort((a, b) => b.prefix.length - a.prefix.length)[0]
 
 export const handleZone = (request: Request, splat: string) =>
   Effect.gen(function* () {
@@ -191,6 +207,27 @@ export const handleZone = (request: Request, splat: string) =>
         return json(200, yield* visitors.knock(house.path, knocker, method, house.version))
       }
 
+      // The Falconer writes to the Oracle, like the Captain, once the player has caught their owl. Only
+      // those the keep admits reach the Falconer, so the keep's route carries the letter.
+      case 'POST keep/falconer': {
+        const oracle = yield* OracleAdmin
+        yield* oracle.grant(player.email, GROUPS.falconers)
+
+        return json(200, { granted: GROUPS.falconers, refreshRequired: true, verifiedBy })
+      }
+
+      // The owl flies to the Aviary. Pomerium decides there whether it gets in, and what it may do.
+      case 'POST perch/aviary':
+        return json(200, yield* fly(request, yield* readOwl(request)))
+
+      // The Falconer sends their own owl to open the cage, since the player's may not. It is a real call, made
+      // with the Falconer's session, so Pomerium decides it on the Falconer's behalf, not the player's.
+      case 'POST perch/falconer': {
+        const visitors = yield* Visitors
+
+        return json(200, yield* visitors.sendFalconersOwl({ method: 'tools/call', tool: OWL_TOOLS.openCage }))
+      }
+
       default:
         return json(200, {
           zone: zone.id,
@@ -208,8 +245,7 @@ export const handleZone = (request: Request, splat: string) =>
         Effect.succeed(json(401, { error: 'invalid Pomerium JWT', reason: error.reason })),
       OracleUnavailable: (error) =>
         Effect.succeed(json(502, { error: 'the Oracle is unreachable', reason: error.reason })),
-      InvalidRules: (error) =>
-        Effect.succeed(json(400, { error: 'invalid door rules', reason: error.reason })),
+      InvalidRules: (error) => Effect.succeed(json(400, { error: 'invalid request', reason: error.reason })),
       BuildersBusy: (error) =>
         Effect.succeed(
           Response.json(

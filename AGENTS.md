@@ -13,6 +13,8 @@ policy. The [README](README.md) explains how it fits together; this file is how 
 | `app/src/game/story.ts`   | Talking, reading and gates: everything that asks Pomerium a question           |
 | `app/src/game/content.ts` | What characters say, what signs show, and the docs each lesson links to        |
 | `app/src/game/house*.ts`  | The player's house: its visitors, its statechart, and its letters and bell     |
+| `app/src/game/owl*.ts`    | Chapter two's owl: its tools' names, its statechart and its story              |
+| `mcp/`                    | The owl's MCP server, a second workspace. Pomerium serves it at two routes     |
 | `app/src/game/store.ts`   | State shared by Phaser and React                                               |
 | `app/src/game/sound.ts`   | All music and sound effects, synthesized with the Web Audio API                |
 | `app/src/components/`     | The React UI around the game                                                   |
@@ -56,8 +58,10 @@ policy. The [README](README.md) explains how it fits together; this file is how 
 - Every type assertion (`as`) needs a `// SAFETY:` comment explaining why it holds.
 - The anti-slop lint rules shape a few idioms: use a `Map` or lookup table instead of chained ternaries,
   and leave a blank line between groups of statements.
-- Quest progress is an XState machine (`quest-machine.ts`). Add new stages and events there, not as
-  flags in the store.
+- Quest progress is an XState machine (`quest-machine.ts` for chapter one, `owl-machine.ts` for chapter
+  two). Add new stages and events there, not as flags in the store.
+- The MCP server shares `app/src/game/groups.ts` and `owl.ts` with the game and runs them straight from
+  Node, so those two files import nothing else. After changing anything under `mcp/`, run `./quest deploy`.
 
 ## Teaching Pomerium accurately
 

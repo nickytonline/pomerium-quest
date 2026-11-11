@@ -4,6 +4,9 @@ import { useSyncExternalStore } from 'react'
 import type { Choice, DocLink, LessonId, Page } from './content.ts'
 import type { HouseRule, HouseState } from './house.ts'
 import { houseActor, persistHouse, resetHouse, type HouseEvent, type HouseStage } from './house-machine.ts'
+import { owlActor, persistOwl, resetOwl, type OwlEvent, type OwlStage } from './owl-machine.ts'
+import type { OwlTool } from './owl.ts'
+import type { OwlFlight, PerchPhase } from './perch.ts'
 import type { EvalLine, Identity } from './ppl.ts'
 import {
   persist,
@@ -42,7 +45,8 @@ export interface Progress {
 }
 
 export interface DenyView {
-  readonly status: 401 | 403
+  /** 200 is a refused MCP request: Pomerium answers those with a JSON-RPC error an MCP client can read. */
+  readonly status: 401 | 403 | 200
   readonly title: string
   /** The refusal as the kingdom tells it, shown first; the rest is how Pomerium decided. */
   readonly story: { readonly title: string; readonly text: string }
@@ -53,6 +57,8 @@ export interface DenyView {
   readonly lines: readonly EvalLine[]
   readonly hint: string
   readonly links: readonly DocLink[]
+  /** A refused MCP tool call: the JSON-RPC request the owl carried, and what Pomerium sent back. */
+  readonly rpc?: { readonly request: string; readonly response: string | null }
   /** Pomerium's request ID for this decision, when it came from a real Pomerium. */
   readonly requestId?: string
   /**
@@ -61,6 +67,31 @@ export interface DenyView {
    * what they were (the page was reloaded since signing in again).
    */
   readonly cachedClaims?: { readonly session: readonly string[]; readonly cached: readonly string[] | null }
+}
+
+/** The perch the player is at, and the errand under way there. */
+export interface PerchView {
+  /** The Aviary's tool this perch stands for. */
+  readonly tool: OwlTool
+  /** The owl's last flight to this perch: the MCP request and Pomerium's answer. */
+  readonly flight: OwlFlight | null
+  /** How far the errand has got: the scene flies the owl to match. */
+  readonly phase: PerchPhase
+  /** The player asked to read what the owl brought back, so the perch's panel is open. */
+  readonly explained: boolean
+}
+
+/**
+ * The Falconer's owl, sent to the cage on the Falconer's behalf. It flies out with the request, comes back
+ * with Mochi's owl beside it, and then what it carried can be read.
+ */
+export interface FalconersErrand {
+  /** The flight, once the owl is back: the MCP request and Pomerium's answer. */
+  readonly flight: OwlFlight | null
+  /** How far the errand has got: the scene flies the Falconer's owl, and Mochi's, to match. */
+  readonly phase: 'out' | 'opening' | 'back' | 'done'
+  /** The player asked to read what the owl brought back, so its panel is open. */
+  readonly explained: boolean
 }
 
 export interface LogEntry {
@@ -106,9 +137,9 @@ export interface QuestState {
   readonly signIn: { readonly url: string } | null
   /** The Oracle has appeared beside the player to sign them in again with new claims. */
   readonly oracleBeside: boolean
-  /** The Royal Keep let the player in: the quest is complete. */
+  /** The Royal Keep let the player in: chapter one is complete. */
   readonly finale: boolean
-  /** After Quest complete: fireworks, a happy Pomeranian and the cast. */
+  /** After chapter two's ending: fireworks, a happy Pomeranian and the cast. */
   readonly celebrating: boolean
   /** The player signed in with a phish: the game is lost and can only start over. */
   readonly phished: boolean
@@ -125,6 +156,14 @@ export interface QuestState {
   readonly house: HouseState | null
   /** The door rules editor is open at the desk. Pauses the game. */
   readonly houseEditor: boolean
+  /** Mirrors the owl machine so React can render it. */
+  readonly owlStage: OwlStage
+  /** The perch the player is sending the owl from, until they leave it. Pauses the game. */
+  readonly perch: PerchView | null
+  /** The errand the Falconer's owl is on, until the player has read it or walked away. Pauses the game. */
+  readonly falconersErrand: FalconersErrand | null
+  /** The player brought Mochi their owl in the Eyrie: chapter two, and the quest, are complete. */
+  readonly chapterTwoDone: boolean
 }
 
 /** Health is counted in half hearts: 10 is five full hearts. */
@@ -203,6 +242,10 @@ let state: QuestState = {
   letterRead: houseActor.getSnapshot().context.letterRead,
   house: null,
   houseEditor: false,
+  owlStage: owlActor.getSnapshot().value,
+  perch: null,
+  falconersErrand: null,
+  chapterTwoDone: false,
 }
 
 const listeners = new Set<() => void>()
@@ -235,6 +278,9 @@ export const paused = (s: QuestState) =>
   s.menuOpen ||
   s.journalOpen ||
   s.houseEditor ||
+  s.perch !== null ||
+  s.falconersErrand !== null ||
+  s.chapterTwoDone ||
   !s.started
 
 export const quest = {
@@ -278,6 +324,9 @@ export const quest = {
       oracleBeside: false,
       finale: false,
       celebrating: false,
+      perch: null,
+      falconersErrand: null,
+      chapterTwoDone: false,
     })
   },
   setMode: (mode: Mode, identity: Identity) => update({ mode, identity }),
@@ -301,6 +350,7 @@ export const quest = {
   /** Tells the quest someone signed in. A session holding the deed owns a house, whichever browser it's in. */
   signedIn: (identity: Identity) => {
     quest.send({ type: 'SIGNED_IN', groups: identity.groups })
+    quest.sendOwl({ type: 'SIGNED_IN', groups: identity.groups })
 
     if (identity.deed) quest.sendHouse({ type: 'DEED_GIVEN' })
   },
@@ -310,6 +360,57 @@ export const quest = {
     const snapshot = houseActor.getSnapshot()
     update(noted({ houseStage: snapshot.value, letterRead: snapshot.context.letterRead }))
   },
+  sendOwl: (event: OwlEvent) => {
+    owlActor.send(event)
+    persistOwl()
+    update(noted({ owlStage: owlActor.getSnapshot().value }))
+  },
+  /** The owl hops onto the perch, and waits there while the player is asked whether to send it. */
+  openPerch: (tool: OwlTool) =>
+    update({
+      perch: { tool, flight: null, phase: 'asking', explained: false },
+      menuOpen: false,
+      journalOpen: false,
+    }),
+  /** The owl sets off, lands or is turned back; the scene flies it to match. */
+  perchPhase: (phase: PerchPhase) => {
+    if (state.perch) update({ perch: { ...state.perch, phase } })
+  },
+  /** The owl is back on the perch with its answer, which waits until the player asks to read it. */
+  perchFlew: (flight: OwlFlight) => {
+    if (state.perch) update({ perch: { ...state.perch, flight, phase: 'done', explained: false } })
+  },
+  /** The player asks to read what the owl brought back: the perch's panel opens. */
+  explainPerch: () => {
+    if (state.perch) update({ perch: { ...state.perch, explained: true } })
+  },
+  closePerch: () => update({ perch: null, inputResumesAt: performance.now() + 200 }),
+  /** The Falconer's owl sets off for the cage. */
+  sendFalconersOwl: () =>
+    update({
+      falconersErrand: { flight: null, phase: 'out', explained: false },
+      menuOpen: false,
+      journalOpen: false,
+    }),
+  /** The Falconer's owl is at the cage, and the keeper unlocks it. */
+  cageOpens: () => {
+    if (state.falconersErrand) update({ falconersErrand: { ...state.falconersErrand, phase: 'opening' } })
+  },
+  /** The cage is open: the Falconer's owl and Mochi's fly back. */
+  falconersOwlReturns: () => {
+    if (state.falconersErrand) update({ falconersErrand: { ...state.falconersErrand, phase: 'back' } })
+  },
+  /** Both owls have landed, and what the Falconer's owl carried waits until the player asks to read it. */
+  falconersOwlFlew: (flight: OwlFlight) => {
+    if (state.falconersErrand) update({ falconersErrand: { flight, phase: 'done', explained: false } })
+  },
+  explainFalconersErrand: () => {
+    if (state.falconersErrand) update({ falconersErrand: { ...state.falconersErrand, explained: true } })
+  },
+  closeFalconersErrand: () => update({ falconersErrand: null, inputResumesAt: performance.now() + 200 }),
+  openChapterTwoEnd: () => update({ chapterTwoDone: true, menuOpen: false, journalOpen: false }),
+  /** Chapter two's ending is the quest's: it leads straight on to the celebration. */
+  closeChapterTwoEnd: () => update({ chapterTwoDone: false, celebrating: true }),
   setHouse: (house: HouseState | null) => update({ house }),
   openHouseEditor: () => update({ houseEditor: true, menuOpen: false, journalOpen: false }),
   closeHouseEditor: () => update({ houseEditor: false, inputResumesAt: performance.now() + 200 }),
@@ -324,8 +425,10 @@ export const quest = {
     saveProgress(progress)
     resetQuest()
     resetHouse()
+    resetOwl()
     update({
       progress,
+      owlStage: owlActor.getSnapshot().value,
       houseStage: houseActor.getSnapshot().value,
       letterRead: false,
       house: null,
@@ -408,8 +511,8 @@ export const quest = {
   summonOracle: () => update({ oracleBeside: true }),
   dismissOracle: () => update({ oracleBeside: false }),
   openFinale: () => update({ finale: true, menuOpen: false, journalOpen: false }),
-  /** Quest complete leads straight on to the celebration. */
-  closeFinale: () => update({ finale: false, celebrating: true }),
+  /** Chapter one's ending closes onto the Aviary's grounds: chapter two starts on the keep's far side. */
+  closeFinale: () => update({ finale: false, inputResumesAt: performance.now() + 200 }),
   endCelebration: () => update({ celebrating: false, inputResumesAt: performance.now() + 200 }),
   fallForPhish: () => update({ phished: true, menuOpen: false, journalOpen: false }),
 

@@ -10,12 +10,14 @@ import {
 import { probe } from '../game/access.ts'
 import { startOver } from '../game/restart.ts'
 import { SHEETS } from '../game/sheets.ts'
+import { ChapterTwoEnd, FalconersErrand, Perch } from './Aviary.tsx'
 import { Celebration } from './Celebration.tsx'
 import { HouseEditor } from './House.tsx'
 import { Phished } from './Phished.tsx'
 import { PolicyLines } from './PolicyLines.tsx'
-import { TAB_EVENT, TabbedScreen, switchTab, tabHint } from './TabbedScreen.tsx'
-import { INTRO, LESSONS, LESSON_ORDER, type Choice } from '../game/content.ts'
+import { TAB_EVENT, TabbedScreen, switchTab, tabHint, TabPane } from './TabbedScreen.tsx'
+import { CHAPTER_ONE_LESSONS, INTRO, LESSONS, LESSON_ORDER, type Choice } from '../game/content.ts'
+import { owlMachine, type OwlStage } from '../game/owl-machine.ts'
 import { KNIGHT_QUOTA, questMachine, type QuestStage } from '../game/quest-machine.ts'
 import { MAX_HP, SETTLE_MS, paused, quest, useQuest, type DenyView, type Dir } from '../game/store.ts'
 import { decide, type Identity } from '../game/ppl.ts'
@@ -37,6 +39,19 @@ const STAGE_LABEL: Record<QuestStage, string> = {
   knighted: 'Knighted (stale claims)',
   knight: 'Knight',
   armed: 'Armed knight',
+}
+
+const OWL_LABEL: Record<OwlStage, string> = {
+  afar: '',
+  arrived: 'Beyond the keep',
+  seeking: 'Owl catcher',
+  fledged: 'Owl keeper',
+  turned: 'Owl keeper (owl turned back)',
+  vouched: 'Falconer (stale claims)',
+  falconer: 'Falconer',
+  entrusted: 'Keyholder (stale claims)',
+  keyholder: 'Keyholder',
+  triumphant: 'Hero of the kingdom',
 }
 
 const TOAST_TONE: Record<'allow' | 'deny' | 'info', string> = {
@@ -68,6 +83,8 @@ const linkButton = 'mt-2.5 border-0 bg-transparent p-0 text-[0.8rem] text-muted 
 
 const stageDescription = (stage: QuestStage) =>
   questMachine.getStateNodeById(`quest.${stage}`).description ?? ''
+
+const owlDescription = (stage: OwlStage) => owlMachine.getStateNodeById(`owl.${stage}`).description ?? ''
 
 function useMedia(query: string) {
   return useSyncExternalStore(
@@ -139,8 +156,28 @@ function useDialogKeys() {
       const { celebrating, deny, dialog, finale, houseEditor, journalOpen, menuOpen, phished, signIn } =
         quest.get()
 
-      // The celebration and phished screens, and the house's desk, handle their own keys.
-      if (celebrating || phished || houseEditor) return
+      const { chapterTwoDone, falconersErrand, perch } = quest.get()
+
+      // The celebration and phished screens, the house's desk, and chapter two's ending handle their own keys.
+      // So does the owl's perch, unless a dialog, a refusal or a sign-in is in front of it.
+      if (celebrating || phished || houseEditor || (chapterTwoDone && !dialog)) return
+
+      // A menu or journal opened over them is in front, so it gets Escape first.
+      const overlaid = menuOpen || journalOpen
+
+      if (perch && !overlaid && !dialog && !deny && !signIn) return
+
+      // So does the Falconer's errand panel once it's open, so Escape leaves it without also opening the menu.
+      if (
+        falconersErrand?.explained &&
+        falconersErrand.phase === 'done' &&
+        !overlaid &&
+        !dialog &&
+        !deny &&
+        !signIn
+      )
+        return
+
       const journalKey = event.key === 'i' || event.key === 'I'
       const confirm = event.key === 'Enter' || event.key === ' ' || event.key === 'e' || event.key === 'E'
 
@@ -405,7 +442,7 @@ function Kingdom() {
           Pomerium Quest
         </h1>
         <p className="m-0 text-xs tracking-[0.04em] text-muted uppercase max-sm:hidden">
-          Chapter one · Identity and access
+          <ChapterTitle />
         </p>
         <div className="ml-auto flex gap-2">
           {!wide && <JournalButton />}
@@ -427,6 +464,8 @@ function Kingdom() {
               <GameCanvas view={board?.view} />
               <Toast />
               <DialogBox />
+              <Perch />
+              <FalconersErrand />
               <DenyScreen />
               <HouseEditor />
               <PauseMenu />
@@ -445,10 +484,18 @@ function Kingdom() {
       </div>
       <SignInSheet />
       <Finale />
+      <ChapterTwoEnd />
       <Celebration />
       <Phished />
     </div>
   )
+}
+
+/** Chapter two starts on the far side of the Royal Keep. */
+function ChapterTitle() {
+  const beyondKeep = useQuest((s) => s.owlStage !== 'afar')
+
+  return beyondKeep ? 'Chapter two · Agents and MCP' : 'Chapter one · Identity and access'
 }
 
 function JournalButton() {
@@ -958,7 +1005,7 @@ function Finale() {
       name="finale"
       label="How you got in"
       showing={open}
-      overlay="fixed inset-0 z-50 grid place-items-center bg-[rgb(10_7_22/0.88)] p-4"
+      overlay="fixed inset-0 z-50 flex items-center justify-center bg-[rgb(10_7_22/0.88)] p-4"
       kingdom={<FinaleStory email={identity.email} />}
       pomerium={<FinalePomerium identity={identity} />}
     />
@@ -973,9 +1020,20 @@ const VOUCHED_BY: readonly { readonly role: string; readonly by: string }[] = [
 
 function FinaleStory({ email }: { readonly email: string }) {
   return (
-    <div className="flex flex-col gap-3 rounded-tr-lg rounded-b-lg border-3 border-sun bg-night-deep px-5 py-[18px]">
+    <TabPane
+      className="rounded-tr-lg rounded-b-lg border-3 border-sun bg-night-deep"
+      body="gap-3"
+      actions={
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+          <button className={enterKeep} type="button" onClick={() => quest.closeFinale()} autoFocus>
+            Enter the Keep ▸
+          </button>
+          <p className={`${tabHint} text-muted`}>← → switch tabs · Enter to go in</p>
+        </div>
+      }
+    >
       <h2 id="finale-title-kingdom" className="sunset-text m-0 font-display text-[2rem] leading-tight">
-        Quest complete
+        Chapter one complete
       </h2>
       <p className="m-0">
         The Royal Keep opens its doors to {email}. The guard admits only someone who is all three, and you
@@ -992,6 +1050,9 @@ function FinaleStory({ email }: { readonly email: string }) {
           </li>
         ))}
       </ul>
+      <p className="m-0">
+        Chapter two waits on the keep's far side. Walk on through, and talk to the Falconer.
+      </p>
       <p className="m-0 text-[0.85rem] text-muted">
         Every gate in the kingdom is a Pomerium route, and its guard's orders are the route's policy. See how
         Pomerium let you in on the{' '}
@@ -1000,13 +1061,7 @@ function FinaleStory({ email }: { readonly email: string }) {
         </button>{' '}
         tab.
       </p>
-      <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-1">
-        <button className={enterKeep} type="button" onClick={() => quest.closeFinale()} autoFocus>
-          Enter the Keep ▸
-        </button>
-        <p className={`${tabHint} text-muted`}>← → switch tabs · Enter to go in</p>
-      </div>
-    </div>
+    </TabPane>
   )
 }
 
@@ -1017,7 +1072,17 @@ function FinalePomerium({ identity }: { readonly identity: Identity }) {
   const lines = decide(keep, identity, { method: 'GET', path }).lines
 
   return (
-    <div className="flex flex-col rounded-tr-lg rounded-b-lg border-t-6 border-allow bg-paper px-5 py-[18px] text-paper-ink [&_a]:text-paper-link [&_:focus-visible]:outline-paper-focus">
+    <TabPane
+      className="rounded-tr-lg rounded-b-lg border-t-6 border-allow bg-paper text-paper-ink [&_a]:text-paper-link [&_:focus-visible]:outline-paper-focus"
+      actions={
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-3.5">
+          <button className={enterKeep} type="button" onClick={() => quest.closeFinale()}>
+            Enter the Keep ▸
+          </button>
+          <p className={`${tabHint} text-paper-muted`}>← → switch tabs · Enter to go in</p>
+        </div>
+      }
+    >
       <p className="m-0 font-mono text-[2.2rem] leading-none font-bold text-[#15803d]">200</p>
       <h2 className="mt-0.5 mb-2 text-[1.25rem] font-bold" id="finale-title-pomerium">
         Access allowed
@@ -1035,10 +1100,11 @@ function FinalePomerium({ identity }: { readonly identity: Identity }) {
         the request to the app behind the route. Every guard you passed worked the same way.
       </p>
       <p className="mt-3 mb-1 text-[0.72rem] tracking-[0.08em] text-paper-muted uppercase">
-        Lessons learned · {LESSON_ORDER.filter((id) => learned.includes(id)).length} of {LESSON_ORDER.length}
+        Lessons learned · {CHAPTER_ONE_LESSONS.filter((id) => learned.includes(id)).length} of{' '}
+        {CHAPTER_ONE_LESSONS.length}
       </p>
       <ol className="m-0 grid list-decimal gap-x-6 gap-y-[3px] pl-[1.4em] text-[0.82rem] sm:grid-cols-2">
-        {LESSON_ORDER.map((id) =>
+        {CHAPTER_ONE_LESSONS.map((id) =>
           learned.includes(id) ? (
             <li key={id}>
               <a href={LESSONS[id].link.href} target="_blank" rel="noreferrer">
@@ -1052,13 +1118,7 @@ function FinalePomerium({ identity }: { readonly identity: Identity }) {
           ),
         )}
       </ol>
-      <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-3.5">
-        <button className={enterKeep} type="button" onClick={() => quest.closeFinale()}>
-          Enter the Keep ▸
-        </button>
-        <p className={`${tabHint} text-paper-muted`}>← → switch tabs · Enter to go in</p>
-      </div>
-    </div>
+    </TabPane>
   )
 }
 
@@ -1077,7 +1137,7 @@ function DenyScreen() {
       name="deny"
       label="Why the guard refused"
       showing={deny}
-      overlay="absolute inset-0 grid items-start justify-items-center overflow-auto bg-[rgb(10_7_22/0.88)] p-3.5"
+      overlay="absolute inset-0 flex items-center justify-center bg-[rgb(10_7_22/0.88)] p-3.5"
       kingdom={<DenyStory deny={deny} />}
       pomerium={<DenyPomerium deny={deny} />}
     />
@@ -1086,7 +1146,21 @@ function DenyScreen() {
 
 function DenyStory({ deny }: { readonly deny: DenyView }) {
   return (
-    <div className="flex flex-col rounded-tr-lg rounded-b-lg border-3 border-ink bg-night-deep px-5 py-[18px]">
+    <TabPane
+      className="rounded-tr-lg rounded-b-lg border-3 border-ink bg-night-deep"
+      actions={
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-3.5">
+          <button
+            className="rounded border-2 border-ink bg-panel px-3.5 py-2 font-display text-ink hover:border-sun"
+            type="button"
+            onClick={() => quest.closeDeny()}
+          >
+            Back to the kingdom
+          </button>
+          <p className={`${tabHint} text-muted`}>← → switch tabs · Enter to close</p>
+        </div>
+      }
+    >
       <h2 className="m-0 font-display text-[1.6rem] leading-tight text-deny" id="deny-title-kingdom">
         {deny.story.title}
       </h2>
@@ -1099,23 +1173,30 @@ function DenyStory({ deny }: { readonly deny: DenyView }) {
         </button>{' '}
         tab.
       </p>
-      <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-3.5">
-        <button
-          className="rounded border-2 border-ink bg-panel px-3.5 py-2 font-display text-ink hover:border-sun"
-          type="button"
-          onClick={() => quest.closeDeny()}
-        >
-          Back to the kingdom
-        </button>
-        <p className={`${tabHint} text-muted`}>← → switch tabs · Enter to close</p>
-      </div>
-    </div>
+    </TabPane>
   )
 }
 
+const rpcLabel = 'mt-0 mb-1 text-[0.72rem] tracking-[0.08em] text-paper-muted uppercase'
+const rpcCode = 'mt-0 mb-2 overflow-x-auto rounded bg-paper-tint px-3 py-2.5 text-[0.8rem] leading-[1.45]'
+
 function DenyPomerium({ deny }: { readonly deny: DenyView }) {
   return (
-    <div className="flex flex-col rounded-tr-lg rounded-b-lg border-t-6 border-deny bg-paper px-5 py-[18px] text-paper-ink [&_a]:text-paper-link [&_:focus-visible]:outline-paper-focus">
+    <TabPane
+      className="rounded-tr-lg rounded-b-lg border-t-6 border-deny bg-paper text-paper-ink [&_a]:text-paper-link [&_:focus-visible]:outline-paper-focus"
+      actions={
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-3.5">
+          <button
+            className="rounded bg-paper-ink px-3.5 py-2 text-paper"
+            type="button"
+            onClick={() => quest.closeDeny()}
+          >
+            Back to the kingdom
+          </button>
+          <p className={`${tabHint} text-paper-muted`}>← → switch tabs · Enter to close</p>
+        </div>
+      }
+    >
       {deny.onBehalfOf && (
         <p className="mb-2 rounded bg-paper-tint px-2.5 py-1.5 text-[0.8rem] text-paper-muted">
           Not your request: this is what {deny.onBehalfOf} was told by the guard.
@@ -1130,6 +1211,14 @@ function DenyPomerium({ deny }: { readonly deny: DenyView }) {
       </p>
       <p className="mt-0.5 mb-2.5 text-[0.85rem] text-paper-muted">as {deny.who}</p>
       {deny.cachedClaims && <CachedClaims claims={deny.cachedClaims} />}
+      {deny.rpc && (
+        <>
+          <p className={rpcLabel}>The MCP request the owl carried</p>
+          <pre className={rpcCode}>{deny.rpc.request}</pre>
+          <p className={rpcLabel}>What came back · HTTP {deny.status}</p>
+          <pre className={`${rpcCode} mb-2.5`}>{deny.rpc.response ?? 'Nothing came back.'}</pre>
+        </>
+      )}
       {deny.lines.length > 0 && <PolicyLines lines={deny.lines} />}
       <p className="mt-3">{deny.hint}</p>
       {deny.requestId && (
@@ -1146,17 +1235,7 @@ function DenyPomerium({ deny }: { readonly deny: DenyView }) {
           </li>
         ))}
       </ul>
-      <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-3.5">
-        <button
-          className="rounded bg-paper-ink px-3.5 py-2 text-paper"
-          type="button"
-          onClick={() => quest.closeDeny()}
-        >
-          Back to the kingdom
-        </button>
-        <p className={`${tabHint} text-paper-muted`}>← → switch tabs · Enter to close</p>
-      </div>
-    </div>
+    </TabPane>
   )
 }
 
@@ -1259,6 +1338,11 @@ function DPad() {
 function IdentityPanel() {
   const identity = useQuest((s) => s.identity)
   const stage = useQuest((s) => s.stage)
+  const owl = useQuest((s) => s.owlStage)
+
+  // Beyond the keep, the owl's errands are the story the panel tells.
+  const [label, description] =
+    owl === 'afar' ? [STAGE_LABEL[stage], stageDescription(stage)] : [OWL_LABEL[owl], owlDescription(owl)]
 
   const claims = identity.authenticated
     ? JSON.stringify({ email: identity.email, groups: identity.groups, deed: identity.deed }, null, 2)
@@ -1273,8 +1357,8 @@ function IdentityPanel() {
         <p className={`my-[15px] ${panelMuted}`}>No session. Visit the Oracle to sign in.</p>
       )}
       <p className="mt-2.5 grid gap-0.5">
-        <span className="font-semibold">{STAGE_LABEL[stage]}</span>
-        <span className={panelMuted}>{stageDescription(stage)}</span>
+        <span className="font-semibold">{label}</span>
+        <span className={panelMuted}>{description}</span>
       </p>
     </section>
   )

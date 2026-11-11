@@ -19,13 +19,23 @@ import { decide, routeYaml, type Identity } from './ppl.ts'
 import { startOver } from './restart.ts'
 import { VISITORS, type VisitorId } from './house.ts'
 import { addDeed, citizenshipPages } from './house-story.ts'
+import { owlAtLeast, owlStage } from './owl-machine.ts'
+import { falconer, friend, keeper } from './owl-story.ts'
+import { aviaryOrigin } from './owl.ts'
 import { KNIGHT_QUOTA, hasSteel, isAtLeast, stage, type QuestStage } from './quest-machine.ts'
 import { sfx } from './sound.ts'
 import { MAX_HP, quest, type DenyView, type LogEntry } from './store.ts'
 import type { Gate, GateRequest, NpcId } from './world.ts'
-import { zoneById, type Zone } from './zones.ts'
+import { zoneById, type Zone, type ZoneId } from './zones.ts'
 
 const UPSTREAM = 'http://quest.quest.svc.cluster.local:3000'
+const MCP_UPSTREAM = 'http://mcp.quest.svc.cluster.local:3000'
+
+/** A zone's route as it appears in Pomerium's config: an MCP server on its own host, the rest on the game's. */
+export const zoneRouteYaml = (zone: Zone) =>
+  zone.host
+    ? routeYaml(zone, new URL(aviaryOrigin(location.origin)).host, MCP_UPSTREAM)
+    : routeYaml(zone, location.host, UPSTREAM)
 
 /** Townsfolk as Pomerium sees them: the same accounts that visit the player's house. */
 const townsperson = (id: VisitorId): Identity => {
@@ -37,12 +47,16 @@ const townsperson = (id: VisitorId): Identity => {
 const TRAVELER = townsperson('traveler')
 const BAKER = townsperson('baker')
 
-const learn = (lesson: LessonId) => quest.learn(lesson, LESSONS[lesson].title)
+export const learn = (lesson: LessonId) => quest.learn(lesson, LESSONS[lesson].title)
 const identity = () => quest.get().identity
 
 /** The groups the player's session carried before they last signed in again, while known. */
 let groupsBeforeSignIn: readonly string[] | null = null
-const who = (id: Identity) => (id.authenticated ? id.email : 'anonymous')
+
+/** What Pomerium may still be deciding with for a minute after a sign-in: the groups from before it. */
+export const groupsBefore = () => groupsBeforeSignIn
+
+export const who = (id: Identity) => (id.authenticated ? id.email : 'anonymous')
 
 const claimsCode = (id: Identity) =>
   JSON.stringify({ email: id.email, email_verified: true, groups: id.groups, deed: id.deed }, null, 2)
@@ -81,6 +95,37 @@ function keepRefusal(id: Identity): Refusal {
   }
 }
 
+/** The Eyrie asks for every group in the quest. The keep already checked three; chapter two earns the rest. */
+function eyrieRefusal(id: Identity): Refusal {
+  const missing: string[] = []
+
+  if (!id.groups.includes(GROUPS.falconers))
+    missing.push(
+      owlAtLeast('vouched')
+        ? "carrying your falconer's papers (sign in with the Oracle again)"
+        : 'a falconer (catch your owl, and the Falconer will vouch for you)',
+    )
+
+  if (!id.groups.includes(GROUPS.keyholders))
+    missing.push(
+      owlAtLeast('entrusted')
+        ? 'carrying your key (sign in with the Oracle again)'
+        : "a keyholder (send your owl to the letter's perch, and the Oracle will make you one)",
+    )
+
+  // Only someone the keep admits gets this far on foot, so a session that fails here on the keep's three
+  // groups was changed behind the game's back.
+  if (missing.length === 0) missing.push('everything the Royal Keep asks for')
+
+  return {
+    story: {
+      title: 'Not yet, friend',
+      text: `The Eyrie's guard reads your papers from top to bottom. "My orders are the longest in the kingdom: everything the keep asks, and a falconer, and a keyholder. Your friend Mochi had all of it, and went in. You still need to be ${missing.join(', and ')}."`,
+    },
+    hint: `The Eyrie's one rule has five checks under and: claim/groups: ${GROUPS.citizens}, ${GROUPS.knights}, ${GROUPS.scholars}, ${GROUPS.falconers} and ${GROUPS.keyholders}. Every check must pass; the ✗ lines are the ones your session fails.`,
+  }
+}
+
 /**
  * Why a guard refused, told twice: as the kingdom sees it, and as Pomerium decided it. In the kingdom the
  * policy is the guard's orders and the session is the papers the player carries.
@@ -114,6 +159,8 @@ function refusal(zone: Zone, id: Identity): Refusal {
       }
     case 'keep':
       return keepRefusal(id)
+    case 'eyrie':
+      return eyrieRefusal(id)
     case 'library':
       return citizensOnly('The library')
     case 'scriptorium':
@@ -133,6 +180,22 @@ function refusal(zone: Zone, id: Identity): Refusal {
         hint: 'No allow rule matched this request, so Pomerium denied it.',
       }
   }
+}
+
+/** What a guard says to papers so new that Pomerium still decides with its cached copy of the old ones. */
+const STALE_STORY: Partial<Record<ZoneId, DenyView['story']>> = {
+  armory: {
+    title: 'Easy there, Sir Eager',
+    text: 'The guard squints at your papers. "Knighted this very minute, were you? The ink\'s still wet. Go polish your sword for a bit, then come back."',
+  },
+  eyrie: {
+    title: 'The wax is still warm',
+    text: 'The guard holds your papers up to the light. "A keyholder, since just now? The wax on that is still warm. Let it set a minute, then come back."',
+  },
+  keep: {
+    title: 'The ink is still wet',
+    text: 'The guard peers at your papers. "A scholar, is it? Then you\'ll know the first rule of scholarship: let the ink dry before you wave it about. Give it a minute."',
+  },
 }
 
 const LOG_DECISION: Record<Outcome['kind'], LogEntry['decision']> = {
@@ -182,16 +245,10 @@ function denyView(
 
   const { story, hint } = stale
     ? {
-        story:
-          zone.id === 'armory'
-            ? {
-                title: 'Easy there, Sir Eager',
-                text: 'The guard squints at your papers. "Knighted this very minute, were you? The ink\'s still wet. Go polish your sword for a bit, then come back."',
-              }
-            : {
-                title: 'The ink is still wet',
-                text: 'The guard peers at your papers. "A scholar, is it? Then you\'ll know the first rule of scholarship: let the ink dry before you wave it about. Give it a minute."',
-              },
+        story: STALE_STORY[zone.id] ?? {
+          title: 'The ink is still wet',
+          text: 'The guard peers at your papers. "Fresh from the Oracle, are they? Let the ink dry before you wave them about. Give it a minute."',
+        },
         hint: 'Try again in a moment. Once the cached copy expires, Pomerium reads your updated user record and the guard lets you through.',
       }
     : refusal(zone, id)
@@ -214,7 +271,7 @@ function denyView(
  * Sends a request, records it in the access log, and shows the denial screen when refused. `askSignIn`
  * false skips the sign-in screen, for callers that handle a missing session themselves.
  */
-async function attempt(
+export async function attempt(
   zone: Zone,
   method: 'GET' | 'POST',
   action: string,
@@ -263,9 +320,14 @@ export async function enterGate(
 
   if (zone.id === 'armory' || zone.id === 'library') learn('jwt')
 
-  if (zone.id === 'keep') {
+  // The quest's last gate. The ending waits inside, with the friend who got here first.
+  if (zone.id === 'eyrie') learn('allOf')
+
+  // The keep's doors open with a fanfare once; after that it's the way through to chapter two.
+  if (zone.id === 'keep' && owlStage() === 'afar') {
     learn('allOf')
     sfx('victory')
+    quest.sendOwl({ type: 'KEEP_ENTERED' })
     quest.openFinale()
   }
 
@@ -275,13 +337,13 @@ export async function enterGate(
 const signPage = (signId: SignId, zone: Zone): Page => ({
   who: `Sign · ${zone.name}`,
   text: SIGN_TEXT[signId] ?? '',
-  code: routeYaml(zone, location.host, UPSTREAM),
+  code: zoneRouteYaml(zone),
   links: SIGN_DOCS[signId] ?? [],
 })
 
 /** Shows a gate's sign: its own words above the route config of the zone the gate asks. */
 export function readSign({ signId, zoneId }: Pick<Gate, 'signId' | 'zoneId'>) {
-  quest.say([signPage(signId, zoneById(zoneId))], () => learn('route'))
+  quest.say([signPage(signId, zoneById(zoneId))], () => learn(zoneById(zoneId).mcp ? 'mcpServer' : 'route'))
 }
 
 /** Runs a Pomerium sign-in in a frame over the game, then reads the session it left behind. */
@@ -367,7 +429,7 @@ const welcomeBack = (next: Identity, onDone?: () => void) =>
     onDone,
   )
 
-/** Groups the Captain or the Librarian asked the Oracle to add, whether or not the session has them yet. */
+/** Groups the Captain, the Librarian, the Falconer or the owl asked the Oracle to add, whether or not the session has them yet. */
 function vouchedGroups() {
   const vouched: string[] = []
 
@@ -376,6 +438,10 @@ function vouchedGroups() {
   if (isAtLeast('knighted')) vouched.push(GROUPS.knights)
 
   if (quest.get().progress.scholar) vouched.push(GROUPS.scholars)
+
+  if (owlAtLeast('vouched')) vouched.push(GROUPS.falconers)
+
+  if (owlAtLeast('entrusted')) vouched.push(GROUPS.keyholders)
 
   return vouched
 }
@@ -403,7 +469,7 @@ const refreshPage = (): Page => ({
 })
 
 /** Rather than send the player back to his temple, the Oracle appears beside them with their new claim. */
-function oracleArrives(letter: string) {
+export function oracleArrives(letter: string) {
   quest.summonOracle()
   quest.say([{ who: 'Oracle', text: letter }, refreshPage()], () => {
     learn('refresh')
@@ -726,6 +792,9 @@ const SCRIPTS: Record<NpcId, () => void> = {
     quest.say([hasSteel() ? { who: 'Armorer', text, links: [link('onroute')] } : { who: 'Armorer', text }])
   },
   librarian: () => void librarian(),
+  falconer,
+  keeper,
+  friend,
 }
 
 const LIBRARIAN_INTRO: Page[] = [

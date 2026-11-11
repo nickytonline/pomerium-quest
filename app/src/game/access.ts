@@ -1,6 +1,7 @@
 // How the game asks for access: every gate is a real HTTP request through Pomerium, and the
 // status code is the answer.
 import type { HouseRule, HouseState, Knock, Knocker, OpenedHouse } from './house.ts'
+import type { OwlCall, OwlFlight } from './perch.ts'
 import { type Identity } from './ppl.ts'
 import { ANONYMOUS, type Mode } from './store.ts'
 import { type Zone } from './zones.ts'
@@ -190,6 +191,12 @@ export const knockAs = (knocker: Knocker, method: 'GET' | 'POST') =>
 /** How long the player's knock keeps trying while Pomerium takes up new rules, as the visitors' knocks do. */
 const PICKUP_MS = 25_000
 
+/** A flight that hasn't come back by now is lost, so the perch is freed. Longer than the server's own wait. */
+const FLIGHT_TIMEOUT_MS = 20_000
+
+/** The Falconer's errand signs in first, then flies, so it gets longer than a player's owl. */
+const FALCONER_TIMEOUT_MS = 35_000
+
 /** One knock by the player: Pomerium's status, and the rules version the house saw if it got in. */
 async function knockOnce(path: string, method: 'GET' | 'POST') {
   try {
@@ -225,5 +232,54 @@ export async function knockYourself(house: HouseState, method: 'GET' | 'POST'): 
     if (current || Date.now() - started > PICKUP_MS) return status
 
     await new Promise((resolve) => setTimeout(resolve, 1_000))
+  }
+}
+
+/**
+ * Asks the Falconer to send their own owl to open the cage. The game server makes the same kind of request
+ * as for the player's owl, but signed in as the Falconer, so Pomerium decides it on the Falconer's behalf.
+ */
+export async function sendFalconersOwl(): Promise<Built<OwlFlight>> {
+  try {
+    const response = await fetch('/zones/perch/falconer', {
+      method: 'POST',
+      redirect: 'manual',
+      signal: AbortSignal.timeout(FALCONER_TIMEOUT_MS),
+      headers: { accept: 'application/json' },
+    })
+
+    if (needsSignIn(response)) return { ok: false, message: 'You have no session. Sign in with the Oracle.' }
+
+    if (!response.ok) return { ok: false, message: `${response.status} ${response.statusText}` }
+
+    // SAFETY: our own server route answers with this JSON shape (app/src/server/perch.ts).
+    return { ok: true, value: (await response.json()) as OwlFlight }
+  } catch (error) {
+    return { ok: false, message: String(error) }
+  }
+}
+
+/**
+ * Sends the owl from a perch: the game server makes the MCP request to the Aviary with the token Pomerium
+ * gave it for the player. The perch is a Pomerium route too, so it can refuse before the owl ever flies.
+ */
+export async function sendOwl(call: OwlCall): Promise<Built<OwlFlight>> {
+  try {
+    const response = await fetch('/zones/perch/aviary', {
+      method: 'POST',
+      redirect: 'manual',
+      headers: { accept: 'application/json', 'content-type': 'application/json' },
+      body: JSON.stringify(call),
+      signal: AbortSignal.timeout(FLIGHT_TIMEOUT_MS),
+    })
+
+    if (needsSignIn(response)) return { ok: false, message: 'You have no session. Sign in with the Oracle.' }
+
+    if (!response.ok) return { ok: false, message: `${response.status} ${response.statusText}` }
+
+    // SAFETY: our own server route answers with this JSON shape (app/src/server/perch.ts).
+    return { ok: true, value: (await response.json()) as OwlFlight }
+  } catch (error) {
+    return { ok: false, message: String(error) }
   }
 }
