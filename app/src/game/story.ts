@@ -620,9 +620,14 @@ const refreshPage = (): Page => ({
 
 /** Rather than send the player back to his temple, the Oracle appears beside them with the news, then night falls. He signs no one in: Pomerium refreshes the session by itself. */
 export async function oracleArrives(letter: string) {
+  const epoch = quest.get().epoch
+
   // Pomerium may have refreshed already: then there is no night to warn about, only the good news.
   const { identity: now } = await probe()
   const fresh = now.authenticated && !claimsPendingFor(now)
+
+  // The game was reset or left while the probe was out: this visit belongs to a game that is gone.
+  if (quest.get().epoch !== epoch) return
 
   night.summonOracle()
   quest.say(
