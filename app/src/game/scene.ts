@@ -33,6 +33,7 @@ import {
   readAnvil,
   readBook,
   readSign,
+  DAWN_MS,
   goToBed,
   readWorkbench,
   talk,
@@ -1754,7 +1755,7 @@ export class KingdomScene extends Phaser.Scene {
       return
     }
 
-    this.tweens.add({ targets: dim, alpha: 0, duration: 2500, onComplete: () => dim.destroy() })
+    this.tweens.add({ targets: dim, alpha: 0, duration: DAWN_MS, onComplete: () => dim.destroy() })
   }
 
   /** Fades the Oracle in beside the player when the store asks for him, and out again after. */

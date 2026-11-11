@@ -493,6 +493,9 @@ export interface Sleep {
   readonly wakeUp: () => void
 }
 
+/** How long day takes to fade back in; the morning letter waits for it. */
+export const DAWN_MS = 2500
+
 /** True from nightfall until the session carries the new claims, so a second night can't start on top. */
 let nightFalling = false
 
@@ -534,7 +537,8 @@ export function startNight() {
       groupsBeforeSignIn = identity().authenticated ? identity().groups : null
       quest.setIdentity(next)
       quest.signedIn(next)
-      morningLetter(next, awarded)
+      const fades = matchMedia('(prefers-reduced-motion: no-preference)').matches
+      setTimeout(() => morningLetter(next, awarded), fades ? DAWN_MS : 0)
     },
   )
 }
