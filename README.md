@@ -153,9 +153,9 @@ good news. The wait is this game's setting (about a minute), and it is configura
 | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | <img src="docs/images/night/town-goes-to-bed.gif" width="320" alt="The townsfolk walk off and fade at nightfall"> | <img src="docs/images/night/town-wakes-up.gif" width="320" alt="Everyone fades back in at their posts"> |
 
-| A gate still asks Pomerium at night                                                                                                   | Keepers sleep in their own buildings                                                                                             |
-| ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| <img src="docs/images/night/gate-opens-at-night.png" width="320" alt="The fields guard raises the gate for a signed-in dog at night"> | <img src="docs/images/night/librarian-asleep.png" width="320" alt="The librarian asleep in a bed in the library, with Zs above"> |
+| A gate still asks Pomerium at night; the policy passes                                                                                                              | Keepers sleep in their own buildings                                                                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| <img src="docs/images/night/gate-opens-at-night.png" width="320" alt="The policy check passes for the signed-in dog, so the fields guard raises the gate at night"> | <img src="docs/images/night/librarian-asleep.png" width="320" alt="The librarian asleep in a bed in the library, with Zs above"> |
 
 ### Write the rules on your own door
 
