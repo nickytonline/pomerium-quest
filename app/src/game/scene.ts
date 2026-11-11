@@ -1647,14 +1647,28 @@ export class KingdomScene extends Phaser.Scene {
     const x = center(bed.x)
     const y = center(bed.y)
     player.anims.stop()
-    player
-      .setFrame(DOG_FRAME.down)
-      .setAngle(90)
-      .setPosition(x, y + 1)
+    player.setFrame(DOG_FRAME.down)
+    this.sleepers = { bed, zs: [] }
 
-    const zs = this.drawZs(x, y)
+    // The bed is a tile away: step onto it, so the camera glides rather than jumps.
+    if (!matchMedia('(prefers-reduced-motion: no-preference)').matches) {
+      player.setAngle(90).setPosition(x, y + 1)
+      this.sleepers.zs = this.drawZs(x, y)
 
-    this.sleepers = { bed, zs }
+      return
+    }
+
+    this.tweens.add({
+      targets: player,
+      x,
+      y: y + 1,
+      angle: 90,
+      duration: 250,
+      onComplete: () => {
+        // Morning may have come, or the player have woken, before they finished lying down.
+        if (this.sleepers?.bed === bed) this.sleepers.zs = this.drawZs(x, y)
+      },
+    })
   }
 
   /** Morning: the dog gets up beside the bed, as they were. */
@@ -1669,8 +1683,25 @@ export class KingdomScene extends Phaser.Scene {
       z.destroy()
     }
 
-    this.player?.setAngle(0).setPosition(center(this.pos.x), center(this.pos.y))
-    this.player?.setFrame(DOG_FRAME[this.dir])
+    const player = this.player
+
+    if (!player) return
+    this.tweens.killTweensOf(player)
+    player.setFrame(DOG_FRAME[this.dir])
+
+    if (!matchMedia('(prefers-reduced-motion: no-preference)').matches) {
+      player.setAngle(0).setPosition(center(this.pos.x), center(this.pos.y))
+
+      return
+    }
+
+    this.tweens.add({
+      targets: player,
+      x: center(this.pos.x),
+      y: center(this.pos.y),
+      angle: 0,
+      duration: 250,
+    })
   }
 
   private swing() {
