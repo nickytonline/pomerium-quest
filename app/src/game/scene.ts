@@ -1937,6 +1937,11 @@ export class KingdomScene extends Phaser.Scene {
     if (wanted && !shown) {
       // Let the dog finish the step they are on, so he appears beside where they stop, not on their way.
       if (this.walkingTo) return
+
+      // Already face to face with the Oracle: a second one beside him would be two of the same.
+      const host = this.standing().find((npc) => npc.npcId === 'oracle')
+
+      if (host && Math.abs(host.x - this.pos.x) <= 1 && Math.abs(host.y - this.pos.y) <= 1) return
       const spot = this.besidePlayer()
 
       const oracle = this.add
