@@ -19,7 +19,7 @@
     "@modelcontextprotocol/node": "2.1.2",
     "@modelcontextprotocol/server": "2.4.0",
     "express": "5.3.0",
-    "jose": "6.2.13",
+    "jose": "6.2.15",
     "pino": "10.4.0",
     "zod": "4.6.7"
   },
