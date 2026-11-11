@@ -190,9 +190,14 @@ type BedId = keyof typeof BEDS
  * nearestBed only looks at BEDS. Everyone else is game data and simply walks off, so has no bed.
  */
 const LIBRARIAN_BED = { x: 36, y: 26 } as const satisfies Point
+const CAPTAIN_BED = { x: 23, y: 3 } as const satisfies Point
 const FALCONER_BED = { x: 31, y: 31 } as const satisfies Point
 
-export const NPC_BEDS: Partial<Record<NpcId, Point>> = { librarian: LIBRARIAN_BED, falconer: FALCONER_BED }
+export const NPC_BEDS: Partial<Record<NpcId, Point>> = {
+  captain: CAPTAIN_BED,
+  librarian: LIBRARIAN_BED,
+  falconer: FALCONER_BED,
+}
 
 const BED_IDS: readonly BedId[] = ['guest', 'home', 'inn', 'hut']
 
@@ -437,6 +442,7 @@ export function buildWorld(): World {
   set(fountain.x, fountain.y + 1, TILE.fountainBottomLeft)
   set(fountain.x + 1, fountain.y + 1, TILE.fountainBottomRight)
   room(18, 2, 24, 7)
+  set(CAPTAIN_BED.x, CAPTAIN_BED.y, TILE.bed)
   room(30, 2, 37, 7)
   fill(21, 8, 21, 11, TILE.cobble)
   fill(33, 8, 33, 11, TILE.cobble)
