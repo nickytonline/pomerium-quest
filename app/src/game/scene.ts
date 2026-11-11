@@ -57,6 +57,7 @@ import {
   inHouse,
   goesToBed,
   nearestBed,
+  BEDS,
   NPC_BEDS,
   regionAt,
   same,
@@ -1603,7 +1604,8 @@ export class KingdomScene extends Phaser.Scene {
 
     if (LOAF.includes(tile)) readTable(this.bread, WHOLE_LOAF)
 
-    if (tile === TILE.bed) {
+    // Only the player's beds: an NPC's bed, like the sage's, is theirs to retire onto.
+    if (tile === TILE.bed && Object.values(BEDS).some((bed) => same(bed, target))) {
       void goToBed({ lieDown: () => this.lieDown(target), wakeUp: () => this.wakeUp() })
     }
 
@@ -1831,15 +1833,21 @@ export class KingdomScene extends Phaser.Scene {
 
   /** At night the guards stay, but the townsfolk go: the keepers into their own beds, the rest off the map. */
   private async townGoesToBed() {
-    const busy = (npc: NpcSprite) =>
-      !goesToBed(npc.npcId) ||
+    const occupied = (npc: NpcSprite) =>
       (npc.npcId === 'traveler' && (this.traveler.moving || this.traveler.plan !== 'roam')) ||
       (npc.npcId === 'captain' && this.captain !== 'guild')
 
     const night = ++this.nightId
 
+    // Anyone mid-errand turns in as soon as they are done, if this same night is still on.
+    const retireWhenFree = async (npc: NpcSprite) => {
+      while (this.stillNight(night) && occupied(npc)) await this.pause(500)
+
+      if (this.stillNight(night) && !npc.retired) await this.retire(npc, night)
+    }
+
     await Promise.all(
-      this.npcs.filter((npc) => !npc.retired && !busy(npc)).map((npc) => this.retire(npc, night)),
+      this.npcs.filter((npc) => !npc.retired && goesToBed(npc.npcId)).map((npc) => retireWhenFree(npc)),
     )
   }
 
