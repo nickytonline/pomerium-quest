@@ -358,14 +358,33 @@ function signInWithPomerium(url: string, onSignedIn: (next: Identity) => void, o
           return
         }
 
-        groupsBeforeSignIn = identity().authenticated ? identity().groups : null
-        quest.setIdentity(next)
-        quest.signedIn(next)
-        onSignedIn(next)
+        void clearLeftoverClaims(next).then((fresh) => {
+          groupsBeforeSignIn = identity().authenticated ? identity().groups : null
+          quest.setIdentity(fresh)
+          quest.signedIn(fresh)
+          onSignedIn(fresh)
+        })
       })
     },
     onCancel,
   )
+}
+
+/**
+ * A newcomer's save is empty, so any claims their sign-in carries belong to an earlier game that was never taken
+ * back (a restart while the session had lapsed can't reach the Oracle). The Oracle takes them back now, and the
+ * game waits for Pomerium's refresh to drop them, so a new game never starts with the old one's claims.
+ */
+async function clearLeftoverClaims(next: Identity): Promise<Identity> {
+  if (!next.authenticated || stage() !== 'newcomer' || (next.groups.length === 0 && !next.deed)) return next
+
+  const outcome = await requestZone(zoneById('oracle'), 'POST', 'reset')
+
+  if (outcome.kind !== 'allow') return next
+
+  quest.toast('The Oracle is taking back claims from your last game.', 'info')
+
+  return (await waitForClaims((id) => id.groups.length === 0 && !id.deed)) ?? next
 }
 
 /** What the Oracle says to a newcomer who has signed in: the sage has news. */
