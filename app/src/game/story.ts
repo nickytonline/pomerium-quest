@@ -24,7 +24,7 @@ import { falconer, friend, keeper } from './owl-story.ts'
 import { aviaryOrigin } from './owl.ts'
 import { KNIGHT_QUOTA, hasSteel, isAtLeast, stage, type QuestStage } from './quest-machine.ts'
 import { sfx } from './sound.ts'
-import { MAX_HP, quest, type DenyView, type LogEntry } from './store.ts'
+import { MAX_HP, paused, quest, type DenyView, type LogEntry } from './store.ts'
 import type { Gate, GateRequest, NpcId } from './world.ts'
 import { zoneById, type Zone, type ZoneId } from './zones.ts'
 
@@ -612,14 +612,17 @@ export async function startNight(): Promise<'fresh' | undefined> {
 }
 
 /**
- * Runs `deliver` once nothing is being said, so a letter never replaces a dialogue or a refusal and drops its
+ * Runs `deliver` once nothing has the player's attention, so a letter never replaces a dialogue, a refusal
+ * or an errand and drops its
  * completion callback. A game that was reset or left meanwhile gets no letter.
  */
 function whenQuiet(epoch: number, deliver: () => void) {
   const attempt = () => {
     if (quest.get().epoch !== epoch) return true
 
-    if (quest.get().dialog || quest.get().deny) return false
+    // Anything holding the player's attention (a dialog, a refusal, the Falconer's cage errand, a perch)
+    // would have its own dialog replaced by the letter, and lose the Oracle's dismissal in the swap.
+    if (paused(quest.get())) return false
     deliver()
 
     return true
