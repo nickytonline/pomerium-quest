@@ -175,13 +175,13 @@ export const HOUSE: House = {
   inside: { x0: 2, y0: 10, x1: 6, y1: 14 },
 }
 
-/** The beds: the sage's guest bed, for a newcomer with no house, and the player's own. */
+/** The beds, one wherever the Oracle's word can arrive, so nobody walks home to sleep: the sage's guest bed, the player's own, the town inn's and the Aviary's hut. */
 export const BEDS = {
   guest: { x: 13, y: 24 },
   home: { x: 6, y: 10 },
+  inn: { x: 22, y: 14 },
+  hut: { x: 33, y: 31 },
 } as const satisfies Record<string, Point>
-
-export type BedId = keyof typeof BEDS
 
 export const inHouse = (point: Point) =>
   point.x >= HOUSE.inside.x0 &&
@@ -361,6 +361,11 @@ export function buildWorld(): World {
     TILE.flowers,
   )
 
+  // The inn, a guest bed off the square for anyone waiting on the Oracle's word.
+  room(19, 13, 23, 15)
+  set(21, 13, TILE.floor)
+  set(BEDS.inn.x, BEDS.inn.y, TILE.bed)
+
   // Library Quarter.
   fill(27, 18, 28, 19, TILE.cobble)
   fill(20, 19, 33, 19, TILE.cobble)
@@ -436,6 +441,11 @@ export function buildWorld(): World {
     ],
     TILE.flowers,
   )
+
+  // The falconer's hut, north of the road, with a guest bed.
+  room(30, 30, 34, 32)
+  set(32, 32, TILE.floor)
+  set(BEDS.hut.x, BEDS.hut.y, TILE.bed)
 
   const perches: Perch[] = [
     { x: 24, y: 35, tool: OWL_TOOLS.whoami },

@@ -137,7 +137,9 @@ export interface QuestState {
   readonly signIn: { readonly url: string } | null
   /** The Oracle has appeared beside the player to sign them in again with new claims. */
   readonly oracleBeside: boolean
-  /** The player is asleep, waiting for Pomerium to hear of their new claims. */
+  /** It is night: the game waits for Pomerium's token to carry the Oracle's new claims, then morning comes. */
+  readonly night: boolean
+  /** The player is asleep in a bed during the night. */
   readonly sleeping: boolean
   /** The Royal Keep let the player in: chapter one is complete. */
   readonly finale: boolean
@@ -234,6 +236,7 @@ let state: QuestState = {
   menuOpen: false,
   signIn: null,
   oracleBeside: false,
+  night: false,
   sleeping: false,
   finale: false,
   celebrating: false,
@@ -326,6 +329,7 @@ export const quest = {
       dialog: null,
       deny: null,
       oracleBeside: false,
+      night: false,
       sleeping: false,
       finale: false,
       celebrating: false,
@@ -515,6 +519,7 @@ export const quest = {
   },
   summonOracle: () => update({ oracleBeside: true }),
   dismissOracle: () => update({ oracleBeside: false }),
+  setNight: (night: boolean) => update({ night, sleeping: night && state.sleeping }),
   setSleeping: (sleeping: boolean) => update({ sleeping }),
   openFinale: () => update({ finale: true, menuOpen: false, journalOpen: false }),
   /** Chapter one's ending closes onto the Aviary's grounds: chapter two starts on the keep's far side. */

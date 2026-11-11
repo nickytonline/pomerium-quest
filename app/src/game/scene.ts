@@ -38,7 +38,6 @@ import {
   talk,
 } from './story.ts'
 import {
-  BEDS,
   BOARD_TILES,
   FALCONER_BARE_FRAME,
   GUARD_FRAME,
@@ -461,9 +460,10 @@ export class KingdomScene extends Phaser.Scene {
   private seen = { interact: 0, attack: 0 }
 
   /** While the dog sleeps in a bed: where, the night's dimming and the Zs above them. */
-  private sleepers:
-    | { bed: Point; dim: Phaser.GameObjects.Rectangle; zs: Phaser.GameObjects.Text[] }
-    | undefined
+  private sleepers: { bed: Point; zs: Phaser.GameObjects.Text[] } | undefined
+
+  /** The night's dimming, while the game waits for Pomerium to hear of new claims. */
+  private nightDim: Phaser.GameObjects.Rectangle | undefined
   private pending = new Set<Action>()
   private lastRockHint = 0
   /** The Oracle, appearing beside the player to sign them in again with new claims. */
@@ -1084,6 +1084,7 @@ export class KingdomScene extends Phaser.Scene {
     const tapped = DIRS.find((dir) => pending.has(dir))
     this.seen = { interact: controls.interact, attack: controls.attack }
     this.syncOracle()
+    this.syncNight()
 
     if (quest.isPaused() || performance.now() < inputResumesAt) {
       this.idle()
@@ -1584,15 +1585,13 @@ export class KingdomScene extends Phaser.Scene {
     if (LOAF.includes(tile)) readTable(this.bread, WHOLE_LOAF)
 
     if (tile === TILE.bed) {
-      const bed = same(target, BEDS.guest) ? 'guest' : 'home'
-
-      goToBed(bed, { lieDown: () => this.lieDown(target), wakeUp: () => this.wakeUp() })
+      goToBed({ lieDown: () => this.lieDown(target), wakeUp: () => this.wakeUp() })
     }
 
     if (tile === TILE.doorLocked) this.lockedHint()
   }
 
-  /** The dog curls up on the bed, the room dims, and a trail of Zs rises while they sleep. */
+  /** The dog curls up on the bed, and a trail of Zs rises while they sleep. */
   private lieDown(bed: Point) {
     const player = this.player
 
@@ -1606,12 +1605,6 @@ export class KingdomScene extends Phaser.Scene {
       .setAngle(90)
       .setPosition(x, y + 1)
 
-    const dim = this.add
-      .rectangle(0, 0, this.scale.width * 4, this.scale.height * 4, 0x0b1026)
-      .setScrollFactor(0)
-      .setDepth(40)
-      .setAlpha(animated ? 0 : 0.5)
-
     const zs = ['z', 'Z', 'Z'].map((letter, i) =>
       this.add
         .text(x + 4 + i * 5, y - 6 - i * 6, letter, {
@@ -1624,10 +1617,9 @@ export class KingdomScene extends Phaser.Scene {
         .setDepth(41),
     )
 
-    this.sleepers = { bed, dim, zs }
+    this.sleepers = { bed, zs }
 
     if (!animated) return
-    this.tweens.add({ targets: dim, alpha: 0.5, duration: 900 })
 
     for (const [i, z] of zs.entries())
       this.tweens.add({
@@ -1640,13 +1632,12 @@ export class KingdomScene extends Phaser.Scene {
       })
   }
 
-  /** Morning: the dog gets up beside the bed, as they were, and the room brightens. */
+  /** Morning: the dog gets up beside the bed, as they were. */
   private wakeUp() {
     const sleepers = this.sleepers
 
     if (!sleepers) return
     this.sleepers = undefined
-    sleepers.dim.destroy()
 
     for (const z of sleepers.zs) {
       this.tweens.killTweensOf(z)
@@ -1729,6 +1720,41 @@ export class KingdomScene extends Phaser.Scene {
     this.shatterRock(target)
     quest.progress({ brokenRocks: [...quest.get().progress.brokenRocks, keyOf(target)] })
     quest.toast('The steel sword splits the rock.', 'info')
+  }
+
+  /** Night falls while the store says so, and fades back to day once the session carries the new claims. */
+  private syncNight() {
+    const night = quest.get().night
+    const dim = this.nightDim
+
+    if (night === Boolean(dim)) return
+    const animated = matchMedia('(prefers-reduced-motion: no-preference)').matches
+
+    if (night) {
+      const added = this.add
+        .rectangle(0, 0, this.scale.width * 4, this.scale.height * 4, 0x0b1026)
+        .setScrollFactor(0)
+        .setDepth(40)
+        .setAlpha(animated ? 0 : 0.5)
+
+      this.nightDim = added
+
+      if (animated) this.tweens.add({ targets: added, alpha: 0.5, duration: 1500 })
+
+      return
+    }
+
+    this.nightDim = undefined
+
+    if (!dim) return
+
+    if (!animated) {
+      dim.destroy()
+
+      return
+    }
+
+    this.tweens.add({ targets: dim, alpha: 0, duration: 2500, onComplete: () => dim.destroy() })
   }
 
   /** Fades the Oracle in beside the player when the store asks for him, and out again after. */
