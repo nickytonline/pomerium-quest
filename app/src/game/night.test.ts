@@ -164,6 +164,30 @@ describe('a session that is already fresh', () => {
   })
 })
 
+describe("the Oracle's letter", () => {
+  const pages = (quest: Awaited<ReturnType<typeof load>>['quest']) =>
+    quest.get().dialog?.pages.map((page) => page.text) ?? []
+
+  it('warns that night will fall while the session is stale', async () => {
+    const { quest, story } = await load()
+
+    await story.oracleArrives('The letter arrived.')
+
+    expect(pages(quest).some((text) => text.includes('Night will fall'))).toBe(true)
+  })
+
+  it('does not mention night when Pomerium has already refreshed the session', async () => {
+    const { quest, story } = await load()
+    const access = await import('./access.ts')
+    // SAFETY: the story reads only `identity` from a probe, so a partial result is enough for the test.
+    vi.mocked(access.probe).mockResolvedValueOnce({ identity: withClaims } as never)
+
+    await story.oracleArrives('The letter arrived.')
+
+    expect(pages(quest).some((text) => text.includes('Night will fall'))).toBe(false)
+  })
+})
+
 describe('sleeping through the night', () => {
   it('lays the player down and marks them asleep', async () => {
     const { quest, story, sfx } = await load()

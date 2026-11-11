@@ -489,8 +489,11 @@ const staleGroups = () => missingGroups(identity())
 export const claimsPending = () => {
   const id = identity()
 
-  return id.authenticated && (staleGroups().length > 0 || (isAtLeast('granted') && !id.deed))
+  return id.authenticated && claimsPendingFor(id)
 }
+
+/** Whether a session lacks a claim, or the deed, that the Oracle has awarded. */
+const claimsPendingFor = (id: Identity) => missingGroups(id).length > 0 || (isAtLeast('granted') && !id.deed)
 
 /** The player's end of a night's sleep: the scene lays the dog down in the bed and gets them up again. */
 export interface Sleep {
@@ -521,8 +524,7 @@ export async function startNight(): Promise<'fresh' | undefined> {
   nightFalling = true
 
   const awarded = staleGroups()
-  const needsDeed = isAtLeast('granted')
-  const ready = (id: Identity) => missingGroups(id).length === 0 && (!needsDeed || Boolean(id.deed))
+  const ready = (id: Identity) => !claimsPendingFor(id)
 
   // Pomerium refreshes on its own cycle, so the session may already carry the new claims. Then there is
   // nothing to wait out: no night, just the news.
@@ -540,13 +542,10 @@ export async function startNight(): Promise<'fresh' | undefined> {
 
   quest.setNight(true)
 
-  // Pomerium refreshes on its own cycle, so the session may already carry the claims: night still lasts long
-  // enough to be seen, rather than flickering by.
+  // However soon the claims arrive, night lasts long enough to be seen, rather than flickering by.
   const lasted = new Promise<void>((resolve) => setTimeout(resolve, MIN_NIGHT_MS))
 
-  const arrived = waitForClaims(
-    (next) => missingGroups(next).length === 0 && (!needsDeed || Boolean(next.deed)),
-  )
+  const arrived = waitForClaims(ready)
 
   void Promise.all([arrived, lasted]).then(([next]) => {
     nightFalling = false
@@ -599,13 +598,20 @@ const refreshPage = (): Page => ({
 })
 
 /** Rather than send the player back to his temple, the Oracle appears beside them with the news, then night falls. He signs no one in: Pomerium refreshes the session by itself. */
-export function oracleArrives(letter: string) {
+export async function oracleArrives(letter: string) {
+  // Pomerium may have refreshed already: then there is no night to warn about, only the good news.
+  const { identity: now } = await probe()
+  const fresh = now.authenticated && !claimsPendingFor(now)
+
   quest.summonOracle()
-  quest.say([{ who: 'Oracle', text: letter }, refreshPage()], () => {
-    learn('refresh')
-    quest.dismissOracle()
-    void startNight()
-  })
+  quest.say(
+    fresh ? [{ who: 'Oracle', text: letter }] : [{ who: 'Oracle', text: letter }, refreshPage()],
+    () => {
+      learn('refresh')
+      quest.dismissOracle()
+      void startNight()
+    },
+  )
 }
 
 function oracle() {
@@ -730,7 +736,7 @@ async function captain() {
     ],
     () => {
       learn('claims')
-      oracleArrives("The Captain's letter arrived. I've added knights to your groups.")
+      void oracleArrives("The Captain's letter arrived. I've added knights to your groups.")
     },
   )
 }
@@ -996,7 +1002,7 @@ async function librarian() {
         links: [link('claims')],
       },
     ],
-    () => oracleArrives("The Librarian's letter arrived. I've added scholars to your groups."),
+    () => void oracleArrives("The Librarian's letter arrived. I've added scholars to your groups."),
   )
 }
 
