@@ -141,6 +141,22 @@ steel sword splits the cracked rocks that block the road to the library.
 From there, the library lets citizens read but only scribes into its scriptorium, the Librarian can make you a scholar,
 and the Royal Keep at the end of the road wants a citizen who is a knight and a scholar at once.
 
+### Night: waiting for new claims
+
+When the Oracle awards a claim, your session still holds the old ones until Pomerium refreshes it, so
+night falls. The screen dims and the townsfolk go to bed or walk off the map: they are only game data.
+The guards stay at their gates, and so does the Oracle, your identity provider, so Pomerium still checks
+every gate while you wait. If Pomerium has already refreshed your session, there is no night, only the
+good news. The wait is this game's setting (about a minute), and it is configurable.
+
+| The town goes to bed                                                                                              | Morning                                                                                                 |
+| ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| <img src="docs/images/night/town-goes-to-bed.gif" width="320" alt="The townsfolk walk off and fade at nightfall"> | <img src="docs/images/night/town-wakes-up.gif" width="320" alt="Everyone fades back in at their posts"> |
+
+| A gate still asks Pomerium at night                                                                                                   | Keepers sleep in their own buildings                                                                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| <img src="docs/images/night/gate-opens-at-night.png" width="320" alt="The fields guard raises the gate for a signed-in dog at night"> | <img src="docs/images/night/librarian-asleep.png" width="320" alt="The librarian asleep in a bed in the library, with Zs above"> |
+
 ### Write the rules on your own door
 
 The Oracle gives you a house in the Slime Fields once you are a citizen. Its door is a real Pomerium route too, and it starts
