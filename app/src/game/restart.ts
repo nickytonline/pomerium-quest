@@ -6,9 +6,7 @@ import { zoneById } from './zones.ts'
 
 /**
  * Starts the game over. A signed-in player's claims are taken back at the Oracle and their session ends, so they
- * log in again to begin. The sign-out lands on Pomerium's own signed-out page: sending it back into the game
- * would need Pomerium's open allow_any_sign_out_redirect_uri flag, which the game leaves off. The sleeping and
- * polling for new claims only happen once they are back in the game.
+ * log in again to begin. The sleeping and polling for new claims only happen once they are back in the game.
  */
 export async function startOver() {
   const state = quest.get()
@@ -27,6 +25,21 @@ export async function startOver() {
 
   quest.resetProgress()
 
-  if (identity.authenticated) location.assign('/.pomerium/sign_out')
-  else location.reload()
+  if (identity.authenticated) await signOut()
+
+  location.reload()
+}
+
+/**
+ * Ends the Pomerium session without leaving the game. A page visit would stop on Pomerium's signed-out page,
+ * and landing back in the game needs the open allow_any_sign_out_redirect_uri flag, which the game leaves off.
+ * A fetch follows the redirect to the authenticate service, which ends the session, and a frame couldn't:
+ * that service refuses to be framed. The response is opaque, which is fine, since only the effect matters.
+ */
+async function signOut() {
+  try {
+    await fetch('/.pomerium/sign_out', { mode: 'no-cors', credentials: 'include' })
+  } catch {
+    // The reload below shows whether the session ended: a lapsed one asks for a login.
+  }
 }
