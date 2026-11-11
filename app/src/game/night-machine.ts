@@ -1,12 +1,15 @@
-// The night the Oracle's claims take to reach the session, as a statechart. Two regions run side by side:
+// The night the Oracle's claims take to reach the session, as a statechart. Three regions run side by side:
 //
 //   night:  day → dusk → dark | day         dark: awake ⇄ asleep
 //   letter: none → dawning → waiting → none
+//   oracle: away → beside (arriving → attending) → away
 //
 // Night falls when the Oracle awards a claim. At dusk the game checks whether Pomerium has already refreshed
 // the session: if so it is day again at once, with the news. Otherwise it is dark until the new claims have
 // arrived and the shortest night has passed, and then morning comes. The morning letter is a second region,
 // so it can wait for the player's attention to be free instead of landing on top of a dialog or an errand.
+// The Oracle stands beside the player from his summons until the dialog he came for is over, so he can
+// never be left standing there when another dialog takes its place.
 //
 // The machine holds no effects. The story provides them (see `startNightActor`), and events from a night
 // that was reset or replaced carry its id, so they are dropped.
@@ -57,6 +60,8 @@ export type NightEvent =
   | { readonly type: 'BED'; readonly sleeper: Sleeper }
   | { readonly type: 'ATTENTION'; readonly busy: boolean }
   | { readonly type: 'LETTER'; readonly morning: Morning }
+  | { readonly type: 'SUMMON' }
+  | { readonly type: 'DISMISS' }
   | { readonly type: 'RESET' }
 
 /** What the machine asks of the game. Each is provided by the story, so the machine stays pure. */
@@ -69,6 +74,8 @@ export interface NightEffects {
   readonly signsIn: (next: Identity) => void
   readonly missedMorning: () => void
   readonly deliversLetter: (morning: Morning) => void
+  readonly oracleComes: () => void
+  readonly oracleGoes: () => void
 }
 
 const letterFor = (context: NightContext, next: Identity, early: boolean): Morning => ({
@@ -93,6 +100,7 @@ export const nightMachine = setup({
     arrived: ({ context }) => context.minPassed && context.settled && context.next !== null,
     missed: ({ context }) => context.minPassed && context.settled && context.next === null,
     attentionFree: ({ context }) => !context.busy,
+    attentionTaken: ({ context }) => context.busy,
   },
   actions: {
     // Provided by the story; these do nothing on their own.
@@ -104,6 +112,8 @@ export const nightMachine = setup({
     signsIn: () => {},
     missedMorning: () => {},
     deliversLetter: () => {},
+    oracleComes: () => {},
+    oracleGoes: () => {},
   },
 }).createMachine({
   id: 'night',
@@ -223,6 +233,25 @@ export const nightMachine = setup({
         },
       },
     },
+
+    // The Oracle beside the player. He comes with a dialog and goes when the player's attention is free again.
+    oracle: {
+      initial: 'away',
+      on: { RESET: { target: '.away' }, DISMISS: { target: '.away' } },
+      states: {
+        away: { on: { SUMMON: 'beside' } },
+        beside: {
+          initial: 'arriving',
+          entry: 'oracleComes',
+          exit: 'oracleGoes',
+          states: {
+            // His dialog has not opened yet.
+            arriving: { always: { guard: 'attentionTaken', target: 'attending' } },
+            attending: { always: { guard: 'attentionFree', target: '#night.oracle.away' } },
+          },
+        },
+      },
+    },
   },
 })
 
@@ -239,6 +268,8 @@ export function startNightActor(effects: NightEffects) {
         signsIn: ({ context }) => context.next && effects.signsIn(context.next),
         missedMorning: effects.missedMorning,
         deliversLetter: ({ context }) => context.morning && effects.deliversLetter(context.morning),
+        oracleComes: effects.oracleComes,
+        oracleGoes: effects.oracleGoes,
       },
     }),
   ).start()
@@ -267,6 +298,9 @@ export function startNightActor(effects: NightEffects) {
       busy = now
       actor.send({ type: 'ATTENTION', busy: now })
     },
+    summonOracle: () => actor.send({ type: 'SUMMON' }),
+    dismissOracle: () => actor.send({ type: 'DISMISS' }),
+    beside: () => snapshot().matches({ oracle: 'beside' }),
     reset: () => actor.send({ type: 'RESET' }),
     stop: () => actor.stop(),
   }

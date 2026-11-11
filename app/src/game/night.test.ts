@@ -327,3 +327,60 @@ describe('the store at night', () => {
     expect(quest.get().sleeping).toBe(true)
   })
 })
+
+describe('the Oracle beside the player', () => {
+  it('leaves when his dialog ends, with no callback to lose', async () => {
+    const { quest, story } = await load()
+    const access = await import('./access.ts')
+    // SAFETY: the story reads only `identity` from a probe, so a partial result is enough for the test.
+    vi.mocked(access.probe).mockResolvedValueOnce({ identity: withClaims } as never)
+
+    await story.startNight()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(quest.get().oracleBeside).toBe(true)
+
+    quest.closeDialog()
+
+    expect(quest.get().oracleBeside).toBe(false)
+  })
+
+  it('still leaves when another dialog was asked for while his was open', async () => {
+    const { quest, story } = await load()
+    const access = await import('./access.ts')
+    // SAFETY: the story reads only `identity` from a probe, so a partial result is enough for the test.
+    vi.mocked(access.probe).mockResolvedValueOnce({ identity: withClaims } as never)
+
+    await story.startNight()
+    await vi.advanceTimersByTimeAsync(0)
+    quest.say([{ who: 'Falconer', text: 'Hello.' }])
+    quest.closeDialog()
+
+    // His dialog is over; the Falconer's now follows it.
+    expect(quest.get().dialog?.pages[0]?.who).toBe('Falconer')
+    quest.closeDialog()
+
+    expect(quest.get().oracleBeside).toBe(false)
+  })
+})
+
+describe('dialogs asked for while one is open', () => {
+  it('wait their turn, each with its own completion callback', async () => {
+    const { quest } = await load()
+    const first = vi.fn()
+    const second = vi.fn()
+
+    quest.say([{ who: 'A', text: 'one' }], first)
+    quest.say([{ who: 'B', text: 'two' }], second)
+
+    expect(quest.get().dialog?.pages[0]?.who).toBe('A')
+    quest.closeDialog()
+
+    expect(first).toHaveBeenCalledOnce()
+    expect(second).not.toHaveBeenCalled()
+    expect(quest.get().dialog?.pages[0]?.who).toBe('B')
+    quest.closeDialog()
+
+    expect(second).toHaveBeenCalledOnce()
+    expect(quest.get().dialog).toBeNull()
+  })
+})

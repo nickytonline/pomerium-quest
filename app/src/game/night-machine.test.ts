@@ -17,6 +17,8 @@ function setup() {
     signsIn: () => log.push('signsIn'),
     missedMorning: () => log.push('missed'),
     deliversLetter: ({ early }) => log.push(early ? 'letter:early' : 'letter'),
+    oracleComes: () => log.push('oracle'),
+    oracleGoes: () => log.push('oracle gone'),
   })
 
   const sleeper: Sleeper = { lieDown: vi.fn(), wakeUp: vi.fn() }
@@ -116,5 +118,29 @@ describe('the morning letter', () => {
     night.attention(false)
 
     expect(log).toContain('letter')
+  })
+})
+
+describe('the Oracle', () => {
+  it('stays until the player’s attention has been taken and is free again', () => {
+    const { night, log } = setup()
+    night.summonOracle()
+
+    expect(night.beside()).toBe(true)
+    night.attention(true)
+
+    expect(night.beside()).toBe(true)
+    night.attention(false)
+
+    expect(night.beside()).toBe(false)
+    expect(log).toEqual(['oracle', 'oracle gone'])
+  })
+
+  it('goes when the game is reset, even if his dialog never opened', () => {
+    const { night } = setup()
+    night.summonOracle()
+    night.reset()
+
+    expect(night.beside()).toBe(false)
   })
 })

@@ -474,17 +474,14 @@ const ROLES: ReadonlyMap<string, string> = new Map([
 
 /** Morning: the Oracle appears beside the player and says what they now are, and that Pomerium has heard. */
 const morningLetter = (next: Identity, awarded: readonly string[], early = false) => {
-  quest.summonOracle()
-  quest.say(
-    [
-      {
-        who: 'Oracle',
-        text: `${early ? 'Good news: Pomerium refreshed your session just now.' : 'Good morning.'} You are now ${listOf(awarded.flatMap((group) => ROLES.get(group) ?? []))}. Pomerium has heard of your new claims, so the guards should let you through.`,
-        code: claimsCode(next),
-      },
-    ],
-    () => quest.dismissOracle(),
-  )
+  night.summonOracle()
+  quest.say([
+    {
+      who: 'Oracle',
+      text: `${early ? 'Good news: Pomerium refreshed your session just now.' : 'Good morning.'} You are now ${listOf(awarded.flatMap((group) => ROLES.get(group) ?? []))}. Pomerium has heard of your new claims, so the guards should let you through.`,
+      code: claimsCode(next),
+    },
+  ])
 }
 
 const listOf = (items: readonly string[]) =>
@@ -549,6 +546,8 @@ const night = startNightActor({
   missedMorning: () =>
     quest.toast("Morning came, but the Oracle's letter didn't reach the guards. Talk to the Oracle.", 'info'),
   deliversLetter: ({ next, awarded, early }) => morningLetter(next, awarded, early),
+  oracleComes: () => quest.summonOracle(),
+  oracleGoes: () => quest.dismissOracle(),
 })
 
 // A game that was reset or left drops its night, and the letter waits while anything has the player's attention.
@@ -625,12 +624,11 @@ export async function oracleArrives(letter: string) {
   const { identity: now } = await probe()
   const fresh = now.authenticated && !claimsPendingFor(now)
 
-  quest.summonOracle()
+  night.summonOracle()
   quest.say(
     fresh ? [{ who: 'Oracle', text: letter }] : [{ who: 'Oracle', text: letter }, refreshPage()],
     () => {
       learn('refresh')
-      quest.dismissOracle()
       void startNight()
     },
   )

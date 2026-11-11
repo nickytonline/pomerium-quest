@@ -259,6 +259,9 @@ let state: QuestState = {
 
 const listeners = new Set<() => void>()
 let dialogDone: (() => void) | undefined
+
+/** Dialogs that were asked for while another was open, in order: each waits its turn instead of replacing it. */
+let dialogQueue: { pages: readonly Page[]; onDone: (() => void) | undefined }[] = []
 let denyDone: (() => void) | undefined
 let signedIn: (() => void) | undefined
 let signInCancelled: (() => void) | undefined
@@ -293,6 +296,21 @@ export const paused = (s: QuestState) =>
   s.chapterTwoDone ||
   !s.started
 
+/** Opens the next queued dialog, unless what just finished already opened one of its own. */
+function sayNext() {
+  const next = dialogQueue.shift()
+
+  if (!next || state.dialog) {
+    // Whatever opened meanwhile goes first; the rest wait for it.
+    if (next) dialogQueue.unshift(next)
+
+    return
+  }
+
+  dialogDone = next.onDone
+  update({ dialog: { pages: next.pages, index: 0 } })
+}
+
 export const quest = {
   get: () => state,
   subscribe: (listener: () => void) => {
@@ -325,6 +343,7 @@ export const quest = {
   /** Back to the title screen. The scene is rebuilt from saved progress on Continue. */
   quit: () => {
     quest.save()
+    dialogQueue = []
     update({
       epoch: state.epoch + 1,
       started: false,
@@ -439,6 +458,7 @@ export const quest = {
     resetQuest()
     resetHouse()
     resetOwl()
+    dialogQueue = []
     update({
       epoch: state.epoch + 1,
       progress,
@@ -454,6 +474,13 @@ export const quest = {
   },
 
   say: (pages: readonly Page[], onDone?: () => void) => {
+    // A dialog already open keeps its pages and its completion callback; this one follows it.
+    if (state.dialog) {
+      dialogQueue.push({ pages, onDone })
+
+      return
+    }
+
     dialogDone = onDone
     update({ dialog: { pages, index: 0 } })
   },
@@ -482,6 +509,7 @@ export const quest = {
     dialogDone = undefined
     update({ dialog: null, inputResumesAt: performance.now() + 200 })
     done?.()
+    sayNext()
   },
 
   /** Closes a page with choices and runs the one picked, instead of the dialog's onDone. */
@@ -489,6 +517,7 @@ export const quest = {
     dialogDone = undefined
     update({ dialog: null, inputResumesAt: performance.now() + 200 })
     choice.pick()
+    sayNext()
   },
 
   showDeny: (deny: DenyView, onDone?: () => void) => {
