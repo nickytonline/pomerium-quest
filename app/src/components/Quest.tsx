@@ -1,3 +1,4 @@
+import { startNight } from '../game/story.ts'
 import {
   useEffect,
   useRef,
@@ -135,8 +136,11 @@ function useBoot() {
     void probe().then(({ mode, identity }) => {
       quest.setMode(mode, identity)
 
-      if (identity.authenticated) quest.signedIn(identity)
-      else quest.send({ type: 'SIGNED_OUT' })
+      if (identity.authenticated) {
+        quest.signedIn(identity)
+        // A game resumed with claims the session lacks: night falls again until the token carries them.
+        startNight()
+      } else quest.send({ type: 'SIGNED_OUT' })
 
       if (returning) {
         quest.start()
