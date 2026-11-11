@@ -139,7 +139,7 @@ function useBoot() {
       if (identity.authenticated) {
         quest.signedIn(identity)
         // A game resumed with claims the session lacks: night falls again until the token carries them.
-        startNight()
+        void startNight()
       } else quest.send({ type: 'SIGNED_OUT' })
 
       if (returning) {

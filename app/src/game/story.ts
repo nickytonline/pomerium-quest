@@ -424,7 +424,7 @@ const grantCitizenship = () => {
         }
 
         quest.send({ type: 'CITIZEN_GRANTED' })
-        startNight()
+        void startNight()
       })
     },
   )
@@ -446,13 +446,13 @@ const ROLES: ReadonlyMap<string, string> = new Map([
 ])
 
 /** Morning: the Oracle appears beside the player and says what they now are, and that Pomerium has heard. */
-const morningLetter = (next: Identity, awarded: readonly string[]) => {
+const morningLetter = (next: Identity, awarded: readonly string[], early = false) => {
   quest.summonOracle()
   quest.say(
     [
       {
         who: 'Oracle',
-        text: `Good morning. You are now ${listOf(awarded.flatMap((group) => ROLES.get(group) ?? []))}. Pomerium has heard of your new claims, so the guards should let you through.`,
+        text: `${early ? 'Good news: Pomerium refreshed your session just now.' : 'Good morning.'} You are now ${listOf(awarded.flatMap((group) => ROLES.get(group) ?? []))}. Pomerium has heard of your new claims, so the guards should let you through.`,
         code: claimsCode(next),
       },
     ],
@@ -516,12 +516,28 @@ let asleep: Sleep | null = null
  * allow_any_sign_out_redirect_uri flag). So the game goes dark and polls, and fades back to day, with the
  * Oracle's letter, once the refreshed token carries the claims. The player may sleep in any bed or wander.
  */
-export function startNight() {
-  if (nightFalling || !claimsPending()) return
+export async function startNight(): Promise<'fresh' | undefined> {
+  if (nightFalling || !claimsPending()) return undefined
   nightFalling = true
 
   const awarded = staleGroups()
   const needsDeed = isAtLeast('granted')
+  const ready = (id: Identity) => missingGroups(id).length === 0 && (!needsDeed || Boolean(id.deed))
+
+  // Pomerium refreshes on its own cycle, so the session may already carry the new claims. Then there is
+  // nothing to wait out: no night, just the news.
+  const { identity: now } = await probe()
+
+  if (now.authenticated && ready(now)) {
+    nightFalling = false
+    groupsBeforeSignIn = identity().authenticated ? identity().groups : null
+    quest.setIdentity(now)
+    quest.signedIn(now)
+    morningLetter(now, awarded, true)
+
+    return 'fresh'
+  }
+
   quest.setNight(true)
 
   // Pomerium refreshes on its own cycle, so the session may already carry the claims: night still lasts long
@@ -557,8 +573,10 @@ export function startNight() {
 }
 
 /** A bed: sleeping through the night, if there is one. A bed with no news waiting is only a bed. */
-export function goToBed(sleep: Sleep) {
-  startNight()
+export async function goToBed(sleep: Sleep) {
+  const outcome = await startNight()
+
+  if (outcome === 'fresh') return
 
   if (!nightFalling) {
     quest.say([{ who: 'You', text: "You aren't sleepy. You'll sleep when the Oracle has news for you." }])
@@ -586,7 +604,7 @@ export function oracleArrives(letter: string) {
   quest.say([{ who: 'Oracle', text: letter }, refreshPage()], () => {
     learn('refresh')
     quest.dismissOracle()
-    startNight()
+    void startNight()
   })
 }
 
@@ -642,7 +660,7 @@ function oracle() {
       [{ who: 'Oracle', text: `I have added ${missing.join(' and ')} to your claims.` }, refreshPage()],
       () => {
         learn('refresh')
-        startNight()
+        void startNight()
       },
     )
 

@@ -11,7 +11,7 @@ let morning: (next: Identity | null) => void
 
 vi.mock('./access.ts', () => ({
   waitForClaims: () => new Promise((resolve) => (morning = resolve)),
-  probe: vi.fn(),
+  probe: vi.fn(async () => ({ identity: { authenticated: true, email: 'nick@example.com', groups: [] } })),
   requestZone: vi.fn(),
   signInUrl: vi.fn(),
 }))
@@ -54,7 +54,7 @@ describe('night', () => {
     const { quest, story } = await load()
 
     expect(story.claimsPending()).toBe(true)
-    story.startNight()
+    await story.startNight()
 
     expect(quest.get().night).toBe(true)
   })
@@ -63,24 +63,24 @@ describe('night', () => {
     const { quest, story } = await load()
     quest.setIdentity(withClaims)
 
-    story.startNight()
+    await story.startNight()
 
     expect(quest.get().night).toBe(false)
   })
 
   it("doesn't start a second night on top of the first", async () => {
     const { quest, story } = await load()
-    story.startNight()
+    await story.startNight()
     quest.setNight(false)
 
-    story.startNight()
+    await story.startNight()
 
     expect(quest.get().night).toBe(false)
   })
 
   it('ends with the claims in the session and the player signed in with them', async () => {
     const { quest, story } = await load()
-    story.startNight()
+    await story.startNight()
 
     morning(withClaims)
     await vi.advanceTimersByTimeAsync(8000)
@@ -91,7 +91,7 @@ describe('night', () => {
 
   it("ends with a toast, and no new claims, when the Oracle's letter never arrives", async () => {
     const { quest, story } = await load()
-    story.startNight()
+    await story.startNight()
 
     morning(null)
     await vi.advanceTimersByTimeAsync(8000)
@@ -103,12 +103,12 @@ describe('night', () => {
 
   it('can fall again the next time a claim is awarded', async () => {
     const { quest, story } = await load()
-    story.startNight()
+    await story.startNight()
     morning(null)
     await vi.advanceTimersByTimeAsync(8000)
     await vi.waitFor(() => expect(quest.get().night).toBe(false))
 
-    story.startNight()
+    await story.startNight()
 
     expect(quest.get().night).toBe(true)
   })
@@ -135,24 +135,32 @@ describe('night after the owl is trusted with a letter', () => {
     expect(quest.get().owlStage).toBe('entrusted')
     expect(story.claimsPending()).toBe(true)
 
-    story.startNight()
+    await story.startNight()
 
     expect(quest.get().night).toBe(true)
   })
 })
 
 describe('a session that is already fresh', () => {
-  it('still gets a night you can see, not a flicker', async () => {
+  it('skips night: Pomerium already heard, so the Oracle just says so', async () => {
     const { quest, story } = await load()
-    story.startNight()
-    morning(withClaims)
-    await vi.advanceTimersByTimeAsync(1000)
+    const access = await import('./access.ts')
+    // SAFETY: the story reads only `identity` from a probe, so a partial result is enough for the test.
+    vi.mocked(access.probe).mockResolvedValueOnce({ identity: withClaims } as never)
 
-    expect(quest.get().night).toBe(true)
-
-    await vi.advanceTimersByTimeAsync(8000)
+    await story.startNight()
 
     expect(quest.get().night).toBe(false)
+    expect(quest.get().identity?.groups).toContain(GROUPS.citizens)
+    expect(quest.get().oracleBeside).toBe(true)
+  })
+
+  it('still falls when the first look finds the session stale', async () => {
+    const { quest, story } = await load()
+
+    await story.startNight()
+
+    expect(quest.get().night).toBe(true)
   })
 })
 
@@ -161,7 +169,7 @@ describe('sleeping through the night', () => {
     const { quest, story, sfx } = await load()
     const bed = sleeper()
 
-    story.goToBed(bed)
+    await story.goToBed(bed)
 
     expect(bed.lieDown).toHaveBeenCalledOnce()
     expect(quest.get().night).toBe(true)
@@ -172,7 +180,7 @@ describe('sleeping through the night', () => {
   it('wakes them at morning, with the claims', async () => {
     const { quest, story, sfx } = await load()
     const bed = sleeper()
-    story.goToBed(bed)
+    await story.goToBed(bed)
 
     morning(withClaims)
     await vi.advanceTimersByTimeAsync(8000)
@@ -186,7 +194,7 @@ describe('sleeping through the night', () => {
   it('wakes them even when the letter never arrives', async () => {
     const { quest, story, sfx } = await load()
     const bed = sleeper()
-    story.goToBed(bed)
+    await story.goToBed(bed)
 
     morning(null)
     await vi.advanceTimersByTimeAsync(8000)
@@ -201,8 +209,8 @@ describe('sleeping through the night', () => {
     const first = sleeper()
     const second = sleeper()
 
-    story.goToBed(first)
-    story.goToBed(second)
+    await story.goToBed(first)
+    await story.goToBed(second)
 
     expect(first.lieDown).toHaveBeenCalledOnce()
     expect(second.lieDown).not.toHaveBeenCalled()
@@ -213,7 +221,7 @@ describe('sleeping through the night', () => {
     quest.setIdentity(withClaims)
     const bed = sleeper()
 
-    story.goToBed(bed)
+    await story.goToBed(bed)
 
     expect(bed.lieDown).not.toHaveBeenCalled()
     expect(quest.get().night).toBe(false)
@@ -226,7 +234,7 @@ describe('walking around at night', () => {
   it('leaves the player awake while night is on', async () => {
     const { quest, story } = await load()
 
-    story.startNight()
+    await story.startNight()
 
     expect(quest.get().night).toBe(true)
     expect(quest.get().sleeping).toBe(false)
@@ -235,9 +243,9 @@ describe('walking around at night', () => {
   it('lets them lie down partway through the night', async () => {
     const { quest, story } = await load()
     const bed = sleeper()
-    story.startNight()
+    await story.startNight()
 
-    story.goToBed(bed)
+    await story.goToBed(bed)
 
     expect(bed.lieDown).toHaveBeenCalledOnce()
     expect(quest.get().sleeping).toBe(true)
@@ -245,7 +253,7 @@ describe('walking around at night', () => {
 
   it('morning needs no bed: the night ends for a player on their feet', async () => {
     const { quest, story } = await load()
-    story.startNight()
+    await story.startNight()
 
     morning(withClaims)
     await vi.advanceTimersByTimeAsync(8000)

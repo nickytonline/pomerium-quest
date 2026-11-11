@@ -1604,7 +1604,7 @@ export class KingdomScene extends Phaser.Scene {
     if (LOAF.includes(tile)) readTable(this.bread, WHOLE_LOAF)
 
     if (tile === TILE.bed) {
-      goToBed({ lieDown: () => this.lieDown(target), wakeUp: () => this.wakeUp() })
+      void goToBed({ lieDown: () => this.lieDown(target), wakeUp: () => this.wakeUp() })
     }
 
     if (tile === TILE.doorLocked) this.lockedHint()
