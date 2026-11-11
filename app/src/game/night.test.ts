@@ -40,10 +40,12 @@ async function load() {
 const sleeper = () => ({ lieDown: vi.fn(), wakeUp: vi.fn() })
 
 beforeEach(() => {
+  vi.useFakeTimers()
   vi.stubGlobal('matchMedia', () => ({ matches: false }))
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.unstubAllGlobals()
 })
 
@@ -81,6 +83,7 @@ describe('night', () => {
     story.startNight()
 
     morning(withClaims)
+    await vi.advanceTimersByTimeAsync(8000)
     await vi.waitFor(() => expect(quest.get().night).toBe(false))
 
     expect(quest.get().identity).toEqual(withClaims)
@@ -91,6 +94,7 @@ describe('night', () => {
     story.startNight()
 
     morning(null)
+    await vi.advanceTimersByTimeAsync(8000)
     await vi.waitFor(() => expect(quest.get().night).toBe(false))
 
     expect(quest.get().toast?.text).toContain("letter didn't reach the guards")
@@ -101,6 +105,7 @@ describe('night', () => {
     const { quest, story } = await load()
     story.startNight()
     morning(null)
+    await vi.advanceTimersByTimeAsync(8000)
     await vi.waitFor(() => expect(quest.get().night).toBe(false))
 
     story.startNight()
@@ -136,6 +141,21 @@ describe('night after the owl is trusted with a letter', () => {
   })
 })
 
+describe('a session that is already fresh', () => {
+  it('still gets a night you can see, not a flicker', async () => {
+    const { quest, story } = await load()
+    story.startNight()
+    morning(withClaims)
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(quest.get().night).toBe(true)
+
+    await vi.advanceTimersByTimeAsync(8000)
+
+    expect(quest.get().night).toBe(false)
+  })
+})
+
 describe('sleeping through the night', () => {
   it('lays the player down and marks them asleep', async () => {
     const { quest, story, sfx } = await load()
@@ -155,6 +175,7 @@ describe('sleeping through the night', () => {
     story.goToBed(bed)
 
     morning(withClaims)
+    await vi.advanceTimersByTimeAsync(8000)
     await vi.waitFor(() => expect(bed.wakeUp).toHaveBeenCalledOnce())
 
     expect(quest.get().night).toBe(false)
@@ -168,6 +189,7 @@ describe('sleeping through the night', () => {
     story.goToBed(bed)
 
     morning(null)
+    await vi.advanceTimersByTimeAsync(8000)
     await vi.waitFor(() => expect(bed.wakeUp).toHaveBeenCalledOnce())
 
     expect(quest.get().sleeping).toBe(false)
@@ -226,6 +248,7 @@ describe('walking around at night', () => {
     story.startNight()
 
     morning(withClaims)
+    await vi.advanceTimersByTimeAsync(8000)
     await vi.waitFor(() => expect(quest.get().night).toBe(false))
 
     expect(quest.get().sleeping).toBe(false)

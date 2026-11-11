@@ -498,6 +498,9 @@ export interface Sleep {
   readonly wakeUp: () => void
 }
 
+/** The shortest a night lasts, so the townsfolk can be seen going to bed even when the session was already fresh. */
+export const MIN_NIGHT_MS = 8000
+
 /** How long day takes to fade back in; the morning letter waits for it. */
 export const DAWN_MS = 2500
 
@@ -521,30 +524,36 @@ export function startNight() {
   const needsDeed = isAtLeast('granted')
   quest.setNight(true)
 
-  void waitForClaims((next) => missingGroups(next).length === 0 && (!needsDeed || Boolean(next.deed))).then(
-    (next) => {
-      nightFalling = false
-      quest.setNight(false)
-      asleep?.wakeUp()
-      asleep = null
+  // Pomerium refreshes on its own cycle, so the session may already carry the claims: night still lasts long
+  // enough to be seen, rather than flickering by.
+  const lasted = new Promise<void>((resolve) => setTimeout(resolve, MIN_NIGHT_MS))
 
-      if (!next) {
-        quest.toast(
-          "Morning came, but the Oracle's letter didn't reach the guards. Talk to the Oracle.",
-          'info',
-        )
-
-        return
-      }
-
-      sfx('wake')
-      groupsBeforeSignIn = identity().authenticated ? identity().groups : null
-      quest.setIdentity(next)
-      quest.signedIn(next)
-      const fades = matchMedia('(prefers-reduced-motion: no-preference)').matches
-      setTimeout(() => morningLetter(next, awarded), fades ? DAWN_MS : 0)
-    },
+  const arrived = waitForClaims(
+    (next) => missingGroups(next).length === 0 && (!needsDeed || Boolean(next.deed)),
   )
+
+  void Promise.all([arrived, lasted]).then(([next]) => {
+    nightFalling = false
+    quest.setNight(false)
+    asleep?.wakeUp()
+    asleep = null
+
+    if (!next) {
+      quest.toast(
+        "Morning came, but the Oracle's letter didn't reach the guards. Talk to the Oracle.",
+        'info',
+      )
+
+      return
+    }
+
+    sfx('wake')
+    groupsBeforeSignIn = identity().authenticated ? identity().groups : null
+    quest.setIdentity(next)
+    quest.signedIn(next)
+    const fades = matchMedia('(prefers-reduced-motion: no-preference)').matches
+    setTimeout(() => morningLetter(next, awarded), fades ? DAWN_MS : 0)
+  })
 }
 
 /** A bed: sleeping through the night, if there is one. A bed with no news waiting is only a bed. */
