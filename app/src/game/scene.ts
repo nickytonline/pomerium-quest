@@ -408,6 +408,8 @@ interface NpcSprite {
   away?: boolean
   /** Asleep in their own bed in their building for the night. */
   inBed?: boolean
+  /** The Zs rising over them while they sleep. */
+  zs?: Phaser.GameObjects.Text[]
   readonly sprite: Phaser.GameObjects.Sprite
 }
 
@@ -1603,20 +1605,8 @@ export class KingdomScene extends Phaser.Scene {
     if (tile === TILE.doorLocked) this.lockedHint()
   }
 
-  /** The dog curls up on the bed, and a trail of Zs rises while they sleep. */
-  private lieDown(bed: Point) {
-    const player = this.player
-
-    if (!player || this.sleepers) return
-    const animated = matchMedia('(prefers-reduced-motion: no-preference)').matches
-    const x = center(bed.x)
-    const y = center(bed.y)
-    player.anims.stop()
-    player
-      .setFrame(DOG_FRAME.down)
-      .setAngle(90)
-      .setPosition(x, y + 1)
-
+  /** A trail of Zs above a sleeper at (x, y); they only drift when the player has asked for motion. */
+  private drawZs(x: number, y: number) {
     const zs = ['z', 'Z', 'Z'].map((letter, i) =>
       this.add
         .text(x + 4 + i * 5, y - 6 - i * 6, letter, {
@@ -1629,9 +1619,7 @@ export class KingdomScene extends Phaser.Scene {
         .setDepth(41),
     )
 
-    this.sleepers = { bed, zs }
-
-    if (!animated) return
+    if (!matchMedia('(prefers-reduced-motion: no-preference)').matches) return zs
 
     for (const [i, z] of zs.entries())
       this.tweens.add({
@@ -1642,6 +1630,26 @@ export class KingdomScene extends Phaser.Scene {
         delay: i * 450,
         repeat: -1,
       })
+
+    return zs
+  }
+
+  /** The dog curls up on the bed, and a trail of Zs rises while they sleep. */
+  private lieDown(bed: Point) {
+    const player = this.player
+
+    if (!player || this.sleepers) return
+    const x = center(bed.x)
+    const y = center(bed.y)
+    player.anims.stop()
+    player
+      .setFrame(DOG_FRAME.down)
+      .setAngle(90)
+      .setPosition(x, y + 1)
+
+    const zs = this.drawZs(x, y)
+
+    this.sleepers = { bed, zs }
   }
 
   /** Morning: the dog gets up beside the bed, as they were. */
@@ -1806,6 +1814,7 @@ export class KingdomScene extends Phaser.Scene {
       npc.sprite.setPosition(center(bed.x), center(bed.y)).setAngle(90)
       npc.inBed = true
       await this.appear(npc)
+      npc.zs = this.drawZs(center(bed.x), center(bed.y))
 
       return
     }
@@ -1845,6 +1854,13 @@ export class KingdomScene extends Phaser.Scene {
           npc.y = home.y
           npc.away = false
           npc.inBed = false
+
+          for (const z of npc.zs ?? []) {
+            this.tweens.killTweensOf(z)
+            z.destroy()
+          }
+
+          npc.zs = undefined
           npc.sprite.setPosition(center(home.x), center(home.y))
           await this.appear(npc)
         }),
