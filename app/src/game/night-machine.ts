@@ -217,6 +217,8 @@ export const nightMachine = setup({
     // The morning letter waits out the dawn, then for the player's attention to be free.
     letter: {
       initial: 'none',
+      // A letter from a game that was reset or left must not land in the next one.
+      on: { RESET: { target: '.none', actions: assign({ morning: null }) } },
       states: {
         none: {
           on: {
