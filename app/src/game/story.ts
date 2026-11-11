@@ -405,7 +405,7 @@ const grantCitizenship = () => {
       ...citizenshipPages(),
       {
         who: 'Oracle',
-        text: 'Your session still holds the claims I gave you at sign-in. Pomerium refreshes them from me about once a minute. Night will fall, and by morning my letter will have reached it. Sleep in any bed, or wait for morning.',
+        text: 'Your session still holds the claims I gave you at sign-in. Pomerium refreshes them from me now and then. For this game it is set to about a minute, but you can configure it (see the docs link). Night will fall, and by morning my letter will have reached it. Sleep in any bed, or wait for morning.',
         links: [link('refresh')],
       },
     ],
@@ -566,7 +566,7 @@ export function goToBed(sleep: Sleep) {
 
 const refreshPage = (): Page => ({
   who: 'Oracle',
-  text: `Pomerium decides with the claims in your session, and those are the ones I gave you when you signed in. It refreshes them from me now and then, about once a minute. Night will fall, and by morning my letter will have reached it. Sleep in any bed (there is one nearby), or wait for morning.`,
+  text: `Pomerium decides with the claims in your session, and those are the ones I gave you when you signed in. It refreshes them from me now and then. For this game it is set to about a minute, but you can configure it (see the docs link). Night will fall, and by morning my letter will have reached it. Sleep in any bed (there is one nearby), or wait for morning.`,
   code: claimsCode(identity()),
   links: [link('refresh')],
 })

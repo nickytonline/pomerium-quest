@@ -532,7 +532,8 @@ request with the token Pomerium put on the perch's request.
   `QUEST_DOMAIN`/`QUEST_PORT`, run `./quest reset-oracle`. (`./quest dev` and `./quest deploy` do create any group the townsfolk need, such as `citizen`, if an older realm lacks it, so a new group alone needs no reset.) A public deployment should run
   `start` with a real database.
 - **New claims take a moment.** After the Oracle changes a claim, Pomerium takes about a minute to refresh
-  the session and use it. Until then the armory still answers 403. In the game, night falls when a claim is awarded and the screen
+  the session and use it. That minute is this game's setting (the 30-second access token below), not a Pomerium
+  default, and it is configurable; the Oracle says so in the game and links to the docs. Until then the armory still answers 403. In the game, night falls when a claim is awarded and the screen
   dims while the game polls. Sleep in any guest bed (the sage's, the town inn's, the falconer's hut, or your own house) or
   wander until morning (the townsfolk go to bed or walk off, but the guards and the Oracle (your identity provider) stay awake, so Pomerium still checks every gate). Once Pomerium's refreshed token carries the claims, day fades back in with the Oracle's letter
   ("You are now a knight"). A bed with no news waiting is only a bed. A restart signs you out, so you log in again with no claims.
