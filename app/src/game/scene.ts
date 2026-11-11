@@ -409,7 +409,7 @@ interface NpcSprite {
   /** Asleep in their own bed in their building for the night. */
   inBed?: boolean
   /** The Zs rising over them while they sleep. */
-  zs?: Phaser.GameObjects.Text[]
+  zs?: Phaser.GameObjects.Text[] | undefined
   readonly sprite: Phaser.GameObjects.Sprite
 }
 
