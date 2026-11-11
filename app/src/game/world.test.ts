@@ -48,12 +48,12 @@ describe("the keepers' beds", () => {
 })
 
 describe('who goes to bed at night', () => {
-  it('is everyone but the Oracle, who stays awake like a guard', () => {
+  it("is everyone but the Oracle and the cage's keeper, who stay awake like a guard", () => {
     const { npcs } = buildWorld()
 
-    expect([...ALWAYS_AWAKE]).toEqual(['oracle'])
-    expect(npcs.filter((npc) => !goesToBed(npc.npcId)).map((npc) => npc.npcId)).toEqual(['oracle'])
-    expect(npcs.filter((npc) => goesToBed(npc.npcId))).toHaveLength(npcs.length - 1)
+    expect([...ALWAYS_AWAKE]).toEqual(['oracle', 'keeper'])
+    expect(npcs.filter((npc) => !goesToBed(npc.npcId)).map((npc) => npc.npcId)).toEqual(['oracle', 'keeper'])
+    expect(npcs.filter((npc) => goesToBed(npc.npcId))).toHaveLength(npcs.length - 2)
   })
 
   it('gives nobody who stays awake a bed', () => {
