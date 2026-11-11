@@ -95,7 +95,7 @@ asks Pomerium whether to let you through, so what you can reach depends on who t
 The game takes the keys while its board has focus. Closing a menu, dialog or panel puts focus back on the
 board. If the keys stop working, click the board.
 
-The menu saves your game, restarts it (the Oracle takes back your claims too), quits to the title screen,
+The menu saves your game, restarts it (the Oracle takes back your claims and you sign in again), quits to the title screen,
 and turns music and sound effects on and off. Beside the board, your identity shows the claims in your
 session right now, and the access log lists every request a guard has checked. In a narrow window or on a
 phone, those panels move into the journal.
@@ -535,7 +535,7 @@ request with the token Pomerium put on the perch's request.
   the session and use it. Until then the armory still answers 403. In the game, the Oracle sends you to bed
   when a claim is awarded (the sage's guest bed before you're a citizen, your own bed after). You sleep while
   the game polls, and wake to the Oracle's letter ("You are now a knight") once Pomerium has heard. A bed
-  with no news waiting is only a bed, and the polling after a restart doesn't put you to sleep.
+  with no news waiting is only a bed. A restart signs you out, so you log in again with no claims.
 - **`groups` vs `claim/groups`.** The `groups` PPL criterion is Pomerium Enterprise only (it needs
   directory sync). Open-source Pomerium checks the IdP's claim with `claim/groups`.
 - **The game never signs out to refresh claims.** A sign-out that lands back in the game needs Pomerium's
