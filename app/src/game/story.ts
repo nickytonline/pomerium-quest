@@ -445,15 +445,20 @@ const ROLES: ReadonlyMap<string, string> = new Map([
   [GROUPS.keyholders, 'a keyholder'],
 ])
 
-/** The morning letter: the Oracle says what the player now is, and Pomerium has heard of it. */
-const morningLetter = (next: Identity, awarded: readonly string[]) =>
-  quest.say([
-    {
-      who: 'Oracle',
-      text: `A letter from the Oracle: "You are now ${listOf(awarded.flatMap((group) => ROLES.get(group) ?? []))}. Pomerium has heard of your new claims, so the guards should let you through."`,
-      code: claimsCode(next),
-    },
-  ])
+/** Morning: the Oracle appears beside the player and says what they now are, and that Pomerium has heard. */
+const morningLetter = (next: Identity, awarded: readonly string[]) => {
+  quest.summonOracle()
+  quest.say(
+    [
+      {
+        who: 'Oracle',
+        text: `Good morning. You are now ${listOf(awarded.flatMap((group) => ROLES.get(group) ?? []))}. Pomerium has heard of your new claims, so the guards should let you through.`,
+        code: claimsCode(next),
+      },
+    ],
+    () => quest.dismissOracle(),
+  )
+}
 
 const listOf = (items: readonly string[]) =>
   items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items.at(-1)}` : (items[0] ?? 'who you are')
@@ -566,10 +571,12 @@ const refreshPage = (): Page => ({
   links: [link('refresh')],
 })
 
-/** The Oracle's letter says a claim was awarded; then night falls until Pomerium's token carries it. */
-export function claimAwarded(letter: string) {
+/** Rather than send the player back to his temple, the Oracle appears beside them with the news, then night falls. He signs no one in: Pomerium refreshes the session by itself. */
+export function oracleArrives(letter: string) {
+  quest.summonOracle()
   quest.say([{ who: 'Oracle', text: letter }, refreshPage()], () => {
     learn('refresh')
+    quest.dismissOracle()
     startNight()
   })
 }
@@ -691,12 +698,12 @@ async function captain() {
       },
       {
         who: 'Captain',
-        text: "One catch: your session still holds the claims from when you signed in, so your groups don't say knights yet. Pomerium catches up on its own in time. A night's wait makes that happen.",
+        text: "One catch: your session still holds the claims from when you signed in, so your groups don't say knights yet. Pomerium catches up on its own in time. A night's wait makes that happen. Ah, here comes the Oracle.",
       },
     ],
     () => {
       learn('claims')
-      claimAwarded("The Captain's letter arrived. I've added knights to your groups.")
+      oracleArrives("The Captain's letter arrived. I've added knights to your groups.")
     },
   )
 }
@@ -962,7 +969,7 @@ async function librarian() {
         links: [link('claims')],
       },
     ],
-    () => claimAwarded("The Librarian's letter arrived. I've added scholars to your groups."),
+    () => oracleArrives("The Librarian's letter arrived. I've added scholars to your groups."),
   )
 }
 
