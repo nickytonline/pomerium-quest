@@ -532,13 +532,16 @@ request with the token Pomerium put on the perch's request.
   `QUEST_DOMAIN`/`QUEST_PORT`, run `./quest reset-oracle`. (`./quest dev` and `./quest deploy` do create any group the townsfolk need, such as `citizen`, if an older realm lacks it, so a new group alone needs no reset.) A public deployment should run
   `start` with a real database.
 - **New claims take a moment.** After the Oracle changes a claim, Pomerium takes about a minute to refresh
-  the session and use it. Until then the armory still answers 403.
+  the session and use it. Until then the armory still answers 403. In the game, the Oracle sends you to bed
+  when a claim is awarded (the sage's guest bed before you're a citizen, your own bed after). You sleep while
+  the game polls, and wake to the Oracle's letter ("You are now a knight") once Pomerium has heard. A bed
+  with no news waiting is only a bed, and the polling after a restart doesn't put you to sleep.
 - **`groups` vs `claim/groups`.** The `groups` PPL criterion is Pomerium Enterprise only (it needs
   directory sync). Open-source Pomerium checks the IdP's claim with `claim/groups`.
 - **The game never signs out to refresh claims.** A sign-out that lands back in the game needs Pomerium's
   `allow_any_sign_out_redirect_uri` flag (the Ingress Controller has no fixed `signout_redirect_url`), and
   that flag is an open redirect, so the game leaves it off. Instead Pomerium refreshes the session as the
-  Oracle's access token nears expiry, and the game polls until the new claims arrive. The realm sets a
+  Oracle's access token nears expiry, and the game polls (while you sleep) until the new claims arrive. The realm sets a
   30-second access token (`accessTokenLifespan` in `render.ts`) so that takes about a minute; with
   Keycloak's default of five minutes it took about four. An existing cluster needs `./quest reset-oracle`
   to pick that up. A hidden iframe can't do the sign-out instead: Pomerium's sign-out pages send

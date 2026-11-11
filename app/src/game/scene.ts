@@ -33,10 +33,12 @@ import {
   readAnvil,
   readBook,
   readSign,
+  goToBed,
   readWorkbench,
   talk,
 } from './story.ts'
 import {
+  BEDS,
   BOARD_TILES,
   FALCONER_BARE_FRAME,
   GUARD_FRAME,
@@ -457,6 +459,11 @@ export class KingdomScene extends Phaser.Scene {
   private phish: Phish[] = []
   private shake: Phaser.Time.TimerEvent | undefined
   private seen = { interact: 0, attack: 0 }
+
+  /** While the dog sleeps in a bed: where, the night's dimming and the Zs above them. */
+  private sleepers:
+    | { bed: Point; dim: Phaser.GameObjects.Rectangle; zs: Phaser.GameObjects.Text[] }
+    | undefined
   private pending = new Set<Action>()
   private lastRockHint = 0
   /** The Oracle, appearing beside the player to sign them in again with new claims. */
@@ -1576,7 +1583,78 @@ export class KingdomScene extends Phaser.Scene {
 
     if (LOAF.includes(tile)) readTable(this.bread, WHOLE_LOAF)
 
+    if (tile === TILE.bed) {
+      const bed = same(target, BEDS.guest) ? 'guest' : 'home'
+
+      goToBed(bed, { lieDown: () => this.lieDown(target), wakeUp: () => this.wakeUp() })
+    }
+
     if (tile === TILE.doorLocked) this.lockedHint()
+  }
+
+  /** The dog curls up on the bed, the room dims, and a trail of Zs rises while they sleep. */
+  private lieDown(bed: Point) {
+    const player = this.player
+
+    if (!player || this.sleepers) return
+    const animated = matchMedia('(prefers-reduced-motion: no-preference)').matches
+    const x = center(bed.x)
+    const y = center(bed.y)
+    player.anims.stop()
+    player
+      .setFrame(DOG_FRAME.down)
+      .setAngle(90)
+      .setPosition(x, y + 1)
+
+    const dim = this.add
+      .rectangle(0, 0, this.scale.width * 4, this.scale.height * 4, 0x0b1026)
+      .setScrollFactor(0)
+      .setDepth(40)
+      .setAlpha(animated ? 0 : 0.5)
+
+    const zs = ['z', 'Z', 'Z'].map((letter, i) =>
+      this.add
+        .text(x + 4 + i * 5, y - 6 - i * 6, letter, {
+          fontFamily: 'monospace',
+          fontSize: `${8 + i * 2}px`,
+          color: '#f1ede4',
+          stroke: '#241a2e',
+          strokeThickness: 2,
+        })
+        .setDepth(41),
+    )
+
+    this.sleepers = { bed, dim, zs }
+
+    if (!animated) return
+    this.tweens.add({ targets: dim, alpha: 0.5, duration: 900 })
+
+    for (const [i, z] of zs.entries())
+      this.tweens.add({
+        targets: z,
+        y: z.y - 8,
+        alpha: { from: 1, to: 0.2 },
+        duration: 1400,
+        delay: i * 450,
+        repeat: -1,
+      })
+  }
+
+  /** Morning: the dog gets up beside the bed, as they were, and the room brightens. */
+  private wakeUp() {
+    const sleepers = this.sleepers
+
+    if (!sleepers) return
+    this.sleepers = undefined
+    sleepers.dim.destroy()
+
+    for (const z of sleepers.zs) {
+      this.tweens.killTweensOf(z)
+      z.destroy()
+    }
+
+    this.player?.setAngle(0).setPosition(center(this.pos.x), center(this.pos.y))
+    this.player?.setFrame(DOG_FRAME[this.dir])
   }
 
   private swing() {

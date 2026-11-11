@@ -41,6 +41,7 @@ export const TILE = {
   tableHeel: 40,
   signIndoors: 41,
   perch: 42,
+  bed: 43,
 } as const
 
 export type TileId = (typeof TILE)[keyof typeof TILE]
@@ -174,6 +175,14 @@ export const HOUSE: House = {
   inside: { x0: 2, y0: 10, x1: 6, y1: 14 },
 }
 
+/** The beds: the sage's guest bed, for a newcomer with no house, and the player's own. */
+export const BEDS = {
+  guest: { x: 13, y: 24 },
+  home: { x: 6, y: 10 },
+} as const satisfies Record<string, Point>
+
+export type BedId = keyof typeof BEDS
+
 export const inHouse = (point: Point) =>
   point.x >= HOUSE.inside.x0 &&
   point.x <= HOUSE.inside.x1 &&
@@ -264,6 +273,7 @@ export function buildWorld(): World {
   set(4, 22, TILE.floor)
   room(10, 23, 14, 27)
   set(10, 25, TILE.floor)
+  set(BEDS.guest.x, BEDS.guest.y, TILE.bed)
   fill(2, 25, 4, 27, TILE.water)
   fill(8, 18, 8, 26, TILE.path)
   fill(4, 23, 8, 23, TILE.path)
@@ -287,6 +297,7 @@ export function buildWorld(): World {
   set(HOUSE.desk.x, HOUSE.desk.y, TILE.desk)
   set(HOUSE.table.x, HOUSE.table.y, TILE.tableBread)
   set(HOUSE.sign.x, HOUSE.sign.y, TILE.sign)
+  set(BEDS.home.x, BEDS.home.y, TILE.bed)
   fill(8, 12, 8, 16, TILE.path)
   fill(8, 12, 15, 12, TILE.path)
   each(

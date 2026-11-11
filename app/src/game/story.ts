@@ -75,14 +75,14 @@ function keepRefusal(id: Identity): Refusal {
   if (!id.groups.includes(GROUPS.knights))
     missing.push(
       vouched.includes(GROUPS.knights)
-        ? "carrying your knight's papers (the Oracle can wait with you at his temple until your session carries them)"
+        ? "carrying your knight's papers (sleep a night, and the Oracle's letter will tell Pomerium)"
         : "a knight (the Captain in the Knights' Guild can vouch for you)",
     )
 
   if (!id.groups.includes(GROUPS.scholars))
     missing.push(
       vouched.includes(GROUPS.scholars)
-        ? "carrying your scholar's papers (the Oracle can wait with you at his temple until your session carries them)"
+        ? "carrying your scholar's papers (sleep a night, and the Oracle's letter will tell Pomerium)"
         : 'a scholar (read every book in the library, then talk to the Librarian)',
     )
 
@@ -386,7 +386,7 @@ const grantCitizenship = () => {
       ...citizenshipPages(),
       {
         who: 'Oracle',
-        text: 'Your session still holds the claims I gave you at sign-in. Pomerium refreshes them from me about once a minute, so wait here with me until it carries them.',
+        text: 'Your session still holds the claims I gave you at sign-in. Pomerium refreshes them from me about once a minute. Go to bed, and by morning my letter will have reached it.',
         links: [link('refresh')],
       },
     ],
@@ -405,7 +405,7 @@ const grantCitizenship = () => {
         }
 
         quest.send({ type: 'CITIZEN_GRANTED' })
-        refreshClaims(() => {})
+        quest.toast("Time for bed. The sage's guest room is in the house to the right.", 'info')
       })
     },
   )
@@ -417,17 +417,27 @@ const welcome = (next: Identity) =>
     ...(stage() === 'newcomer' ? [SAGE_HINT] : []),
   ])
 
-const welcomeBack = (next: Identity, onDone?: () => void) =>
-  quest.say(
-    [
-      {
-        who: 'Oracle',
-        text: 'Pomerium has heard of your new claims. They are below. The guards should let you through.',
-        code: claimsCode(next),
-      },
-    ],
-    onDone,
-  )
+/** What the Oracle's letter calls a player who has been added to each group. */
+const ROLES: ReadonlyMap<string, string> = new Map([
+  [GROUPS.citizens, 'a citizen'],
+  [GROUPS.knights, 'a knight'],
+  [GROUPS.scholars, 'a scholar'],
+  [GROUPS.falconers, 'a falconer'],
+  [GROUPS.keyholders, 'a keyholder'],
+])
+
+/** The morning letter: the Oracle says what the player now is, and Pomerium has heard of it. */
+const morningLetter = (next: Identity, awarded: readonly string[]) =>
+  quest.say([
+    {
+      who: 'Oracle',
+      text: `A letter from the Oracle: "You are now ${listOf(awarded.flatMap((group) => ROLES.get(group) ?? []))}. Pomerium has heard of your new claims, so the guards should let you through."`,
+      code: claimsCode(next),
+    },
+  ])
+
+const listOf = (items: readonly string[]) =>
+  items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items.at(-1)}` : (items[0] ?? 'who you are')
 
 /** Groups the Captain, the Librarian, the Falconer or the owl asked the Oracle to add, whether or not the session has them yet. */
 function vouchedGroups() {
@@ -451,31 +461,77 @@ const missingGroups = (id: Identity) => vouchedGroups().filter((group) => !id.gr
 
 const staleGroups = () => missingGroups(identity())
 
+/** True when the Oracle has granted claims, or a deed, that the player's session doesn't carry yet. */
+export const claimsPending = () => {
+  const id = identity()
+
+  return id.authenticated && (staleGroups().length > 0 || (isAtLeast('granted') && !id.deed))
+}
+
+/** The player's end of a night's sleep: the scene lays the dog down in the bed and gets them up again. */
+export interface Sleep {
+  readonly lieDown: () => void
+  readonly wakeUp: () => void
+}
+
 /**
- * Waits for Pomerium to refresh the session so it carries the groups the Oracle has added since. There is
- * no sign-out: that would need Pomerium's allow_any_sign_out_redirect_uri flag, an open redirect.
+ * Going to bed. Pomerium refreshes the session by itself, about a minute after the Oracle changes a claim,
+ * and there is no sign-out to speed it up (that would need Pomerium's open allow_any_sign_out_redirect_uri
+ * flag). So the player sleeps while the game polls, and wakes to the Oracle's letter once Pomerium has heard.
+ * A bed with no news waiting is only a bed: ordinary polling never puts the player to sleep.
  */
-function refreshClaims(onDone: () => void) {
-  quest.toast("The Oracle's word is travelling to the guards. It takes about a minute.", 'info')
+export function goToBed(bed: 'guest' | 'home', sleep: Sleep) {
+  if (bed === 'guest' && isAtLeast('citizen')) {
+    quest.say([
+      {
+        who: 'Sage',
+        text: "That bed was only for guests. You're a citizen now, so sleep in your own house.",
+      },
+    ])
 
-  void waitForClaims((next) => missingGroups(next).length === 0).then((next) => {
-    if (!next) {
-      onDone()
-      quest.toast('The guards have not heard yet. Talk to the Oracle again in a moment.', 'info')
+    return
+  }
 
-      return
-    }
+  if (!claimsPending()) {
+    quest.say([{ who: 'You', text: "You aren't sleepy. You'll sleep when the Oracle has news for you." }])
 
-    groupsBeforeSignIn = identity().authenticated ? identity().groups : null
-    quest.setIdentity(next)
-    quest.signedIn(next)
-    welcomeBack(next, onDone)
-  })
+    return
+  }
+
+  const awarded = staleGroups()
+  const needsDeed = isAtLeast('granted')
+
+  sfx('sleep')
+  sleep.lieDown()
+  quest.setSleeping(true)
+
+  void waitForClaims((next) => missingGroups(next).length === 0 && (!needsDeed || Boolean(next.deed))).then(
+    (next) => {
+      quest.setSleeping(false)
+      sleep.wakeUp()
+
+      if (!next) {
+        quest.toast('You slept badly: no letter came. Try again in a moment.', 'info')
+
+        return
+      }
+
+      sfx('wake')
+      groupsBeforeSignIn = identity().authenticated ? identity().groups : null
+      quest.setIdentity(next)
+      quest.signedIn(next)
+      morningLetter(next, awarded)
+    },
+  )
 }
 
 const refreshPage = (): Page => ({
   who: 'Oracle',
-  text: 'Pomerium decides with the claims in your session, and those are the ones I gave you when you signed in. It refreshes them from me now and then, about once a minute. Wait here with me while it hears the news.',
+  text: `Pomerium decides with the claims in your session, and those are the ones I gave you when you signed in. It refreshes them from me now and then, about once a minute. Go to bed, and by morning my letter will have reached it. ${
+    isAtLeast('citizen')
+      ? 'Your own bed is in your house.'
+      : "The sage's guest bed is in the house to the right."
+  }`,
   code: claimsCode(identity()),
   links: [link('refresh')],
 })
@@ -485,7 +541,7 @@ export function oracleArrives(letter: string) {
   quest.summonOracle()
   quest.say([{ who: 'Oracle', text: letter }, refreshPage()], () => {
     learn('refresh')
-    refreshClaims(() => quest.dismissOracle())
+    quest.dismissOracle()
   })
 }
 
@@ -539,10 +595,7 @@ function oracle() {
   if (missing.length > 0) {
     quest.say(
       [{ who: 'Oracle', text: `I have added ${missing.join(' and ')} to your claims.` }, refreshPage()],
-      () => {
-        learn('refresh')
-        refreshClaims(() => {})
-      },
+      () => learn('refresh'),
     )
 
     return
@@ -560,7 +613,7 @@ async function captain() {
         who: 'Captain',
         text:
           stage() === 'knighted'
-            ? 'The Oracle has your new claim, but your session still carries the old one. Visit him in the temple and wait for your session to refresh, then claim your steel in the armory, east of here across the square.'
+            ? "The Oracle has your new claim, but your session still carries the old one. Go to bed, and the Oracle's letter will reach you by morning. Then claim your steel in the armory, east of here across the square."
             : 'Go claim your steel. The armory is east of here, across the square.',
       },
     ])
@@ -606,7 +659,7 @@ async function captain() {
       },
       {
         who: 'Captain',
-        text: "One catch: your session still holds the claims from when you signed in, so your groups don't say knights yet. Pomerium would catch up on its own in time, but you needn't wait. Ah, here comes the Oracle.",
+        text: "One catch: your session still holds the claims from when you signed in, so your groups don't say knights yet. Pomerium catches up on its own in time. Sleeping a night makes that happen. Ah, here comes the Oracle.",
       },
     ],
     () => {
@@ -720,7 +773,7 @@ function sageAfterSignIn() {
       quest.say([
         {
           who: 'Sage',
-          text: 'The Oracle has made you a citizen, but your papers still show the old claims. Visit him once more, and he will wait with you until Pomerium refreshes them.',
+          text: "The Oracle has made you a citizen, but your papers still show the old claims. Go to bed. By morning the Oracle's letter will have reached Pomerium.",
         },
       ])
 
@@ -792,7 +845,7 @@ const SCRIPTS: Record<NpcId, () => void> = {
       citizen: armorerIntro,
       proven: `${armorerIntro} The Captain can vouch for you.`,
       knighted:
-        "The Oracle lists you as a knight? Then your session hasn't caught up. The guard reads the claims in your session, and those were set when you signed in: groups: []. Pomerium refreshes them from the Oracle now and then, but sign in with him again and you won't have to wait.",
+        "The Oracle lists you as a knight? Then your session hasn't caught up. The guard reads the claims in your session, and those were set when you signed in: groups: []. Pomerium refreshes them from the Oracle now and then. Sleep a night, and the Oracle's letter will bring it up to date.",
       knight:
         'Your session says groups: [knights] now, so the guard will let you through. The steel sword is in the chest inside.',
       armed:
