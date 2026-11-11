@@ -66,12 +66,19 @@ sign_in_from() {
     --data-urlencode "password=${PASSWORD}" "$action"
 }
 
-# Signs out of Pomerium (and the Oracle), landing straight back at the Oracle's sign-in page, as the
-# game does, then signs in again so the new session carries fresh claims.
+# Waits for Pomerium to refresh the session so it carries the claims the Oracle has changed, as the game
+# does: it never signs out (that would need Pomerium's open allow_any_sign_out_redirect_uri flag). The
+# Oracle's access tokens last 30 seconds, so Pomerium refreshes in about a minute. Prints refreshed or
+# timeout; the arguments (the player's email) are kept so callers read as before.
 sign_in_again() {
-  local jar="$1" email="$2"
-  sign_in_from "$jar" "$email" \
-    "$(curl -s -L -c "$jar" -b "$jar" "${GAME}/.pomerium/sign_out?pomerium_redirect_uri=${GAME}/zones/oracle/signin")"
+  local jar="$1" before now
+  before="$(curl -s -b "$jar" -H "$JSON" "${GAME}/zones/oracle/")"
+  for _ in $(seq 1 50); do
+    now="$(curl -s -b "$jar" -H "$JSON" "${GAME}/zones/oracle/")"
+    [ "$now" != "$before" ] && { echo refreshed; return; }
+    sleep 3
+  done
+  echo timeout
 }
 
 # A newcomer isn't a citizen until the Oracle says so: he grants the citizens group and the deed, and the
@@ -126,7 +133,7 @@ check "scriptorium is its own route, scribes only" 403 "$(status "$citizen" /zon
 echo "Knighthood"
 check "Captain knights the player" 200 "$(status "$citizen" /zones/guild/knight POST)"
 check "armory still refuses (session holds old claims)" 403 "$(status "$citizen" /zones/armory/enter)"
-check "signing in again lands back in the game" "${GAME}/?signedin=1" "$(sign_in_again "$citizen" "$email")"
+check "Pomerium refreshes the session with the new claims" refreshed "$(sign_in_again "$citizen" "$email")"
 armory=403
 for _ in $(seq 1 45); do
   armory="$(status "$citizen" /zones/armory/enter)"
@@ -212,7 +219,7 @@ echo "Taking the claims back"
 deed_before="$(curl -s -b "$citizen" -H "$JSON" "${GAME}/zones/oracle/" | grep -o '"deed":"[^"]*"')"
 check "a restart takes the claims back at the Oracle" 200 "$(status "$citizen" /zones/oracle/reset POST)"
 check "taking them back again is harmless" 200 "$(status "$citizen" /zones/oracle/reset POST)"
-check "signing in again lands back in the game" "${GAME}/?signedin=1" "$(sign_in_again "$citizen" "$email")"
+check "Pomerium refreshes the session with the new claims" refreshed "$(sign_in_again "$citizen" "$email")"
 check "the new session carries no deed" yes \
   "$(curl -s -b "$citizen" -H "$JSON" "${GAME}/zones/oracle/" | grep -q '"deed":null' && echo yes || echo no)"
 # Pomerium keeps a copy of the user's claims for up to a minute. Wait that out, so an old copy would have expired.
@@ -225,10 +232,8 @@ check "becoming a citizen again grants a new deed" yes \
   "$([ -n "$deed_after" ] && [ "$deed_after" != "$deed_before" ] && echo yes || echo no)"
 
 echo "Starting over"
-check "signing out to restart lands on the title screen" "${GAME}/" \
-  "$(curl -s -L -c "$citizen" -b "$citizen" -o /dev/null -w '%{url_effective}' \
-    "${GAME}/.pomerium/sign_out?pomerium_redirect_uri=${GAME}/")"
-check "and the session is gone" 401 "$(status "$citizen" /zones/fields/enter)"
+curl -s -L -c "$citizen" -b "$citizen" -o /dev/null "${GAME}/.pomerium/sign_out"
+check "signing out ends the session" 401 "$(status "$citizen" /zones/fields/enter)"
 
 echo "Your house"
 # The Builders' Yard: the game server writes the house of whoever Pomerium signed in.

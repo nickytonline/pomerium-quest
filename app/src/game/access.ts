@@ -106,18 +106,31 @@ export async function requestZone(zone: Zone, method: 'GET' | 'POST', action: st
 /** Where to send the browser to sign in through Pomerium, landing back in the game. */
 export const signInUrl = () => '/zones/oracle/signin'
 
-/** Signs out of Pomerium, landing at `path`. Any landing page needs the allow_any_sign_out_redirect_uri flag. */
-const signOutTo = (path: string) =>
-  `/.pomerium/sign_out?pomerium_redirect_uri=${encodeURIComponent(`${location.origin}${path}`)}`
-
 /**
- * Sign out of the Pomerium session, and with it the Oracle's (Keycloak ends its session too), landing
- * straight back at sign-in, which picks up fresh claims from the Oracle.
+ * Waits for Pomerium to refresh the session until `ready` accepts the player's claims, or gives up (null).
+ * The game never signs out to get fresh claims: a sign-out that lands back in the game needs Pomerium's
+ * allow_any_sign_out_redirect_uri flag, an open redirect. Pomerium refreshes the session by itself, about a
+ * minute after the Oracle changes a claim.
  */
-export const refreshClaimsUrl = () => signOutTo(signInUrl())
+export async function waitForClaims(
+  ready: (identity: Identity) => boolean,
+  { everyMs = 3000, giveUpMs = 150_000 } = {},
+): Promise<Identity | null> {
+  const until = Date.now() + giveUpMs
+  let wait = everyMs
 
-/** Sign out of Pomerium and the Oracle, landing back on the title screen signed out. */
-export const signOutUrl = () => signOutTo('/')
+  while (Date.now() < until) {
+    const { identity } = await probe()
+
+    if (identity.authenticated && ready(identity)) return identity
+
+    // Back off and add jitter, so many players waiting at once don't poll in lockstep.
+    await new Promise((resolve) => setTimeout(resolve, wait * (0.75 + Math.random() * 0.5)))
+    wait = Math.min(wait * 1.25, 10_000)
+  }
+
+  return null
+}
 
 /** The builder's answer: the value it sent, or why it couldn't. */
 export type Built<T> =

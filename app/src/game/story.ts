@@ -1,6 +1,6 @@
 // What happens when the player talks, reads or asks a guard to let them through a gate. The scene handles
 // movement and drawing; this module handles the conversation with Pomerium.
-import { probe, refreshClaimsUrl, requestZone, signInUrl, type Outcome } from './access.ts'
+import { probe, requestZone, signInUrl, waitForClaims, type Outcome } from './access.ts'
 import {
   BOOKS,
   KNOCKED_OUT,
@@ -75,14 +75,14 @@ function keepRefusal(id: Identity): Refusal {
   if (!id.groups.includes(GROUPS.knights))
     missing.push(
       vouched.includes(GROUPS.knights)
-        ? "carrying your knight's papers (the Oracle can sign you in again at his temple)"
+        ? "carrying your knight's papers (the Oracle can wait with you at his temple until your session carries them)"
         : "a knight (the Captain in the Knights' Guild can vouch for you)",
     )
 
   if (!id.groups.includes(GROUPS.scholars))
     missing.push(
       vouched.includes(GROUPS.scholars)
-        ? "carrying your scholar's papers (the Oracle can sign you in again at his temple)"
+        ? "carrying your scholar's papers (the Oracle can wait with you at his temple until your session carries them)"
         : 'a scholar (read every book in the library, then talk to the Librarian)',
     )
 
@@ -386,7 +386,7 @@ const grantCitizenship = () => {
       ...citizenshipPages(),
       {
         who: 'Oracle',
-        text: 'Your session still holds the claims I gave you at sign-in, so let me sign you in again. Then it will carry them.',
+        text: 'Your session still holds the claims I gave you at sign-in. Pomerium refreshes them from me about once a minute, so wait here with me until it carries them.',
         links: [link('refresh')],
       },
     ],
@@ -422,7 +422,7 @@ const welcomeBack = (next: Identity, onDone?: () => void) =>
     [
       {
         who: 'Oracle',
-        text: 'Signed in again. Your new claims are below. Guards may take up to a minute to hear of them.',
+        text: 'Pomerium has heard of your new claims. They are below. The guards should let you through.',
         code: claimsCode(next),
       },
     ],
@@ -446,24 +446,36 @@ function vouchedGroups() {
   return vouched
 }
 
-/** Groups the Oracle lists for the player that their session doesn't carry yet. */
-const staleGroups = () => vouchedGroups().filter((group) => !identity().groups.includes(group))
+/** Groups the Oracle lists for the player that a session doesn't carry yet. */
+const missingGroups = (id: Identity) => vouchedGroups().filter((group) => !id.groups.includes(group))
 
-/** Signs the player in again so their session carries the groups the Oracle has added since. */
+const staleGroups = () => missingGroups(identity())
+
+/**
+ * Waits for Pomerium to refresh the session so it carries the groups the Oracle has added since. There is
+ * no sign-out: that would need Pomerium's allow_any_sign_out_redirect_uri flag, an open redirect.
+ */
 function refreshClaims(onDone: () => void) {
-  signInWithPomerium(
-    refreshClaimsUrl(),
-    (next) => welcomeBack(next, onDone),
-    () => {
+  quest.toast("The Oracle's word is travelling to the guards. It takes about a minute.", 'info')
+
+  void waitForClaims((next) => missingGroups(next).length === 0).then((next) => {
+    if (!next) {
       onDone()
-      quest.toast("You can sign in again at the Oracle's temple", 'info')
-    },
-  )
+      quest.toast('The guards have not heard yet. Talk to the Oracle again in a moment.', 'info')
+
+      return
+    }
+
+    groupsBeforeSignIn = identity().authenticated ? identity().groups : null
+    quest.setIdentity(next)
+    quest.signedIn(next)
+    welcomeBack(next, onDone)
+  })
 }
 
 const refreshPage = (): Page => ({
   who: 'Oracle',
-  text: 'Pomerium decides with the claims in your session, and those are the ones I gave you when you signed in. It refreshes them from me now and then, but that can take a while. Let me sign you in again so your session carries the new one now.',
+  text: 'Pomerium decides with the claims in your session, and those are the ones I gave you when you signed in. It refreshes them from me now and then, about once a minute. Wait here with me while it hears the news.',
   code: claimsCode(identity()),
   links: [link('refresh')],
 })
@@ -548,7 +560,7 @@ async function captain() {
         who: 'Captain',
         text:
           stage() === 'knighted'
-            ? 'The Oracle has your new claim, but your session still carries the old one. Visit him in the temple and sign in again, then claim your steel in the armory, east of here across the square.'
+            ? 'The Oracle has your new claim, but your session still carries the old one. Visit him in the temple and wait for your session to refresh, then claim your steel in the armory, east of here across the square.'
             : 'Go claim your steel. The armory is east of here, across the square.',
       },
     ])
@@ -708,7 +720,7 @@ function sageAfterSignIn() {
       quest.say([
         {
           who: 'Sage',
-          text: 'The Oracle has made you a citizen, but your papers still show the old claims. Visit him once more, and he will sign you in again.',
+          text: 'The Oracle has made you a citizen, but your papers still show the old claims. Visit him once more, and he will wait with you until Pomerium refreshes them.',
         },
       ])
 

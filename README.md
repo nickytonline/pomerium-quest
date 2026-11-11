@@ -11,17 +11,17 @@ that failed.
 
 Chapter one covers the fundamentals.
 
-| In the game                                                    | In Pomerium                                                              |
-| -------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| The Oracle signs you in                                        | Your identity provider (Keycloak, over OIDC)                             |
-| Each gate's guard, and the sign beside it                      | A route and its policy                                                   |
-| The Oracle makes you a citizen, and the town only admits them  | `claim/groups`, set by the IdP, not guessed from your email address      |
-| The Captain makes you a knight; the armory checks it           | `claim/groups`, and claims coming from the IdP                           |
-| Being knighted doesn't open the armory until you sign in again | Your session holds the claims from sign-in until Pomerium refreshes it   |
-| Citizens may read the books, but not write in them             | Allow rules can check `http_method`                                      |
-| Only scribes may enter the scriptorium inside the library      | A longer path can be its own route, with its own policy                  |
-| The access log and the denial screen                           | Every request is checked, and denied by default                          |
-| The game server knows who you are                              | Pomerium's signed `X-Pomerium-Jwt-Assertion` header, verified by the app |
+| In the game                                                   | In Pomerium                                                              |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| The Oracle signs you in                                       | Your identity provider (Keycloak, over OIDC)                             |
+| Each gate's guard, and the sign beside it                     | A route and its policy                                                   |
+| The Oracle makes you a citizen, and the town only admits them | `claim/groups`, set by the IdP, not guessed from your email address      |
+| The Captain makes you a knight; the armory checks it          | `claim/groups`, and claims coming from the IdP                           |
+| Being knighted doesn't open the armory straight away          | Your session holds the claims from sign-in until Pomerium refreshes it   |
+| Citizens may read the books, but not write in them            | Allow rules can check `http_method`                                      |
+| Only scribes may enter the scriptorium inside the library     | A longer path can be its own route, with its own policy                  |
+| The access log and the denial screen                          | Every request is checked, and denied by default                          |
+| The game server knows who you are                             | Pomerium's signed `X-Pomerium-Jwt-Assertion` header, verified by the app |
 
 Then the Oracle makes you a citizen with a house in the Slime Fields, and you write the policy on its door yourself:
 
@@ -48,7 +48,7 @@ tools):
 | The Aviary turns back the owl of anyone who isn't a falconer    | The route's `allow` rule asks for `claim/groups: falconers`, before any tool is looked at                           |
 | The errand that opens the cage is refused to your owl           | One `deny` rule matches a call to an `open_` tool from anyone whose groups lack `distinguished-falconers`           |
 | The Falconer's owl opens the cage yours couldn't                | The same tool call, made on another user's behalf: the Falconer is a real account in that group, so no deny matches |
-| The owl's letter makes you a keyholder, and the last gate opens | A tool call changes a claim at the IdP; you sign in again for your session to see it                                |
+| The owl's letter makes you a keyholder, and the last gate opens | A tool call changes a claim at the IdP; your session sees it once Pomerium refreshes it                             |
 | Mochi's owl flies for Mochi, not for you                        | Another agent acts on another user's behalf, with that user's claims                                                |
 | The perch shows what the owl carried and what came back         | The JSON-RPC request, Pomerium's answer (a JSON-RPC error when it refuses), and how the policy was evaluated        |
 
@@ -111,7 +111,7 @@ temple is a real Keycloak login, and afterwards he shows you the claims Pomerium
 
 Bot slimes roam the Slime Fields. They bite for a whole heart, and your wooden sword takes two swings to
 pop one. The Captain wants three gone before they'll vouch for you. Run out of hearts and you start over:
-the Oracle takes back your citizenship, your deed and your progress, and you sign in again with no claims.
+the Oracle takes back your citizenship, your deed and your progress, and you start again with no claims.
 Catch a fish or drink from the town fountain to heal.
 
 The dog can swim, too: only its head shows above the water, and it shakes itself dry on the bank.
@@ -480,7 +480,7 @@ Progress lives in four [XState](https://stately.ai/docs/xstate) statecharts, sav
 | [`owl-machine.ts`](app/src/game/owl-machine.ts)       | Chapter two: afar → arrived → seeking → fledged → turned → vouched → falconer → entrusted → keyholder → triumphant |
 
 `knighted` is the stage the chapter turns on: the Oracle lists you in `knights`, but your Pomerium
-session still holds the claims from when you signed in, so the armory says no until you sign in again.
+session still holds the claims from when you signed in, so the armory says no until Pomerium refreshes the session (about a minute).
 
 The art and sound are code too. The sprites and tiles are pixel grids in [`art/`](art) that
 `node art/sprites.mjs` draws into sprite sheets, and there are no audio files: every note of music and
@@ -531,15 +531,18 @@ request with the token Pomerium put on the perch's request.
   redeploy. It imports the realm on first start only: after changing the realm in `render.ts`, or
   `QUEST_DOMAIN`/`QUEST_PORT`, run `./quest reset-oracle`. (`./quest dev` and `./quest deploy` do create any group the townsfolk need, such as `citizen`, if an older realm lacks it, so a new group alone needs no reset.) A public deployment should run
   `start` with a real database.
-- **Signing in again signs you out of Keycloak too.** Pomerium's sign-out calls Keycloak's
-  end-session endpoint, so refreshing your claims asks for your password again.
-- **New claims take a moment.** After you sign in again, Pomerium's authorize service can take up to
-  about a minute to use the new claim. Until then the armory still answers 403.
+- **New claims take a moment.** After the Oracle changes a claim, Pomerium takes about a minute to refresh
+  the session and use it. Until then the armory still answers 403.
 - **`groups` vs `claim/groups`.** The `groups` PPL criterion is Pomerium Enterprise only (it needs
   directory sync). Open-source Pomerium checks the IdP's claim with `claim/groups`.
-- **Signing out lands where the game asks.** The Ingress Controller's settings have no
-  `signout_redirect_url`, so the game passes `pomerium_redirect_uri` (allowed by the
-  `allow_any_sign_out_redirect_uri` runtime flag) to land back at sign-in or on the title screen.
+- **The game never signs out to refresh claims.** A sign-out that lands back in the game needs Pomerium's
+  `allow_any_sign_out_redirect_uri` flag (the Ingress Controller has no fixed `signout_redirect_url`), and
+  that flag is an open redirect, so the game leaves it off. Instead Pomerium refreshes the session as the
+  Oracle's access token nears expiry, and the game polls until the new claims arrive. The realm sets a
+  30-second access token (`accessTokenLifespan` in `render.ts`) so that takes about a minute; with
+  Keycloak's default of five minutes it took about four. An existing cluster needs `./quest reset-oracle`
+  to pick that up. A hidden iframe can't do the sign-out instead: Pomerium's sign-out pages send
+  `X-Frame-Options: SAMEORIGIN`, and the second hop is on the `authenticate` origin.
 - **MCP routes take a token, not a cookie.** An MCP server route answers 401 to a browser session. MCP
   clients sign in through Pomerium's own OAuth flow, and the game's perch gets its token from being an
   MCP client route.

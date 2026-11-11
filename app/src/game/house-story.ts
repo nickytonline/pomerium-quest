@@ -288,7 +288,7 @@ export function doorRefusesYou() {
   quest.say([
     {
       who: 'Your door',
-      text: "Your door won't open for you. Pomerium checks each request against the route's rules, and the one that lets in the deed's owner needs the deed in your session. Talk to the Oracle at his temple: he can sign you in again so your session carries it.",
+      text: "Your door won't open for you. Pomerium checks each request against the route's rules, and the one that lets in the deed's owner needs the deed in your session. Talk to the Oracle at his temple: he can wait with you until Pomerium refreshes your session so it carries it.",
       links: [link('refresh')],
     },
   ])

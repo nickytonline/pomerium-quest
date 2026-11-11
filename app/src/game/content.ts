@@ -218,7 +218,7 @@ export const KNOCKED_OUT: Page[] = [
   },
   {
     who: 'The Oracle',
-    text: 'Your citizenship and your deed go back to me. Sign in again, and you start over from the village with no claims.',
+    text: 'Your citizenship and your deed go back to me. Give Pomerium a minute to hear of it, and you start over from the village with no claims.',
   },
 ]
 
