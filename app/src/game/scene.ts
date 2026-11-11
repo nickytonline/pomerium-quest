@@ -14,6 +14,7 @@ import {
   currentLetter,
   enterHouse,
   doorRefusesYou,
+  lockedDoorDenied,
   readHouseSign,
   readLetter,
   readTable,
@@ -2917,10 +2918,7 @@ export class KingdomScene extends Phaser.Scene {
   private lockedHint() {
     if (performance.now() - this.lastRockHint < 2000) return
     this.lastRockHint = performance.now()
-    quest.toast(
-      'Locked. The door opens once your token carries the deed. The sage in Hearth Village can tell you more.',
-      'info',
-    )
+    lockedDoorDenied()
   }
 
   private rockHint() {
