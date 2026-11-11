@@ -488,12 +488,13 @@ keyboard.
 
 Progress lives in four [XState](https://stately.ai/docs/xstate) statecharts, saved to local storage:
 
-| Machine                                               | Tracks                                                                                                             |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| [`quest-machine.ts`](app/src/game/quest-machine.ts)   | Chapter one: anonymous → newcomer → invited → granted → citizen → proven → knighted → knight → armed               |
-| [`house-machine.ts`](app/src/game/house-machine.ts)   | Your house: one stage per letter on the desk, solved by real visits                                                |
-| [`player-machine.ts`](app/src/game/player-machine.ts) | The dog: walking, waiting on a gate, swinging, and a moment's safety after a hit                                   |
-| [`owl-machine.ts`](app/src/game/owl-machine.ts)       | Chapter two: afar → arrived → seeking → fledged → turned → vouched → falconer → entrusted → keyholder → triumphant |
+| Machine                                               | Tracks                                                                                                               |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| [`quest-machine.ts`](app/src/game/quest-machine.ts)   | Chapter one: anonymous → newcomer → invited → granted → citizen → proven → knighted → knight → armed                 |
+| [`house-machine.ts`](app/src/game/house-machine.ts)   | Your house: one stage per letter on the desk, solved by real visits                                                  |
+| [`player-machine.ts`](app/src/game/player-machine.ts) | The dog: walking, waiting on a gate, swinging, and a moment's safety after a hit                                     |
+| [`owl-machine.ts`](app/src/game/owl-machine.ts)       | Chapter two: afar → arrived → seeking → fledged → turned → vouched → falconer → entrusted → keyholder → triumphant   |
+| [`night-machine.ts`](app/src/game/night-machine.ts)   | The night while a session refreshes: day → dusk → dark (awake or asleep), the morning letter, and the Oracle's visit |
 
 `knighted` is the stage the chapter turns on: the Oracle lists you in `knights`, but your Pomerium
 session still holds the claims from when you signed in, so the armory says no until Pomerium refreshes the session (about a minute).
