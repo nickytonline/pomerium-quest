@@ -109,6 +109,33 @@ describe('night', () => {
   })
 })
 
+describe('night after the owl is trusted with a letter', () => {
+  it('falls when the Oracle awards keyholders to a session that has falconers', async () => {
+    const { quest, story } = await load()
+    const falconer: Identity = { ...withClaims, groups: [GROUPS.citizens, GROUPS.falconers] }
+
+    for (const type of [
+      'KEEP_ENTERED',
+      'OWL_SOUGHT',
+      'OWL_CAUGHT',
+      'OWL_TURNED_BACK',
+      'FALCONER_VOUCHED',
+    ] as const)
+      quest.sendOwl({ type })
+
+    quest.setIdentity(falconer)
+    quest.sendOwl({ type: 'SIGNED_IN', groups: falconer.groups })
+    quest.sendOwl({ type: 'LETTER_DELIVERED' })
+
+    expect(quest.get().owlStage).toBe('entrusted')
+    expect(story.claimsPending()).toBe(true)
+
+    story.startNight()
+
+    expect(quest.get().night).toBe(true)
+  })
+})
+
 describe('sleeping through the night', () => {
   it('lays the player down and marks them asleep', async () => {
     const { quest, story, sfx } = await load()

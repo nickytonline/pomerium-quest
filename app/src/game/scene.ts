@@ -409,6 +409,8 @@ interface NpcSprite {
   away?: boolean
   /** Asleep in their own bed in their building for the night. */
   inBed?: boolean
+  /** Sent off for the night, from the moment they start; cleared when they are back at their post. */
+  retired?: boolean
   /** The Zs rising over them while they sleep. */
   zs?: Phaser.GameObjects.Text[] | undefined
   readonly sprite: Phaser.GameObjects.Sprite
@@ -480,6 +482,8 @@ export class KingdomScene extends Phaser.Scene {
   private visitingOracle: Phaser.GameObjects.Sprite | undefined
   /** Townsfolk, where they stand now. Only the traveler moves: around the fields and into the house. */
   private npcs: NpcSprite[] = []
+  /** Counts nights, so a retiring townsperson can tell their night has already ended. */
+  private nightId = 0
   private traveler: Traveler = {
     plan: 'roam',
     path: [],
@@ -1801,21 +1805,33 @@ export class KingdomScene extends Phaser.Scene {
       (npc.npcId === 'traveler' && (this.traveler.moving || this.traveler.plan !== 'roam')) ||
       (npc.npcId === 'captain' && this.captain !== 'guild')
 
+    const night = ++this.nightId
+
     await Promise.all(
-      this.npcs.filter((npc) => !npc.away && !npc.inBed && !busy(npc)).map((npc) => this.retire(npc)),
+      this.npcs.filter((npc) => !npc.retired && !busy(npc)).map((npc) => this.retire(npc, night)),
     )
   }
 
-  private async retire(npc: NpcSprite) {
+  /** Whether the night that sent them to bed is still on: a short night can end while they are on the way. */
+  private stillNight(night: number) {
+    return night === this.nightId && quest.get().night
+  }
+
+  private async retire(npc: NpcSprite, night: number) {
     const bed = NPC_BEDS[npc.npcId]
+    npc.retired = true
 
     if (bed) {
       await this.vanish(npc)
+
+      if (!this.stillNight(night)) return
       npc.x = bed.x
       npc.y = bed.y
       npc.sprite.setPosition(center(bed.x), center(bed.y)).setAngle(90)
       npc.inBed = true
       await this.appear(npc)
+
+      if (!this.stillNight(night)) return
       npc.zs = this.drawZs(center(bed.x), center(bed.y))
 
       return
@@ -1835,27 +1851,32 @@ export class KingdomScene extends Phaser.Scene {
           alpha: 0,
           duration: 2500,
           onComplete: () => resolve(),
+          onStop: () => resolve(),
         }),
       )
     }
 
-    npc.sprite.setVisible(false)
+    if (this.stillNight(night)) npc.sprite.setVisible(false)
   }
 
-  /** Morning: everyone is back at their post. */
+  /** Morning: everyone is back at their post, even anyone still on the way to bed. */
   private async townWakes() {
+    this.nightId++
+
     await Promise.all(
       this.npcs
-        .filter((npc) => npc.away || npc.inBed)
+        .filter((npc) => npc.retired)
         .map(async (npc) => {
           const home = this.world.npcs.find((candidate) => candidate.npcId === npc.npcId)
 
           if (!home) return
+          this.tweens.killTweensOf(npc.sprite)
           npc.sprite.setAngle(0).setAlpha(0).setVisible(true)
           npc.x = home.x
           npc.y = home.y
           npc.away = false
           npc.inBed = false
+          npc.retired = false
 
           for (const z of npc.zs ?? []) {
             this.tweens.killTweensOf(z)
