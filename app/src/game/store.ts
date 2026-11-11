@@ -296,19 +296,13 @@ export const paused = (s: QuestState) =>
   s.chapterTwoDone ||
   !s.started
 
-/** Opens the next queued dialog, unless what just finished already opened one of its own. */
-function sayNext() {
+/** The dialog to show straight after one closes, if any was asked for meanwhile: handed over with no gap in between, so nothing else can slip into it. */
+function nextDialog(): QuestState['dialog'] {
   const next = dialogQueue.shift()
 
-  if (!next || state.dialog) {
-    // Whatever opened meanwhile goes first; the rest wait for it.
-    if (next) dialogQueue.unshift(next)
+  dialogDone = next?.onDone
 
-    return
-  }
-
-  dialogDone = next.onDone
-  update({ dialog: { pages: next.pages, index: 0 } })
+  return next ? { pages: next.pages, index: 0 } : null
 }
 
 export const quest = {
@@ -506,18 +500,15 @@ export const quest = {
     if (!dialog || dialog.pages.slice(dialog.index).some((page) => page.choices)) return
 
     const done = dialogDone
-    dialogDone = undefined
-    update({ dialog: null, inputResumesAt: performance.now() + 200 })
+
+    update({ dialog: nextDialog(), inputResumesAt: performance.now() + 200 })
     done?.()
-    sayNext()
   },
 
   /** Closes a page with choices and runs the one picked, instead of the dialog's onDone. */
   choose: (choice: Choice) => {
-    dialogDone = undefined
-    update({ dialog: null, inputResumesAt: performance.now() + 200 })
+    update({ dialog: nextDialog(), inputResumesAt: performance.now() + 200 })
     choice.pick()
-    sayNext()
   },
 
   showDeny: (deny: DenyView, onDone?: () => void) => {

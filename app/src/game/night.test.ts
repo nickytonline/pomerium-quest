@@ -364,6 +364,27 @@ describe('the Oracle beside the player', () => {
 })
 
 describe('dialogs asked for while one is open', () => {
+  it("go before the Oracle's letter, which waits for the whole queue", async () => {
+    const { quest, story } = await load()
+    const access = await import('./access.ts')
+    // SAFETY: the story reads only `identity` from a probe, so a partial result is enough for the test.
+    vi.mocked(access.probe).mockResolvedValueOnce({ identity: withClaims } as never)
+    quest.sendFalconersOwl()
+    await story.startNight()
+    quest.say([{ who: 'A', text: 'one' }])
+    quest.say([{ who: 'B', text: 'two' }])
+    quest.closeFalconersErrand()
+    await vi.advanceTimersByTimeAsync(DAWN_MS)
+
+    expect(quest.get().dialog?.pages[0]?.who).toBe('A')
+    quest.closeDialog()
+
+    expect(quest.get().dialog?.pages[0]?.who).toBe('B')
+    quest.closeDialog()
+
+    expect(quest.get().dialog?.pages[0]?.who).toBe('Oracle')
+  })
+
   it('wait their turn, each with its own completion callback', async () => {
     const { quest } = await load()
     const first = vi.fn()
