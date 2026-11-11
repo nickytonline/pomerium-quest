@@ -1399,7 +1399,20 @@ export class KingdomScene extends Phaser.Scene {
   }
 
   /** Asks Pomerium on the player's behalf; if it allows them, the guard steps aside and they walk on. */
+  /** At night the guards and townsfolk have gone home: say so, and the caller does nothing. */
+  private closedForNight(): boolean {
+    if (!quest.get().night) return false
+
+    if (performance.now() - this.lastRockHint > 2000) {
+      this.lastRockHint = performance.now()
+      quest.toast("It's late and everything is closed. Sleep in a bed or walk around until morning.", 'info')
+    }
+
+    return true
+  }
+
   private askGuard(guard: Guard, target: Point, request: GateRequest, leaving = false) {
+    if (this.closedForNight()) return
     this.mode.send({ type: 'GATE' })
     void enterGate(request, leaving).then((outcome) => {
       if (outcome !== 'allow') {
@@ -1481,7 +1494,7 @@ export class KingdomScene extends Phaser.Scene {
     const npc = this.npcs.find((candidate) => same(candidate, target))
 
     if (npc) {
-      talk(npc.npcId)
+      if (!this.closedForNight()) talk(npc.npcId)
 
       return
     }
@@ -1731,7 +1744,7 @@ export class KingdomScene extends Phaser.Scene {
 
     if (night) {
       quest.toast(
-        `Night falls. The nearest bed is ${nearestBed(this.pos, houseStage() !== 'unowned')}. Sleep there, or wait for morning.`,
+        `It's late and everything is closed. The nearest bed is ${nearestBed(this.pos, houseStage() !== 'unowned')}. Sleep there, or walk around until morning.`,
         'info',
       )
 
