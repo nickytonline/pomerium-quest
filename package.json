@@ -20,7 +20,7 @@
     "lint": "vp lint"
   },
   "devDependencies": {
-    "@oxlint/plugins": "1.89.0",
+    "@oxlint/plugins": "1.92.0",
     "@typescript/native": "npm:typescript@7.0.2",
     "typescript": "npm:@typescript/typescript6@6.0.2",
     "vite-plus": "1.4.0",
