@@ -21,6 +21,7 @@ import { VISITORS, type VisitorId } from './house.ts'
 import { addDeed, citizenshipPages } from './house-story.ts'
 import { owlAtLeast, owlStage } from './owl-machine.ts'
 import { falconer, friend, keeper } from './owl-story.ts'
+import { DAWN_MS, MIN_NIGHT_MS, startNightActor, type Sleeper } from './night-machine.ts'
 import { aviaryOrigin } from './owl.ts'
 import { KNIGHT_QUOTA, hasSteel, isAtLeast, stage, type QuestStage } from './quest-machine.ts'
 import { sfx } from './sound.ts'
@@ -522,129 +523,78 @@ export const claimsPending = () => {
 const claimsPendingFor = (id: Identity) => missingGroups(id).length > 0 || (isAtLeast('granted') && !id.deed)
 
 /** The player's end of a night's sleep: the scene lays the dog down in the bed and gets them up again. */
-export interface Sleep {
-  readonly lieDown: () => void
-  readonly wakeUp: () => void
-}
+export type Sleep = Sleeper
 
-/** The shortest a night lasts, so the townsfolk can be seen going to bed even when the session was already fresh. */
-export const MIN_NIGHT_MS = 8000
+export { DAWN_MS, MIN_NIGHT_MS }
 
-/** How long day takes to fade back in; the morning letter waits for it. */
-export const DAWN_MS = 2500
+/** The night and its morning letter. The machine decides what may happen; these are the effects it asks for. */
+const night = startNightActor({
+  nightFalls: () => quest.setNight(true),
+  dayBreaks: () => quest.setNight(false),
+  sleeps: (sleeper) => {
+    sfx('sleep')
+    sleeper.lieDown()
+    quest.setSleeping(true)
+  },
+  wakes: (sleeper) => {
+    sleeper.wakeUp()
+    quest.setSleeping(false)
+  },
+  dawnSound: () => sfx('wake'),
+  signsIn: (next) => {
+    groupsBeforeSignIn = identity().authenticated ? identity().groups : null
+    quest.setIdentity(next)
+    quest.signedIn(next)
+  },
+  missedMorning: () =>
+    quest.toast("Morning came, but the Oracle's letter didn't reach the guards. Talk to the Oracle.", 'info'),
+  deliversLetter: ({ next, awarded, early }) => morningLetter(next, awarded, early),
+})
 
-/** True from nightfall until the session carries the new claims, so a second night can't start on top. */
-let nightFalling = false
+// A game that was reset or left drops its night, and the letter waits while anything has the player's attention.
+let seenEpoch = quest.get().epoch
 
-/** The game (epoch) that owns the night under way, so a night left behind can't end one that replaced it. */
-let nightEpoch = -1
+quest.subscribe(() => {
+  const now = quest.get()
 
-/** Whoever is asleep in a bed, to be woken when morning comes. */
-let asleep: Sleep | null = null
+  if (now.epoch !== seenEpoch) {
+    seenEpoch = now.epoch
+    night.reset()
+  }
+
+  night.attention(paused(now))
+})
 
 /**
  * Night falls when the Oracle awards a claim. Pomerium refreshes the session by itself, about a minute after
  * the Oracle changes a claim, and there is no sign-out to speed it up (that would need Pomerium's open
  * allow_any_sign_out_redirect_uri flag). So the game goes dark and polls, and fades back to day, with the
  * Oracle's letter, once the refreshed token carries the claims. The player may sleep in any bed or wander.
+ * The night's machine (night-machine.ts) owns what may happen when; this asks Pomerium its questions.
  */
 export async function startNight(): Promise<'fresh' | undefined> {
-  const epoch = quest.get().epoch
+  if (!night.day() || !claimsPending()) return undefined
 
-  // A night left behind (the player quit) is still winding down: it doesn't block the one that replaces it.
-  if ((nightFalling && nightEpoch === epoch) || !claimsPending()) return undefined
-  nightFalling = true
-  nightEpoch = epoch
   const awarded = staleGroups()
   const ready = (id: Identity) => !claimsPendingFor(id)
+  const fades = matchMedia('(prefers-reduced-motion: no-preference)').matches
+  const id = night.fall(awarded, fades ? DAWN_MS : 0)
 
   // Pomerium refreshes on its own cycle, so the session may already carry the new claims. Then there is
   // nothing to wait out: no night, just the news.
   const { identity: now } = await probe()
 
-  // The game was reset or left while the probe was out: its answer belongs to a game that is gone.
-  if (quest.get().epoch !== epoch) return cancelNight(epoch)
+  // The game was reset or left while the probe was out: its answer belongs to a night that is gone.
+  if (!night.current(id)) return undefined
 
   if (now.authenticated && ready(now)) {
-    nightFalling = false
-    quest.setNight(false)
-    asleep?.wakeUp()
-    asleep = null
-    groupsBeforeSignIn = identity().authenticated ? identity().groups : null
-    quest.setIdentity(now)
-    quest.signedIn(now)
-    morningLetter(now, awarded, true)
+    night.fresh(id, now)
 
     return 'fresh'
   }
 
-  quest.setNight(true)
-
-  // However soon the claims arrive, night lasts long enough to be seen, rather than flickering by.
-  const lasted = new Promise<void>((resolve) => setTimeout(resolve, MIN_NIGHT_MS))
-
-  const arrived = waitForClaims(ready)
-
-  void Promise.all([arrived, lasted]).then(([next]) => {
-    if (quest.get().epoch !== epoch) return cancelNight(epoch)
-
-    nightFalling = false
-    quest.setNight(false)
-    asleep?.wakeUp()
-    asleep = null
-
-    if (!next) {
-      quest.toast(
-        "Morning came, but the Oracle's letter didn't reach the guards. Talk to the Oracle.",
-        'info',
-      )
-
-      return
-    }
-
-    sfx('wake')
-    groupsBeforeSignIn = identity().authenticated ? identity().groups : null
-    quest.setIdentity(next)
-    quest.signedIn(next)
-    const fades = matchMedia('(prefers-reduced-motion: no-preference)').matches
-    setTimeout(() => whenQuiet(epoch, () => morningLetter(next, awarded)), fades ? DAWN_MS : 0)
-  })
-}
-
-/**
- * Runs `deliver` once nothing has the player's attention, so a letter never replaces a dialogue, a refusal
- * or an errand and drops its
- * completion callback. A game that was reset or left meanwhile gets no letter.
- */
-function whenQuiet(epoch: number, deliver: () => void) {
-  const attempt = () => {
-    if (quest.get().epoch !== epoch) return true
-
-    // Anything holding the player's attention (a dialog, a refusal, the Falconer's cage errand, a perch)
-    // would have its own dialog replaced by the letter, and lose the Oracle's dismissal in the swap.
-    if (paused(quest.get())) return false
-    deliver()
-
-    return true
-  }
-
-  if (attempt()) return
-
-  const stop = quest.subscribe(() => {
-    if (attempt()) stop()
-  })
-}
-
-/** Drops a night that belongs to a game that was reset or left: it accepts no session and wakes no one late. */
-function cancelNight(epoch: number): undefined {
-  // The player came back and a new night took over: it owns the flag and the sleeper now.
-  if (nightEpoch !== epoch) return undefined
-
-  nightFalling = false
-  asleep?.wakeUp()
-  asleep = null
-
-  return undefined
+  night.stale(id)
+  void waitForClaims(ready).then((next) => night.claims(id, next))
 }
 
 /** A bed: sleeping through the night, if there is one. A bed with no news waiting is only a bed. */
@@ -653,17 +603,13 @@ export async function goToBed(sleep: Sleep) {
 
   if (outcome === 'fresh') return
 
-  if (!nightFalling) {
+  if (night.day()) {
     quest.say([{ who: 'You', text: "You aren't sleepy. You'll sleep when the Oracle has news for you." }])
 
     return
   }
 
-  if (asleep) return
-  asleep = sleep
-  sfx('sleep')
-  sleep.lieDown()
-  quest.setSleeping(true)
+  night.bed(sleep)
 }
 
 const refreshPage = (): Page => ({

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 
 import { GROUPS } from './groups.ts'
+import { DAWN_MS } from './night-machine.ts'
 import type { Identity } from './ppl.ts'
 
 const signedIn: Identity = { authenticated: true, email: 'nick@example.com', groups: [] }
@@ -29,6 +30,7 @@ async function load() {
   const sfx = (await import('./sound.ts')).sfx
 
   store.quest.resetProgress()
+  store.quest.start()
   store.quest.setIdentity(signedIn)
   store.quest.send({ type: 'SIGNED_IN', groups: [] })
   store.quest.send({ type: 'SAGE_SPOKE' })
@@ -149,9 +151,26 @@ describe('a session that is already fresh', () => {
     vi.mocked(access.probe).mockResolvedValueOnce({ identity: withClaims } as never)
 
     await story.startNight()
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(quest.get().night).toBe(false)
     expect(quest.get().identity?.groups).toContain(GROUPS.citizens)
+    expect(quest.get().oracleBeside).toBe(true)
+  })
+
+  it("holds the Oracle's news while the Falconer's cage errand has the player's attention", async () => {
+    const { quest, story } = await load()
+    const access = await import('./access.ts')
+    // SAFETY: the story reads only `identity` from a probe, so a partial result is enough for the test.
+    vi.mocked(access.probe).mockResolvedValueOnce({ identity: withClaims } as never)
+    quest.sendFalconersOwl()
+
+    await story.startNight()
+    await vi.advanceTimersByTimeAsync(DAWN_MS)
+
+    expect(quest.get().oracleBeside).toBe(false)
+    quest.closeFalconersErrand()
+
     expect(quest.get().oracleBeside).toBe(true)
   })
 
