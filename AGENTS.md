@@ -44,6 +44,11 @@ policy. The [README](README.md) explains how it fits together; this file is how 
   Keycloak realm. A change under `app/src/` needs no `./quest deploy`; `./quest dev` already reloads it.
 - In the browser, read state as text (a script or page snapshot) before taking a screenshot. Use a
   screenshot only for what is visual: layout, art and animation.
+- For a long playtest, hand it to a subagent and have it return a short summary, rather than driving the
+  browser one call at a time in the main thread.
+- Read a file by line range when you only need part of it, and scope searches to a path. Never search
+  `node_modules`, build output, lockfiles or minified bundles; `.rgignore` already leaves out the tracked
+  ones. Name a file by path to search it anyway.
 - `./quest logs` follows forever, so don't pipe it. Use
   `kubectl --context k3d-quest -n quest logs deployment/<name> --tail=50 | grep <what you need>`
   (the Pomerium namespace is `pomerium`).

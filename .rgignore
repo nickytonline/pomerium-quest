@@ -1,0 +1,8 @@
+# ripgrep reads this on top of .gitignore, which already covers node_modules, dist, .output and
+# generated files. These are tracked files that are only noise in a search.
+package-lock.json
+# Vendored Pomerium install; render.ts adjusts it. Search it by path when you need it.
+deploy/pomerium/ingress-controller.yaml
+*.min.js
+*.min.css
+*.map
