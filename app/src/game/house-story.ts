@@ -73,14 +73,14 @@ export const citizenshipPages = (): Page[] => [
 
 /**
  * The Oracle makes the player a citizen and adds the deed to their claims. True once he has; their
- * session carries both after the next sign-in.
+ * session carries both once Pomerium refreshes it, and only then does the house door open.
  */
 export async function addDeed() {
   const claimed = await claimCitizenship()
 
   if (!claimed.ok) return false
 
-  quest.sendHouse({ type: 'DEED_GIVEN' })
+  // The door stays locked until the token carries the deed: signedIn sends DEED_GIVEN once it does.
   sfx('itemGet')
   quest.toast('The Oracle added the deed to your house', 'info')
 
