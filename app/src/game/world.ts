@@ -195,18 +195,82 @@ const BED_PLACES: Record<BedId, string> = {
   hut: "the falconer's hut in the Aviary",
 }
 
-/** The closest bed to a point, as a sentence: its place and which way to walk. Your own bed needs a house to go to. */
-export function nearestBed(from: Point, hasHouse: boolean): string {
-  const ids = BED_IDS.filter((id) => id !== 'home' || hasHouse)
-  const dist = (id: BedId) => Math.abs(BEDS[id].x - from.x) + Math.abs(BEDS[id].y - from.y)
-  const id = ids.reduce((best, next) => (dist(next) < dist(best) ? next : best), 'guest')
-  const dx = BEDS[id].x - from.x
-  const dy = BEDS[id].y - from.y
+/** Chapter one's kingdom is level one, the Aviary and the Eyrie below the keep are level two. */
+const levelOf = (y: number) => (y > KEEP_WALL ? 2 : 1)
+
+const DIRECTIONS: readonly Point[] = [
+  { x: 1, y: 0 },
+  { x: -1, y: 0 },
+  { x: 0, y: 1 },
+  { x: 0, y: -1 },
+]
+
+/**
+ * The fewest steps on foot to a bed on the player's level, or null if none can be reached. Walls block, so a
+ * bed in another room needs its door. Gates are shut at night, so the first search goes round them; only
+ * when no bed is reachable that way does a second search walk through them (staying on the level).
+ */
+function walkToBed(
+  tiles: readonly (readonly number[])[],
+  from: Point,
+  hasHouse: boolean,
+  throughGates: boolean,
+): { id: BedId; steps: number } | null {
+  const level = levelOf(from.y)
+  const beds = BED_IDS.filter((id) => (id !== 'home' || hasHouse) && levelOf(BEDS[id].y) === level)
+
+  const passable = (tile: number) =>
+    PLAYER_TERRAIN.has(tile) ||
+    tile === TILE.doorClosed ||
+    (tile === TILE.doorLocked && hasHouse) ||
+    (throughGates && (tile === TILE.gateClosed || tile === TILE.gateOpen))
+
+  const seen = new Set([`${from.x},${from.y}`])
+  let frontier: Point[] = [from]
+
+  for (let steps = 0; frontier.length > 0; steps++) {
+    const next: Point[] = []
+
+    for (const at of frontier) {
+      for (const step of DIRECTIONS) {
+        const to = { x: at.x + step.x, y: at.y + step.y }
+        const tile = tiles[to.y]?.[to.x]
+        const bed = beds.find((id) => same(BEDS[id], to))
+
+        if (bed) return { id: bed, steps: steps + 1 }
+
+        if (tile === undefined || levelOf(to.y) !== level || seen.has(`${to.x},${to.y}`) || !passable(tile))
+          continue
+        seen.add(`${to.x},${to.y}`)
+        next.push(to)
+      }
+    }
+
+    frontier = next
+  }
+
+  return null
+}
+
+/**
+ * Where the closest bed is that the player can walk to on their level, as a sentence: its place and which way
+ * to go. Null when none can be reached. Your own bed needs a house to go to.
+ */
+export function nearestBed(
+  tiles: readonly (readonly number[])[],
+  from: Point,
+  hasHouse: boolean,
+): string | null {
+  const found = walkToBed(tiles, from, hasHouse, false) ?? walkToBed(tiles, from, hasHouse, true)
+
+  if (!found) return null
+  const dx = BEDS[found.id].x - from.x
+  const dy = BEDS[found.id].y - from.y
   const ns = Math.abs(dy) < 3 ? '' : dy < 0 ? 'north' : 'south'
   const ew = Math.abs(dx) < 3 ? '' : dx < 0 ? 'west' : 'east'
   const way = `${ns}${ns && ew ? '-' : ''}${ew}`
 
-  return way ? `${BED_PLACES[id]}, to the ${way}` : `${BED_PLACES[id]}, right here`
+  return way ? `${BED_PLACES[found.id]}, to the ${way}` : `${BED_PLACES[found.id]}, right here`
 }
 
 export const inHouse = (point: Point) =>

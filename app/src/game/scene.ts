@@ -1746,8 +1746,12 @@ export class KingdomScene extends Phaser.Scene {
     const animated = matchMedia('(prefers-reduced-motion: no-preference)').matches
 
     if (night) {
+      const bed = nearestBed(this.world.tiles, this.pos, houseStage() !== 'unowned')
+
       quest.toast(
-        `It's late and everything is closed. The nearest bed is ${nearestBed(this.pos, houseStage() !== 'unowned')}. Sleep there, or walk around until morning.`,
+        bed
+          ? `It's late and everything is closed. The nearest bed is ${bed}. Sleep there, or walk around until morning.`
+          : "It's late and everything is closed. There is no bed nearby, so walk around until morning.",
         'info',
       )
 
