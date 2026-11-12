@@ -5,23 +5,24 @@ policy. The [README](README.md) explains how it fits together; this file is how 
 
 ## Where things live
 
-| Path                      | What it is                                                                     |
-| ------------------------- | ------------------------------------------------------------------------------ |
-| `app/src/game/zones.ts`   | Every zone and its policy. The single source of truth for what each gate does  |
-| `scripts/render.ts`       | Turns `zones.ts` into the Pomerium config, Keycloak realm and Kubernetes files |
-| `app/src/game/scene.ts`   | The Phaser overworld: movement, sword, monsters, drawing                       |
-| `app/src/game/story.ts`   | Talking, reading and gates: everything that asks Pomerium a question           |
-| `app/src/game/content.ts` | What characters say, what signs show, and the docs each lesson links to        |
-| `app/src/game/house*.ts`  | The player's house: its visitors, its statechart, and its letters and bell     |
-| `app/src/game/owl*.ts`    | Chapter two's owl: its tools' names, its statechart and its story              |
-| `mcp/`                    | The owl's MCP server, a second workspace. Pomerium serves it at two routes     |
-| `app/src/game/store.ts`   | State shared by Phaser and React                                               |
-| `app/src/game/sound.ts`   | All music and sound effects, synthesized with the Web Audio API                |
-| `app/src/components/`     | The React UI around the game                                                   |
-| `app/src/server/`         | Server routes (Effect 4): verify Pomerium's JWT, call the Oracle, build houses |
-| `deploy/pomerium/`        | The vendored Pomerium Ingress Controller install that `render.ts` adjusts      |
-| `art/`                    | Pixel art as code; `node art/sprites.mjs` regenerates the sprite sheets        |
-| `docs/prd/`               | Plans for work not yet built                                                   |
+| Path                      | What it is                                                                          |
+| ------------------------- | ----------------------------------------------------------------------------------- |
+| `app/src/game/zones.ts`   | Every zone and its policy. The single source of truth for what each gate does       |
+| `scripts/render.ts`       | Turns `zones.ts` into the Pomerium config, Keycloak realm and Kubernetes files      |
+| `app/src/game/scene.ts`   | The Phaser overworld: movement, sword, monsters, drawing                            |
+| `app/src/game/story.ts`   | Talking, reading and gates: everything that asks Pomerium a question                |
+| `app/src/game/content.ts` | What characters say, what signs show, and the docs each lesson links to             |
+| `app/src/game/house*.ts`  | The player's house: its visitors, its statechart, and its letters and bell          |
+| `app/src/game/owl*.ts`    | Chapter two's owl: its tools' names, its statechart and its story                   |
+| `mcp/`                    | The owl's MCP server, a second workspace. Pomerium serves it at two routes          |
+| `app/src/game/store.ts`   | State shared by Phaser and React                                                    |
+| `app/src/game/sound.ts`   | All music and sound effects, synthesized with the Web Audio API                     |
+| `app/src/components/`     | The React UI around the game                                                        |
+| `app/src/server/`         | Server routes (Effect 4): verify Pomerium's JWT, call the Oracle, build houses      |
+| `deploy/pomerium/`        | The vendored Pomerium Ingress Controller install that `render.ts` adjusts           |
+| `art/`                    | Pixel art as code; `node art/sprites.mjs` regenerates the sprite sheets             |
+| `integration/`            | Integration Vitest scenarios behind `./quest test`, one file per independent player |
+| `docs/prd/`               | Plans for work not yet built                                                        |
 
 ## Running and checking
 
