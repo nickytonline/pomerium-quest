@@ -3164,7 +3164,7 @@ export function startGame(parent: HTMLElement) {
     scene: [KingdomScene],
   })
 
-  // Handy for poking at state from devtools, and used by the end-to-end checks.
+  // Handy for poking at state from devtools, and used by the integration tests.
   globalThis.__quest = { game, quest }
 
   return game

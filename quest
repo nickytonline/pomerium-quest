@@ -232,7 +232,7 @@ case "${1:-up}" in
     ;;
   test)
     # Node doesn't trust mkcert's certificate unless it's told to.
-    NODE_EXTRA_CA_CERTS="$(mkcert -CAROOT)/rootCA.pem" ./node_modules/.bin/vp test run --config e2e/vitest.config.ts
+    NODE_EXTRA_CA_CERTS="$(mkcert -CAROOT)/rootCA.pem" ./node_modules/.bin/vp test run --config integration/vitest.config.ts
     ;;
   logs)
     if [ "${2:-pomerium}" = pomerium ]; then kc -n "$POMERIUM_NAMESPACE" logs -f deployment/pomerium

@@ -20,7 +20,7 @@ export { GROUPS }
 
 /** Keeps runs started in the same second (or in the same run, in parallel files) from sharing accounts. */
 export const RUN = `${Date.now()}-${process.pid}-${randomUUID().slice(0, 8)}`
-export const PASSWORD = `e2e-${RUN}-pass`
+export const PASSWORD = `integration-${RUN}-pass`
 
 const JSON_ACCEPT = 'application/json'
 

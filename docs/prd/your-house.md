@@ -355,7 +355,7 @@ Answered while building:
 - **Ingress Controller version:** branch 0-33-0 embeds Pomerium v0.33.4. Everything in the old config
   maps onto annotations or the `Pomerium` resource except `signout_redirect_url` (see "As built").
 - **Switching from public to a policy:** one server-side apply removes the public annotation and adds
-  the policy. The end-to-end checks knock straight after the first save and see the slime refused.
+  the policy. The integration tests knock straight after the first save and see the slime refused.
 - **`set_request_headers` on Ingress:** `ingress.pomerium.io/set_request_headers`, a JSON map.
 
 Still open:
@@ -370,5 +370,5 @@ Still open:
 - A player can write door rules in the game, save them, and see real visitors let in or refused by Pomerium.
 - Every letter can be solved, and the solution is checked by real visits.
 - No player can change another player's house, and no rule a player writes can reach outside their own
-  route. The end-to-end checks prove both.
+  route. The integration tests prove both.
 - Idle houses are removed, and the number of open houses stays under the limit.

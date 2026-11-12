@@ -280,18 +280,18 @@ swing with Space or J, and press Esc for the menu (save, restart, quit to title,
 don't need to edit `/etc/hosts`. mkcert creates a locally trusted certificate, and may ask for your
 password the first time.
 
-| Command                 | What it does                                                                               |
-| ----------------------- | ------------------------------------------------------------------------------------------ |
-| `./quest up`            | Create the cluster if needed, build the images, deploy, and wait until the game answers    |
-| `./quest dev`           | Same as `up`, but the game runs its Vite dev server and hot-reloads `app/src`              |
-| `./quest deploy`        | Rebuild and redeploy into the existing cluster                                             |
-| `./quest test`          | Sign players in through Pomerium (Vitest, in `e2e/`) and check every zone policy and house |
-| `npm test`              | Run the unit tests for the policy evaluator, house rules, statecharts and MCP tools        |
-| `./quest status`        | Show the pods, services and Ingresses                                                      |
-| `./quest logs pomerium` | Follow logs (`pomerium`, `quest`, `mcp` or `keycloak`)                                     |
-| `./quest admin`         | Open Keycloak's admin console on http://localhost:8080 and print its password              |
-| `./quest reset-oracle`  | Forget every player and re-import the Keycloak realm                                       |
-| `./quest down`          | Delete the cluster                                                                         |
+| Command                 | What it does                                                                                       |
+| ----------------------- | -------------------------------------------------------------------------------------------------- |
+| `./quest up`            | Create the cluster if needed, build the images, deploy, and wait until the game answers            |
+| `./quest dev`           | Same as `up`, but the game runs its Vite dev server and hot-reloads `app/src`                      |
+| `./quest deploy`        | Rebuild and redeploy into the existing cluster                                                     |
+| `./quest test`          | Sign players in through Pomerium (Vitest, in `integration/`) and check every zone policy and house |
+| `npm test`              | Run the unit tests for the policy evaluator, house rules, statecharts and MCP tools                |
+| `./quest status`        | Show the pods, services and Ingresses                                                              |
+| `./quest logs pomerium` | Follow logs (`pomerium`, `quest`, `mcp` or `keycloak`)                                             |
+| `./quest admin`         | Open Keycloak's admin console on http://localhost:8080 and print its password                      |
+| `./quest reset-oracle`  | Forget every player and re-import the Keycloak realm                                               |
+| `./quest down`          | Delete the cluster                                                                                 |
 
 `./quest dev` (and `./quest up`) take a minute or two to start the cluster, build the images and bring up Keycloak. Wait
 for the `Ready:` line before you open the game.

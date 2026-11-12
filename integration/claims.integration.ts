@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vite-plus/test'
 import { GAME, PLAYERS, Player, RUN, becomeCitizen, tools } from './support.ts'
 
 const anon = new Player('anon')
-const player = new Player(`e2e-${RUN}@${PLAYERS}`)
+const player = new Player(`integration-${RUN}@${PLAYERS}`)
 
 describe('Anonymous', () => {
   it('serves the game shell publicly', async () => {
