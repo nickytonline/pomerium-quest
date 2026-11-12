@@ -488,7 +488,7 @@ two share one small store ([`store.ts`](app/src/game/store.ts)): Phaser writes t
 health and region to it, and React writes the controls, so the touch buttons drive the same code as the
 keyboard.
 
-Progress lives in four [XState](https://stately.ai/docs/xstate) statecharts, saved to local storage:
+Progress lives in five [XState](https://stately.ai/docs/xstate) statecharts, saved to local storage:
 
 | Machine                                               | Tracks                                                                                                               |
 | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
@@ -504,6 +504,217 @@ session still holds the claims from when you signed in, so the armory says no un
 The art and sound are code too. The sprites and tiles are pixel grids in [`art/`](art) that
 `node art/sprites.mjs` draws into sprite sheets, and there are no audio files: every note of music and
 every sound effect is synthesized at runtime with the Web Audio API ([`sound.ts`](app/src/game/sound.ts)).
+
+### The statecharts
+
+Each chart below is drawn from its machine by `node scripts/statecharts.ts`, and `npm test` fails if one
+no longer matches. An edge reads `EVENT [guard]`: the event that moves the machine, and the named check
+that must pass first. An edge with only `[guard]` is taken as soon as the check passes, and `after` is a
+timer. In the dog's and the night's charts, the boxes side by side run at the same time. An event that
+puts a whole box back to its start, like the night's `RESET` or the Oracle's `DISMISS`, isn't drawn.
+
+<details>
+<summary>Chapter one: <code>quest-machine.ts</code></summary>
+
+<!-- statechart:quest -->
+
+```mermaid
+stateDiagram-v2
+  state "anonymous" as anonymous
+  state "newcomer" as newcomer
+  state "invited" as invited
+  state "granted" as granted
+  state "citizen" as citizen
+  state "proven" as proven
+  state "knighted" as knighted
+  state "knight" as knight
+  state "armed" as armed
+  [*] --> anonymous
+  anonymous --> citizen: SIGNED_IN [hasCitizenClaim]
+  anonymous --> newcomer: SIGNED_IN [lacksCitizenClaim]
+  newcomer --> invited: SAGE_SPOKE
+  newcomer --> citizen: SIGNED_IN [hasCitizenClaim]
+  newcomer --> anonymous: SIGNED_OUT
+  invited --> granted: CITIZEN_GRANTED
+  invited --> citizen: SIGNED_IN [hasCitizenClaim]
+  invited --> anonymous: SIGNED_OUT
+  granted --> citizen: SIGNED_IN [hasCitizenClaim]
+  granted --> anonymous: SIGNED_OUT
+  citizen --> anonymous: SIGNED_OUT
+  citizen --> proven: [proven]
+  proven --> knighted: KNIGHTED
+  proven --> anonymous: SIGNED_OUT
+  knighted --> knight: SIGNED_IN [hasKnightsClaim]
+  knight --> armed: STEEL_TAKEN
+```
+
+<!-- /statechart:quest -->
+
+</details>
+
+<details>
+<summary>Your house: <code>house-machine.ts</code></summary>
+
+<!-- statechart:house -->
+
+```mermaid
+stateDiagram-v2
+  state "unowned" as unowned
+  state "slimes" as slimes
+  state "bread" as bread
+  state "guild" as guild
+  state "baker" as baker
+  state "window" as window
+  state "done" as done
+  [*] --> unowned
+  unowned --> slimes: DEED_GIVEN
+  slimes --> bread: LETTER_SOLVED
+  bread --> guild: LETTER_SOLVED
+  guild --> baker: LETTER_SOLVED
+  baker --> window: LETTER_SOLVED
+  window --> done: LETTER_SOLVED
+```
+
+<!-- /statechart:house -->
+
+</details>
+
+<details>
+<summary>The dog: <code>player-machine.ts</code></summary>
+
+<!-- statechart:player -->
+
+```mermaid
+stateDiagram-v2
+  state "action" as action
+  state action {
+    state "idle" as action_idle
+    state "walking" as action_walking
+    state "awaitingGate" as action_awaitingGate
+    state "attacking" as action_attacking
+    [*] --> action_idle
+    action_idle --> action_walking: WALK
+    action_idle --> action_awaitingGate: GATE
+    action_idle --> action_attacking: SWING
+    action_walking --> action_idle: ARRIVED
+    action_awaitingGate --> action_walking: WALK
+    action_awaitingGate --> action_idle: GATE_DENIED
+    action_attacking --> action_idle: after 200 ms
+  }
+  state "body" as body
+  state body {
+    state "vulnerable" as body_vulnerable
+    state "invulnerable" as body_invulnerable
+    [*] --> body_vulnerable
+    body_vulnerable --> body_invulnerable: HIT
+    body_invulnerable --> body_vulnerable: after 1000 ms
+  }
+```
+
+<!-- /statechart:player -->
+
+</details>
+
+<details>
+<summary>Chapter two: <code>owl-machine.ts</code></summary>
+
+<!-- statechart:owl -->
+
+```mermaid
+stateDiagram-v2
+  state "afar" as afar
+  state "arrived" as arrived
+  state "seeking" as seeking
+  state "fledged" as fledged
+  state "turned" as turned
+  state "vouched" as vouched
+  state "falconer" as falconer
+  state "entrusted" as entrusted
+  state "keyholder" as keyholder
+  state "triumphant" as triumphant
+  [*] --> afar
+  afar --> arrived: KEEP_ENTERED
+  afar --> keyholder: SIGNED_IN [hasKeyholdersClaim]
+  afar --> falconer: SIGNED_IN [hasMochisOwlersClaim]
+  arrived --> seeking: OWL_SOUGHT
+  arrived --> keyholder: SIGNED_IN [hasKeyholdersClaim]
+  arrived --> falconer: SIGNED_IN [hasMochisOwlersClaim]
+  seeking --> fledged: OWL_CAUGHT
+  seeking --> keyholder: SIGNED_IN [hasKeyholdersClaim]
+  seeking --> falconer: SIGNED_IN [hasMochisOwlersClaim]
+  fledged --> turned: OWL_TURNED_BACK
+  fledged --> keyholder: SIGNED_IN [hasKeyholdersClaim]
+  fledged --> falconer: SIGNED_IN [hasMochisOwlersClaim]
+  turned --> vouched: FALCONER_VOUCHED
+  turned --> keyholder: SIGNED_IN [hasKeyholdersClaim]
+  turned --> falconer: SIGNED_IN [hasMochisOwlersClaim]
+  vouched --> keyholder: SIGNED_IN [hasKeyholdersClaim]
+  vouched --> falconer: SIGNED_IN [hasMochisOwlersClaim]
+  falconer --> entrusted: LETTER_DELIVERED
+  falconer --> keyholder: SIGNED_IN [hasKeyholdersClaim]
+  entrusted --> keyholder: SIGNED_IN [hasKeyholdersClaim]
+  keyholder --> triumphant: REUNITED [hasMochisOwl]
+```
+
+<!-- /statechart:owl -->
+
+</details>
+
+<details>
+<summary>The night: <code>night-machine.ts</code></summary>
+
+<!-- statechart:night -->
+
+```mermaid
+stateDiagram-v2
+  state "night" as night
+  state night {
+    state "day" as night_day
+    state "dusk" as night_dusk
+    state "dark" as night_dark
+    state night_dark {
+      state "awake" as night_dark_awake
+      state "asleep" as night_dark_asleep
+      [*] --> night_dark_awake
+      night_dark_awake --> night_dark_asleep: BED
+      night_dark_awake --> night_dark_asleep: always
+    }
+    [*] --> night_day
+    night_day --> night_dusk: FALL
+    night_dusk --> night_day: FRESH [current]
+    night_dusk --> night_dark: STALE [current]
+    night_dark --> night_day: [arrived]
+    night_dark --> night_day: [missed]
+  }
+  state "letter" as letter
+  state letter {
+    state "none" as letter_none
+    state "dawning" as letter_dawning
+    state "waiting" as letter_waiting
+    [*] --> letter_none
+    letter_none --> letter_dawning: LETTER
+    letter_dawning --> letter_waiting: after dawn
+    letter_waiting --> letter_none: [attentionFree]
+  }
+  state "oracle" as oracle
+  state oracle {
+    state "away" as oracle_away
+    state "beside" as oracle_beside
+    state oracle_beside {
+      state "arriving" as oracle_beside_arriving
+      state "attending" as oracle_beside_attending
+      [*] --> oracle_beside_arriving
+      oracle_beside_arriving --> oracle_beside_attending: [attentionTaken]
+    }
+    [*] --> oracle_away
+    oracle_away --> oracle_beside: SUMMON
+    oracle_beside_attending --> oracle_away: [attentionFree]
+  }
+```
+
+<!-- /statechart:night -->
+
+</details>
 
 ### On the server
 
