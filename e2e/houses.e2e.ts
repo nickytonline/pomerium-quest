@@ -13,7 +13,6 @@ import {
   field,
   newPlayer,
   rules,
-  sleep,
   type Json,
 } from './support.ts'
 
@@ -51,19 +50,16 @@ describe('Your house', () => {
     expect(await home.knock('slime')).toBe('200')
   })
 
-  // The save pause starts when the server begins a save, so the second save is sent while the first is still
-  // in flight: probing after it returns could land outside the pause on a slow Pomerium.
+  // The save pause starts when the server begins a save, so two saves sent together can't both get through,
+  // whichever the server sees first. Sending them together also keeps the check clear of Pomerium's pace.
   it('letter 1: saves the traveler (the deed lets you in)', async () => {
     const first = rules([allow('or', emailIs('wanderer@outlands.net'))])
-    const saving = home.save(first)
 
-    await sleep(200)
+    const statuses = (await Promise.all([home.builder('save', first), home.builder('save', first)]))
+      .map((reply) => reply.status)
+      .toSorted((a, b) => a - b)
 
-    expect(
-      (await home.builder('save', first)).status,
-      'saving again straight away waits for the builders',
-    ).toBe(503)
-    expect(await saving).toBe(200)
+    expect(statuses, 'one save is taken, the other waits for the builders').toEqual([200, 503])
     expect(await home.knock('slime'), 'the slime is turned away').toBe('401')
     expect(await home.knock('traveler'), 'the traveler is let in').toBe('200')
     expect(await home.status(`${path}knock`), 'you are let in').toBe(200)
