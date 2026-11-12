@@ -216,15 +216,17 @@ Claude Code has been tried end to end: it signs in and gets the same tools and r
 ## Play it on a real Pomerium (local k3d)
 
 You need Docker, [k3d](https://k3d.io), [kubectl](https://kubernetes.io/docs/tasks/tools/),
-[mkcert](https://github.com/FiloSottile/mkcert) and Node 24. The repo pins Node in `mise.toml`, so with
-[mise](https://mise.jdx.dev), `mise install` gets the right version. `./quest` is a Bash script.
+[mkcert](https://github.com/FiloSottile/mkcert) and Node. The repo pins the Node version in `mise.toml`, so run
+`mise install` with [mise](https://mise.jdx.dev) to get the right version. Any other Node version manager
+works too, such as asdf or nvm, as long as it matches the version in `mise.toml`. `./quest` is a Bash script.
 
 ### macOS
 
 Use Docker Desktop, OrbStack or Colima for Docker, then:
 
 ```sh
-brew install k3d kubectl mkcert node
+brew install k3d kubectl mkcert mise
+mise install   # Node, at the version pinned in mise.toml
 ./quest up
 ```
 
@@ -232,7 +234,7 @@ brew install k3d kubectl mkcert node
 
 Install [Docker Engine](https://docs.docker.com/engine/install/) (or Docker Desktop), and make sure you can
 run `docker` without `sudo`. Then install the rest. With [Homebrew on Linux](https://docs.brew.sh/Homebrew-on-Linux),
-the macOS line above works as is. Without it:
+the macOS commands above work as is (use `mise` there too, or your own Node manager). Without it:
 
 ```sh
 curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash   # k3d
@@ -240,7 +242,7 @@ sudo apt install libnss3-tools   # lets mkcert add its certificate to Chrome and
 ```
 
 Then install kubectl ([instructions](https://kubernetes.io/docs/tasks/tools/install-kubectl-linux/)), mkcert
-([instructions](https://github.com/FiloSottile/mkcert#linux)) and Node 24 (`mise install`), and run
+([instructions](https://github.com/FiloSottile/mkcert#linux)) and Node (`mise install`), and run
 `./quest up`. Rootless Docker can't listen on port 443, so with it, run `QUEST_PORT=8443 ./quest up`.
 
 ### Windows
