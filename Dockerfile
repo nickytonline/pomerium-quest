@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # The images: `--target app` (the game's production build), `--target app-dev` (`./quest dev`) and
 # `--target mcp` (the owl's MCP server).
-ARG NODE_IMAGE=node:24.22.1-alpine
+ARG NODE_IMAGE=node:26.13.1-alpine
 
 FROM ${NODE_IMAGE} AS deps
 WORKDIR /repo
