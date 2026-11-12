@@ -37,7 +37,7 @@ jobs:
       - run: npm ci
       - run: npm test
 
-  # Plays every gate on a real Pomerium: a k3d cluster with Keycloak, then ./quest test with curl.
+  # Plays every gate on a real Pomerium: a k3d cluster with Keycloak, then ./quest test (Vitest).
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 30

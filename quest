@@ -231,7 +231,8 @@ case "${1:-up}" in
     kc -n "$NAMESPACE" get pods,svc,ingress
     ;;
   test)
-    bash scripts/e2e.sh
+    # Node doesn't trust mkcert's certificate unless it's told to.
+    NODE_EXTRA_CA_CERTS="$(mkcert -CAROOT)/rootCA.pem" ./node_modules/.bin/vp test run --config e2e/vitest.config.ts
     ;;
   logs)
     if [ "${2:-pomerium}" = pomerium ]; then kc -n "$POMERIUM_NAMESPACE" logs -f deployment/pomerium
