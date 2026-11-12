@@ -55,6 +55,15 @@ describe('the night machine', () => {
     expect(log.filter((entry) => entry === 'sleeps' || entry === 'wakes')).toEqual(['sleeps', 'wakes'])
   })
 
+  it('puts a player who reached a bed during dusk to sleep once night falls', () => {
+    const { night, log, sleeper } = setup()
+    const id = night.fall([], 0)
+    night.bed(sleeper)
+    night.stale(id)
+
+    expect(log).toEqual(['dark', 'sleeps'])
+  })
+
   it('ends with no sign-in, and a note, when the claims never arrive', async () => {
     const { night, log } = setup()
     const id = night.fall([], 0)

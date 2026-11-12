@@ -170,6 +170,8 @@ export const nightMachine = setup({
               ],
             },
             STALE: { guard: 'current', target: 'dark' },
+            // A bed reached while the first look is out: remembered, so the player sleeps once night falls.
+            BED: { actions: assign(({ event }) => ({ sleeper: event.sleeper })) },
           },
         },
 
@@ -203,6 +205,7 @@ export const nightMachine = setup({
           ],
           states: {
             awake: {
+              always: { guard: ({ context }) => context.sleeper !== null, target: 'asleep' },
               on: { BED: { target: 'asleep', actions: assign(({ event }) => ({ sleeper: event.sleeper })) } },
             },
             asleep: {

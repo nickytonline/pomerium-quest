@@ -45,7 +45,7 @@ async function readRequestId(response: Response) {
 const needsSignIn = (response: Response) =>
   response.type === 'opaqueredirect' || response.status === 302 || response.status === 401
 
-/** How long one wait-for-claims probe may take before it is cut off. */
+/** How long a probe may take before it is cut off, so nothing waits on Pomerium forever. */
 const PROBE_TIMEOUT_MS = 10_000
 
 /** Finds out whether Pomerium is in front of us and, if so, who we are. */
@@ -53,7 +53,7 @@ export async function probe(signal?: AbortSignal): Promise<{ mode: Mode; identit
   try {
     const response = await fetch('/zones/oracle/', {
       redirect: 'manual',
-      signal: signal ?? null,
+      signal: signal ?? AbortSignal.timeout(PROBE_TIMEOUT_MS),
       headers: { accept: 'application/json' },
     })
 
