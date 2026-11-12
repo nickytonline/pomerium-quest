@@ -13,6 +13,7 @@ import {
   field,
   newPlayer,
   rules,
+  sleep,
   type Json,
 } from './support.ts'
 
@@ -40,6 +41,7 @@ describe('Your house', () => {
   })
 
   it('lets a slime (no session) walk into a public house', async () => {
+    expect(await home.liveWithin(60), 'Pomerium has taken up the public house').toBe(true)
     expect((await anon.fetch('GET', knockUrl(), new Headers({ accept: 'application/json' }))).status).toBe(
       200,
     )
@@ -49,10 +51,19 @@ describe('Your house', () => {
     expect(await home.knock('slime')).toBe('200')
   })
 
+  // The save pause starts when the server begins a save, so the second save is sent while the first is still
+  // in flight: probing after it returns could land outside the pause on a slow Pomerium.
   it('letter 1: saves the traveler (the deed lets you in)', async () => {
     const first = rules([allow('or', emailIs('wanderer@outlands.net'))])
+    const saving = home.save(first)
 
-    expect(await home.save(first)).toBe(200)
+    await sleep(200)
+
+    expect(
+      (await home.builder('save', first)).status,
+      'saving again straight away waits for the builders',
+    ).toBe(503)
+    expect(await saving).toBe(200)
     expect(await home.knock('slime'), 'the slime is turned away').toBe('401')
     expect(await home.knock('traveler'), 'the traveler is let in').toBe('200')
     expect(await home.status(`${path}knock`), 'you are let in').toBe(200)
@@ -60,12 +71,6 @@ describe('Your house', () => {
 
   it('has the builders say Pomerium has taken up the rules', async () => {
     expect(await home.liveWithin(60)).toBe(true)
-  })
-
-  it('makes saving again straight away wait for the builders', async () => {
-    expect((await home.builder('save', rules([allow('or', emailIs('wanderer@outlands.net'))]))).status).toBe(
-      503,
-    )
   })
 
   it('letter 2: saves no rules, so only the deed owner gets in', async () => {

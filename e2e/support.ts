@@ -155,7 +155,9 @@ export class Player {
         signal: AbortSignal.timeout(300_000),
       }
 
+      // A redirect to another host must not carry this host's cookies along.
       if (cookie) sent.set('cookie', cookie)
+      else sent.delete('cookie')
 
       if (payload !== undefined) init.body = payload
 

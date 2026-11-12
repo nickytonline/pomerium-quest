@@ -11,7 +11,8 @@ beforeAll(async () => {
   home = await newPlayer('idle')
   await becomeCitizen(home)
   path = field((await home.builder('open', { rules: null })).body, 'path')
-  await home.liveWithin(60)
+  expect(await home.liveWithin(60), 'Pomerium has taken up the house').toBe(true)
+  expect(await home.status(`${path}knock`), 'the door answers before it is removed').toBe(200)
 })
 
 describe('Idle houses', () => {
@@ -41,6 +42,7 @@ describe('Idle houses', () => {
   })
 
   it('answers its owner again', async () => {
+    expect(await home.liveWithin(60), 'Pomerium has taken up the rebuilt route').toBe(true)
     expect(await home.status(`${path}knock`)).toBe(200)
   })
 })
