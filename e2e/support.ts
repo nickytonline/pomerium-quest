@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+
 import { expect } from 'vite-plus/test'
 
 import { GROUPS } from '../app/src/game/groups.ts'
@@ -17,7 +19,7 @@ export const PLAYERS = 'players.example'
 export { GROUPS }
 
 /** Keeps runs started in the same second (or in the same run, in parallel files) from sharing accounts. */
-export const RUN = `${Date.now()}-${process.pid}-${Math.random().toString(36).slice(2, 8)}`
+export const RUN = `${Date.now()}-${process.pid}-${randomUUID().slice(0, 8)}`
 export const PASSWORD = `e2e-${RUN}-pass`
 
 const JSON_ACCEPT = 'application/json'
