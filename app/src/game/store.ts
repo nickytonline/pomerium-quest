@@ -137,6 +137,12 @@ export interface QuestState {
   readonly signIn: { readonly url: string } | null
   /** The Oracle has appeared beside the player to sign them in again with new claims. */
   readonly oracleBeside: boolean
+  /** It is night: the game waits for Pomerium's token to carry the Oracle's new claims, then morning comes. */
+  readonly night: boolean
+  /** The player is asleep in a bed during the night. */
+  readonly sleeping: boolean
+  /** Bumped when the game is left or reset, so work started before it can tell it is out of date. */
+  readonly epoch: number
   /** The Royal Keep let the player in: chapter one is complete. */
   readonly finale: boolean
   /** After chapter two's ending: fireworks, a happy Pomeranian and the cast. */
@@ -232,6 +238,9 @@ let state: QuestState = {
   menuOpen: false,
   signIn: null,
   oracleBeside: false,
+  night: false,
+  sleeping: false,
+  epoch: 0,
   finale: false,
   celebrating: false,
   phished: false,
@@ -250,6 +259,9 @@ let state: QuestState = {
 
 const listeners = new Set<() => void>()
 let dialogDone: (() => void) | undefined
+
+/** Dialogs that were asked for while another was open, in order: each waits its turn instead of replacing it. */
+let dialogQueue: { pages: readonly Page[]; onDone: (() => void) | undefined }[] = []
 let denyDone: (() => void) | undefined
 let signedIn: (() => void) | undefined
 let signInCancelled: (() => void) | undefined
@@ -272,6 +284,7 @@ export const paused = (s: QuestState) =>
   s.dialog !== null ||
   s.deny !== null ||
   s.signIn !== null ||
+  s.sleeping ||
   s.finale ||
   s.celebrating ||
   s.phished ||
@@ -282,6 +295,15 @@ export const paused = (s: QuestState) =>
   s.falconersErrand !== null ||
   s.chapterTwoDone ||
   !s.started
+
+/** The dialog to show straight after one closes, if any was asked for meanwhile: handed over with no gap in between, so nothing else can slip into it. */
+function nextDialog(): QuestState['dialog'] {
+  const next = dialogQueue.shift()
+
+  dialogDone = next?.onDone
+
+  return next ? { pages: next.pages, index: 0 } : null
+}
 
 export const quest = {
   get: () => state,
@@ -315,13 +337,17 @@ export const quest = {
   /** Back to the title screen. The scene is rebuilt from saved progress on Continue. */
   quit: () => {
     quest.save()
+    dialogQueue = []
     update({
+      epoch: state.epoch + 1,
       started: false,
       menuOpen: false,
       journalOpen: false,
       dialog: null,
       deny: null,
       oracleBeside: false,
+      night: false,
+      sleeping: false,
       finale: false,
       celebrating: false,
       perch: null,
@@ -426,7 +452,9 @@ export const quest = {
     resetQuest()
     resetHouse()
     resetOwl()
+    dialogQueue = []
     update({
+      epoch: state.epoch + 1,
       progress,
       owlStage: owlActor.getSnapshot().value,
       houseStage: houseActor.getSnapshot().value,
@@ -440,6 +468,13 @@ export const quest = {
   },
 
   say: (pages: readonly Page[], onDone?: () => void) => {
+    // A dialog already open keeps its pages and its completion callback; this one follows it.
+    if (state.dialog) {
+      dialogQueue.push({ pages, onDone })
+
+      return
+    }
+
     dialogDone = onDone
     update({ dialog: { pages, index: 0 } })
   },
@@ -465,15 +500,14 @@ export const quest = {
     if (!dialog || dialog.pages.slice(dialog.index).some((page) => page.choices)) return
 
     const done = dialogDone
-    dialogDone = undefined
-    update({ dialog: null, inputResumesAt: performance.now() + 200 })
+
+    update({ dialog: nextDialog(), inputResumesAt: performance.now() + 200 })
     done?.()
   },
 
   /** Closes a page with choices and runs the one picked, instead of the dialog's onDone. */
   choose: (choice: Choice) => {
-    dialogDone = undefined
-    update({ dialog: null, inputResumesAt: performance.now() + 200 })
+    update({ dialog: nextDialog(), inputResumesAt: performance.now() + 200 })
     choice.pick()
   },
 
@@ -510,6 +544,8 @@ export const quest = {
   },
   summonOracle: () => update({ oracleBeside: true }),
   dismissOracle: () => update({ oracleBeside: false }),
+  setNight: (night: boolean) => update({ night, sleeping: night && state.sleeping }),
+  setSleeping: (sleeping: boolean) => update({ sleeping }),
   openFinale: () => update({ finale: true, menuOpen: false, journalOpen: false }),
   /** Chapter one's ending closes onto the Aviary's grounds: chapter two starts on the keep's far side. */
   closeFinale: () => update({ finale: false, inputResumesAt: performance.now() + 200 }),

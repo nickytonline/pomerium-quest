@@ -3,9 +3,9 @@
 // door rules, and the explanations below come from the same rules.
 import { claimCitizenship, houseStatus, knockAs, knockYourself, openHouse, saveHouse } from './access.ts'
 import { LESSONS, LETTERS, link, type Caller, type LessonId, type Letter, type Page } from './content.ts'
-import { VISITORS, deedRule, type HouseRule, type HouseState, type VisitorId } from './house.ts'
+import { HOUSE_PREFIX, VISITORS, deedRule, type HouseRule, type HouseState, type VisitorId } from './house.ts'
 import { houseStage, type LetterStage } from './house-machine.ts'
-import { policyYaml, type Identity } from './ppl.ts'
+import { decide, policyYaml, type Identity } from './ppl.ts'
 import { sfx } from './sound.ts'
 import { ANONYMOUS, quest } from './store.ts'
 
@@ -73,14 +73,14 @@ export const citizenshipPages = (): Page[] => [
 
 /**
  * The Oracle makes the player a citizen and adds the deed to their claims. True once he has; their
- * session carries both after the next sign-in.
+ * session carries both once Pomerium refreshes it, and only then does the house door open.
  */
 export async function addDeed() {
   const claimed = await claimCitizenship()
 
   if (!claimed.ok) return false
 
-  quest.sendHouse({ type: 'DEED_GIVEN' })
+  // The door stays locked until the token carries the deed: signedIn sends DEED_GIVEN once it does.
   sfx('itemGet')
   quest.toast('The Oracle added the deed to your house', 'info')
 
@@ -288,10 +288,35 @@ export function doorRefusesYou() {
   quest.say([
     {
       who: 'Your door',
-      text: "Your door won't open for you. Pomerium checks each request against the route's rules, and the one that lets in the deed's owner needs the deed in your session. Talk to the Oracle at his temple: he can sign you in again so your session carries it.",
+      text: "Your door won't open for you. Pomerium checks each request against the route's rules, and the one that lets in the deed's owner needs the deed in your session. Talk to the Oracle at his temple: he can wait with you until Pomerium refreshes your session so it carries it.",
       links: [link('refresh')],
     },
   ])
+}
+
+/**
+ * The player walked into their house's locked door before the Oracle granted the deed. No route exists
+ * yet, so nothing is logged: this shows how the door's first rule would decide, the same way a guard's
+ * refusal does.
+ */
+export function lockedDoorDenied() {
+  const { identity } = quest.get()
+  const path = `${HOUSE_PREFIX}/yours`
+  const decision = decide({ policy: [deedRule('the id on your deed')] }, identity, { method: 'GET', path })
+
+  quest.showDeny({
+    status: 403,
+    title: 'Access denied',
+    story: {
+      title: 'Locked',
+      text: "The door doesn't budge. The house is yours by right, but the lock only opens for the deed, and your papers don't carry one yet. The sage in Hearth Village can tell you more.",
+    },
+    requestLine: `GET ${location.origin}${path}`,
+    who: identity.authenticated ? identity.email : 'anonymous',
+    lines: decision.lines,
+    hint: 'Your house is a route, and its first rule lets in whoever holds the deed: claim/deed. Nothing in your session says deed, so no rule matches, and Pomerium denies by default.',
+    links: [link('authz'), link('defaultDeny')],
+  })
 }
 
 /** What one visit should have done but didn't, as the house tells it. */

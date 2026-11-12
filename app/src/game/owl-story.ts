@@ -117,7 +117,7 @@ async function vouch() {
     ],
     () => {
       learn('claims')
-      oracleArrives(`The Falconer's letter arrived. I've added ${GROUPS.falconers} to your groups.`)
+      void oracleArrives(`The Falconer's letter arrived. I've added ${GROUPS.falconers} to your groups.`)
     },
   )
 }
@@ -185,7 +185,7 @@ export function falconer() {
           text: 'The Oracle has the letter, but your session still holds the claims from when you signed in. Ah, here he comes.',
         },
       ],
-      () => oracleArrives(`The letter arrived. I've added ${group} to your groups.`),
+      () => void oracleArrives(`The letter arrived. I've added ${group} to your groups.`),
     )
 
     return
@@ -463,7 +463,7 @@ const DONE: Partial<Record<OwlTool, () => void>> = {
         ],
         () => {
           learn('claims')
-          oracleArrives(`The owl's letter arrived. I've added ${GROUPS.keyholders} to your groups.`)
+          void oracleArrives(`The owl's letter arrived. I've added ${GROUPS.keyholders} to your groups.`)
         },
       )
   },

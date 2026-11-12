@@ -42,6 +42,8 @@ export type Effect =
   | 'bell'
   | 'hoot'
   | 'flutter'
+  | 'sleep'
+  | 'wake'
 
 const STORAGE_KEY = 'pomerium-quest/sound/v1'
 
@@ -551,6 +553,16 @@ const EFFECTS: Record<Effect, (mix: Mixer, out: AudioNode, at: number) => void> 
   hoot: (_mix, out, at) => {
     tone(out, at, { wave: 'sine', freq: 392, to: 349, dur: 0.14, peak: 0.16, hold: true })
     tone(out, at + 0.2, { wave: 'sine', freq: 392, to: 311, dur: 0.34, peak: 0.16, hold: true })
+  },
+  /** Settling into bed: a slow, sinking lullaby of three soft notes. */
+  sleep: (_mix, out, at) => {
+    for (const [i, name] of ['E5', 'C5', 'G4'].entries())
+      tone(out, at + i * 0.32, { wave: 'sine', freq: hz(name), dur: 0.5, peak: 0.12 })
+  },
+  /** Waking to a letter: a bright, rising morning chime. */
+  wake: (_mix, out, at) => {
+    for (const [i, name] of ['G4', 'C5', 'E5'].entries())
+      tone(out, at + i * 0.1, { wave: 'triangle', freq: hz(name), dur: 0.3, peak: 0.16 })
   },
   /** The owl hopping out of reach: three quick wingbeats, each a soft puff of air. */
   flutter: (mix, out, at) => {

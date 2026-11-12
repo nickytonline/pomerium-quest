@@ -66,12 +66,17 @@ sign_in_from() {
     --data-urlencode "password=${PASSWORD}" "$action"
 }
 
-# Signs out of Pomerium (and the Oracle), landing straight back at the Oracle's sign-in page, as the
-# game does, then signs in again so the new session carries fresh claims.
+# Waits for Pomerium to refresh the session until the Oracle's answer matches the expected claim (a grep
+# pattern, such as '"knights"'), as the game does: it never signs out (that would need Pomerium's open
+# allow_any_sign_out_redirect_uri flag). The Oracle's access tokens last 30 seconds, so Pomerium refreshes in
+# about a minute. Prints refreshed or timeout; the email argument is kept so callers read as before.
 sign_in_again() {
-  local jar="$1" email="$2"
-  sign_in_from "$jar" "$email" \
-    "$(curl -s -L -c "$jar" -b "$jar" "${GAME}/.pomerium/sign_out?pomerium_redirect_uri=${GAME}/zones/oracle/signin")"
+  local jar="$1" pattern="$3"
+  for _ in $(seq 1 50); do
+    curl -s -b "$jar" -H "$JSON" "${GAME}/zones/oracle/" | grep -q "$pattern" && { echo refreshed; return; }
+    sleep 3
+  done
+  echo timeout
 }
 
 # A newcomer isn't a citizen until the Oracle says so: he grants the citizens group and the deed, and the
@@ -79,7 +84,7 @@ sign_in_again() {
 become_citizen() {
   local jar="$1" email="$2"
   check "the Oracle grants citizenship and a deed" 200 "$(status "$jar" /zones/oracle/citizen POST)"
-  sign_in_again "$jar" "$email" >/dev/null
+  sign_in_again "$jar" "$email" '"deed":"[0-9a-f-]\{36\}"' >/dev/null
   check "the new session carries a deed claim" yes \
     "$(curl -s -b "$jar" -H "$JSON" "${GAME}/zones/oracle/" | grep -q '"deed":"[0-9a-f-]\{36\}"' && echo yes || echo no)"
   # Pomerium takes a moment to see the new claims; wait, so the first request after this isn't a stale 403.
@@ -126,7 +131,7 @@ check "scriptorium is its own route, scribes only" 403 "$(status "$citizen" /zon
 echo "Knighthood"
 check "Captain knights the player" 200 "$(status "$citizen" /zones/guild/knight POST)"
 check "armory still refuses (session holds old claims)" 403 "$(status "$citizen" /zones/armory/enter)"
-check "signing in again lands back in the game" "${GAME}/?signedin=1" "$(sign_in_again "$citizen" "$email")"
+check "Pomerium refreshes the session with the new claims" refreshed "$(sign_in_again "$citizen" "$email" '"knights"')"
 armory=403
 for _ in $(seq 1 45); do
   armory="$(status "$citizen" /zones/armory/enter)"
@@ -138,7 +143,7 @@ check "armory opens once Pomerium sees the new claim" 200 "$armory"
 echo "The Royal Keep"
 check "keep refuses a knight who isn't a scholar" 403 "$(status "$citizen" /zones/keep/enter)"
 check "Librarian names the player a scholar" 200 "$(status "$citizen" /zones/oracle/scholar POST)"
-sign_in_again "$citizen" "$email" >/dev/null
+sign_in_again "$citizen" "$email" '"scholars"' >/dev/null
 keep=403
 for _ in $(seq 1 45); do
   keep="$(status "$citizen" /zones/keep/enter)"
@@ -180,7 +185,7 @@ check "the Eyrie refuses a player who is neither falconer nor keyholder" 403 "$(
 check "the Falconer vouches for the player, and the Oracle adds falconers" yes \
   "$(curl -s -b "$owl" -H "$JSON" -X POST "${GAME}/zones/keep/falconer" | grep -q "\"granted\":\"$GROUP_FALCONERS\"" && echo yes || echo no)"
 check "the Aviary still refuses (session holds old claims)" refused "$(perch "$owl" "$tools" | field outcome.kind)"
-sign_in_again "$owl" "$falconer" >/dev/null
+sign_in_again "$owl" "$falconer" '"falconers"' >/dev/null
 check "the Aviary lists its tools for a falconer's owl" tools "$(perch_until "$owl" "$tools" tools)"
 check "it lists all five, the forbidden one too" \
   "whoami,ring_bell,scout_grounds,deliver_letter,open_cage" \
@@ -202,7 +207,7 @@ check "the Eyrie refuses a falconer who is no keyholder" 403 "$(status "$owl" /z
 check "deliver_letter has the Oracle add keyholders" yes \
   "$(perch "$owl" "$(call deliver_letter)" | field outcome.text | grep -q "\"granted\": \"$GROUP_KEYHOLDERS\"" && echo yes || echo no)"
 check "the Eyrie still refuses (session holds old claims)" 403 "$(status "$owl" /zones/eyrie/enter)"
-sign_in_again "$owl" "$falconer" >/dev/null
+sign_in_again "$owl" "$falconer" '"keyholders"' >/dev/null
 check "the Eyrie opens to all five groups, ending chapter two" 200 "$(gate_until "$owl" /zones/eyrie/enter)"
 check "open_cage stays refused, even for a keyholder" refused \
   "$(perch "$owl" "$(call open_cage)" | field outcome.kind)"
@@ -212,7 +217,7 @@ echo "Taking the claims back"
 deed_before="$(curl -s -b "$citizen" -H "$JSON" "${GAME}/zones/oracle/" | grep -o '"deed":"[^"]*"')"
 check "a restart takes the claims back at the Oracle" 200 "$(status "$citizen" /zones/oracle/reset POST)"
 check "taking them back again is harmless" 200 "$(status "$citizen" /zones/oracle/reset POST)"
-check "signing in again lands back in the game" "${GAME}/?signedin=1" "$(sign_in_again "$citizen" "$email")"
+check "Pomerium refreshes the session with the new claims" refreshed "$(sign_in_again "$citizen" "$email" '"deed":null')"
 check "the new session carries no deed" yes \
   "$(curl -s -b "$citizen" -H "$JSON" "${GAME}/zones/oracle/" | grep -q '"deed":null' && echo yes || echo no)"
 # Pomerium keeps a copy of the user's claims for up to a minute. Wait that out, so an old copy would have expired.
@@ -225,10 +230,8 @@ check "becoming a citizen again grants a new deed" yes \
   "$([ -n "$deed_after" ] && [ "$deed_after" != "$deed_before" ] && echo yes || echo no)"
 
 echo "Starting over"
-check "signing out to restart lands on the title screen" "${GAME}/" \
-  "$(curl -s -L -c "$citizen" -b "$citizen" -o /dev/null -w '%{url_effective}' \
-    "${GAME}/.pomerium/sign_out?pomerium_redirect_uri=${GAME}/")"
-check "and the session is gone" 401 "$(status "$citizen" /zones/fields/enter)"
+curl -s -L -c "$citizen" -b "$citizen" -o /dev/null "${GAME}/.pomerium/sign_out"
+check "signing out ends the session" 401 "$(status "$citizen" /zones/fields/enter)"
 
 echo "Your house"
 # The Builders' Yard: the game server writes the house of whoever Pomerium signed in.
@@ -348,7 +351,7 @@ check "save no rules, so only the deed opens the door" 200 "$(builder_status "$h
 check "the builders say Pomerium has taken up the rules" true "$(live_within "$home" 60)"
 check "the owner's deed lets them in" 200 "$(status "$home" "${path}knock")"
 check "a restart takes the owner's deed back" 200 "$(status "$home" /zones/oracle/reset POST)"
-sign_in_again "$home" "$owner" >/dev/null
+sign_in_again "$home" "$owner" '"deed":null' >/dev/null
 sleep 65
 check "with no deed, the owner's own door refuses them" 403 "$(status "$home" "${path}knock")"
 become_citizen "$home" "$owner"

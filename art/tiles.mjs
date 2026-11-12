@@ -354,6 +354,19 @@ const perch = (rect) => {
   rect(13, 8, 1, 1, '#5b3a22')
 }
 
+/** A bed against the floor: a wooden frame, a white pillow at the head and a blue blanket over the rest. */
+const bed = (rect) => {
+  floor(rect)
+  rect(2, 1, 12, 14, '#241a2e')
+  rect(3, 2, 10, 12, '#6b4226')
+  rect(4, 3, 8, 3, '#f1ede4')
+  rect(4, 5, 8, 1, '#cfc8b8')
+  rect(4, 6, 8, 7, '#4a6fa5')
+  rect(4, 6, 8, 1, '#7ea0d4')
+  rect(7, 8, 1, 4, '#3b5887')
+  rect(9, 8, 1, 4, '#3b5887')
+}
+
 /** The writing desk and its quill, with a sheet of paper on it or a sealed letter waiting. */
 const desk = (rect, top) => {
   floor(rect)
@@ -573,6 +586,8 @@ const painters = [
   (rect) => signpost(rect, floor),
   // 42 a perch: one of the Aviary's tools, out in the open
   perch,
+  // 43 a bed, in the sage's guest room and in the player's house
+  bed,
 ]
 
 export const tiles = painters.map((paint) => {

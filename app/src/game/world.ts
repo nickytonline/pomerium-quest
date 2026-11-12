@@ -41,6 +41,7 @@ export const TILE = {
   tableHeel: 40,
   signIndoors: 41,
   perch: 42,
+  bed: 43,
 } as const
 
 export type TileId = (typeof TILE)[keyof typeof TILE]
@@ -174,6 +175,129 @@ export const HOUSE: House = {
   inside: { x0: 2, y0: 10, x1: 6, y1: 14 },
 }
 
+/** The beds, one wherever the Oracle's word can arrive, so nobody walks home to sleep: the sage's guest bed, the player's own, the town inn's and the Aviary's hut. */
+export const BEDS = {
+  guest: { x: 13, y: 24 },
+  home: { x: 6, y: 10 },
+  inn: { x: 22, y: 14 },
+  hut: { x: 33, y: 31 },
+} as const satisfies Record<string, Point>
+
+type BedId = keyof typeof BEDS
+
+/**
+ * Where the townsfolk who keep a building sleep at night, in that building. They are not beds for the player:
+ * nearestBed only looks at BEDS. Everyone else is game data and simply walks off, so has no bed.
+ */
+/**
+ * Like the guards, the Oracle never sleeps: he is the identity provider, and sign-in must always be there.
+ * Neither does the cage's keeper, who holds its key and stays at their post so the cage is never left unwatched.
+ */
+export const ALWAYS_AWAKE: ReadonlySet<NpcId> = new Set(['oracle', 'keeper'])
+
+/** Whether someone leaves the map or goes to bed when night falls. */
+export const goesToBed = (npcId: NpcId) => !ALWAYS_AWAKE.has(npcId)
+
+const LIBRARIAN_BED = { x: 36, y: 26 } as const satisfies Point
+const CAPTAIN_BED = { x: 23, y: 3 } as const satisfies Point
+const SAGE_BED = { x: 13, y: 26 } as const satisfies Point
+const FALCONER_BED = { x: 31, y: 31 } as const satisfies Point
+
+export const NPC_BEDS: Partial<Record<NpcId, Point>> = {
+  captain: CAPTAIN_BED,
+  librarian: LIBRARIAN_BED,
+  falconer: FALCONER_BED,
+  sage: SAGE_BED,
+}
+
+const BED_IDS: readonly BedId[] = ['guest', 'home', 'inn', 'hut']
+
+/** Where each bed is, in the words a player is told. */
+const BED_PLACES: Record<BedId, string> = {
+  guest: "the sage's guest bed, in the house in Hearth Village",
+  home: 'your own bed, in your house',
+  inn: 'the inn just off the town square',
+  hut: "the falconer's hut in the Aviary",
+}
+
+/** Chapter one's kingdom is level one, the Aviary and the Eyrie below the keep are level two. */
+const levelOf = (y: number) => (y > KEEP_WALL ? 2 : 1)
+
+const DIRECTIONS: readonly Point[] = [
+  { x: 1, y: 0 },
+  { x: -1, y: 0 },
+  { x: 0, y: 1 },
+  { x: 0, y: -1 },
+]
+
+/**
+ * The fewest steps on foot to a bed on the player's level, or null if none can be reached. Walls block, so a
+ * bed in another room needs its door. Gates stay policy-checked at night, so the first search goes round them; only
+ * when no bed is reachable that way does a second search walk through them (staying on the level).
+ */
+function walkToBed(
+  tiles: readonly (readonly number[])[],
+  from: Point,
+  hasHouse: boolean,
+  throughGates: boolean,
+): { id: BedId; steps: number } | null {
+  const level = levelOf(from.y)
+  const beds = BED_IDS.filter((id) => (id !== 'home' || hasHouse) && levelOf(BEDS[id].y) === level)
+
+  const passable = (tile: number) =>
+    PLAYER_TERRAIN.has(tile) ||
+    tile === TILE.doorClosed ||
+    (tile === TILE.doorLocked && hasHouse) ||
+    (throughGates && (tile === TILE.gateClosed || tile === TILE.gateOpen))
+
+  const seen = new Set([`${from.x},${from.y}`])
+  let frontier: Point[] = [from]
+
+  for (let steps = 0; frontier.length > 0; steps++) {
+    const next: Point[] = []
+
+    for (const at of frontier) {
+      for (const step of DIRECTIONS) {
+        const to = { x: at.x + step.x, y: at.y + step.y }
+        const tile = tiles[to.y]?.[to.x]
+        const bed = beds.find((id) => same(BEDS[id], to))
+
+        if (bed) return { id: bed, steps: steps + 1 }
+
+        if (tile === undefined || levelOf(to.y) !== level || seen.has(`${to.x},${to.y}`) || !passable(tile))
+          continue
+        seen.add(`${to.x},${to.y}`)
+        next.push(to)
+      }
+    }
+
+    frontier = next
+  }
+
+  return null
+}
+
+/**
+ * Where the closest bed is that the player can walk to on their level, as a sentence: its place and which way
+ * to go. Null when none can be reached. Your own bed needs a house to go to.
+ */
+export function nearestBed(
+  tiles: readonly (readonly number[])[],
+  from: Point,
+  hasHouse: boolean,
+): string | null {
+  const found = walkToBed(tiles, from, hasHouse, false) ?? walkToBed(tiles, from, hasHouse, true)
+
+  if (!found) return null
+  const dx = BEDS[found.id].x - from.x
+  const dy = BEDS[found.id].y - from.y
+  const ns = Math.abs(dy) < 3 ? '' : dy < 0 ? 'north' : 'south'
+  const ew = Math.abs(dx) < 3 ? '' : dx < 0 ? 'west' : 'east'
+  const way = `${ns}${ns && ew ? '-' : ''}${ew}`
+
+  return way ? `${BED_PLACES[found.id]}, to the ${way}` : `${BED_PLACES[found.id]}, right here`
+}
+
 export const inHouse = (point: Point) =>
   point.x >= HOUSE.inside.x0 &&
   point.x <= HOUSE.inside.x1 &&
@@ -264,6 +388,8 @@ export function buildWorld(): World {
   set(4, 22, TILE.floor)
   room(10, 23, 14, 27)
   set(10, 25, TILE.floor)
+  set(BEDS.guest.x, BEDS.guest.y, TILE.bed)
+  set(SAGE_BED.x, SAGE_BED.y, TILE.bed)
   fill(2, 25, 4, 27, TILE.water)
   fill(8, 18, 8, 26, TILE.path)
   fill(4, 23, 8, 23, TILE.path)
@@ -287,6 +413,7 @@ export function buildWorld(): World {
   set(HOUSE.desk.x, HOUSE.desk.y, TILE.desk)
   set(HOUSE.table.x, HOUSE.table.y, TILE.tableBread)
   set(HOUSE.sign.x, HOUSE.sign.y, TILE.sign)
+  set(BEDS.home.x, BEDS.home.y, TILE.bed)
   fill(8, 12, 8, 16, TILE.path)
   fill(8, 12, 15, 12, TILE.path)
   each(
@@ -327,6 +454,7 @@ export function buildWorld(): World {
   set(fountain.x, fountain.y + 1, TILE.fountainBottomLeft)
   set(fountain.x + 1, fountain.y + 1, TILE.fountainBottomRight)
   room(18, 2, 24, 7)
+  set(CAPTAIN_BED.x, CAPTAIN_BED.y, TILE.bed)
   room(30, 2, 37, 7)
   fill(21, 8, 21, 11, TILE.cobble)
   fill(33, 8, 33, 11, TILE.cobble)
@@ -350,6 +478,11 @@ export function buildWorld(): World {
     TILE.flowers,
   )
 
+  // The inn, a guest bed off the square for anyone waiting on the Oracle's word.
+  room(19, 13, 23, 15)
+  set(21, 13, TILE.floor)
+  set(BEDS.inn.x, BEDS.inn.y, TILE.bed)
+
   // Library Quarter.
   fill(27, 18, 28, 19, TILE.cobble)
   fill(20, 19, 33, 19, TILE.cobble)
@@ -360,6 +493,7 @@ export function buildWorld(): World {
   fill(29, 21, 29, 26, TILE.wall)
   fill(30, 22, 32, 22, TILE.shelf)
   fill(34, 22, 36, 22, TILE.shelf)
+  set(LIBRARIAN_BED.x, LIBRARIAN_BED.y, TILE.bed)
   each(
     [
       [18, 24],
@@ -425,6 +559,12 @@ export function buildWorld(): World {
     ],
     TILE.flowers,
   )
+
+  // The falconer's hut, north of the road, with a guest bed.
+  room(30, 30, 34, 32)
+  set(32, 32, TILE.floor)
+  set(BEDS.hut.x, BEDS.hut.y, TILE.bed)
+  set(FALCONER_BED.x, FALCONER_BED.y, TILE.bed)
 
   const perches: Perch[] = [
     { x: 24, y: 35, tool: OWL_TOOLS.whoami },

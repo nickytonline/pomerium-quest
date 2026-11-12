@@ -188,10 +188,6 @@ function pomeriumSettings(): Yaml {
       certificates: [`${POMERIUM_NAMESPACE}/quest-tls`],
       // Pomerium fetches the Oracle's sign-in metadata over HTTPS, signed by the local mkcert CA.
       caSecrets: [`${POMERIUM_NAMESPACE}/quest-ca`],
-      // Signing out can land anywhere in the game: back at sign-in to refresh claims, or at the title
-      // screen to start over (see app/src/game/access.ts). Without this flag Pomerium drops the
-      // pomerium_redirect_uri and leaves the player on its own signed-out page.
-      runtimeFlags: { allow_any_sign_out_redirect_uri: true },
       mcpAllowedClientIdDomains: MCP_ALLOWED_CLIENT_ID_DOMAINS,
       // Forward the identity provider's groups claim to the app as a header too.
       jwtClaimHeaders: { 'X-Pomerium-Claim-Groups': 'groups', 'X-Pomerium-Claim-Deed': 'deed' },
@@ -422,6 +418,10 @@ function realm(secrets: Secrets): Yaml {
     resetPasswordAllowed: false,
     rememberMe: false,
     sslRequired: 'external',
+    // The game never signs out to refresh claims (that would need Pomerium's open
+    // allow_any_sign_out_redirect_uri flag). Pomerium picks up new claims when it refreshes the session,
+    // which happens as the access token nears expiry, so a short token means about a minute, not minutes.
+    accessTokenLifespan: 30,
     groups: [BASE_GROUP, ...GRANTED_GROUPS].map((name) => ({ name })),
     clients: [
       {
